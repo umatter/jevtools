@@ -13,6 +13,13 @@ from tests.scenario.fixtures import scenario_context
 from tests.support import SCENARIO_SOURCES, load_fixture
 
 
+@pytest.fixture(autouse=True)
+def _isolated_limits_cache(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Routers load the limits ``jevtools probe`` cached for their backend (§8.7); tests never read the developer's
+    cache (``~/.cache/jevtools``)."""
+    monkeypatch.setenv("JEVTOOLS_CACHE_DIR", str(tmp_path_factory.getbasetemp() / "jevtools-cache"))
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip ``@pytest.mark.live`` tests unless a Jev API key is configured."""
     if os.environ.get("TYPESAFE_API_KEY") or os.environ.get("OPENROUTER_API_KEY"):

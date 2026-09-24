@@ -35,6 +35,23 @@ def path_key(path: Sequence[str]) -> str:
     return out
 
 
+def source_spec_name(spec: Any) -> str | None:
+    """The registration name of one ``x-jev.source`` entry: a string as is; a tool or MCP source object by its
+    ``name`` key, else ``tool:<tool>`` / ``mcp:<uri template>`` (the default names of
+    :class:`~jevtools.sources.toolsource.ToolSource` and :class:`~jevtools.sources.mcp.MCPResources`)."""
+    if isinstance(spec, str):
+        return spec
+    if not isinstance(spec, dict):
+        return None
+    if isinstance(spec.get("name"), str):
+        return str(spec["name"])
+    if isinstance(spec.get("tool"), str):
+        return f"tool:{spec['tool']}"
+    if isinstance(spec.get("mcp_resources"), str):
+        return f"mcp:{spec['mcp_resources']}"
+    return None
+
+
 class Member(BaseModel):
     """One literal value of an enum/catalog/ordinal slot (or an author ``values`` candidate)."""
 
@@ -151,10 +168,11 @@ class SlotSpec(BaseModel):
 
     @property
     def source_names(self) -> tuple[str, ...]:
-        """Names of registered sources in :attr:`source` (tool/MCP source objects are skipped)."""
+        """Names of the sources in :attr:`source`; tool and MCP source objects are named by
+        :func:`source_spec_name` (``tool:<tool>``, ``mcp:<uri template>`` or their ``name`` key)."""
         spec = self.source
         items = spec if isinstance(spec, list) else [spec] if spec is not None else []
-        return tuple(s for s in items if isinstance(s, str))
+        return tuple(name for s in items if (name := source_spec_name(s)) is not None)
 
     def walk(self) -> Iterator[SlotSpec]:
         """This spec and every nested item/child/branch spec, depth first."""
@@ -242,4 +260,4 @@ class ToolSpec(BaseModel):
 
 SlotSpec.model_rebuild()
 
-__all__ = ["ITEM", "Member", "SlotSpec", "ToolSpec", "path_key"]
+__all__ = ["ITEM", "Member", "SlotSpec", "ToolSpec", "path_key", "source_spec_name"]

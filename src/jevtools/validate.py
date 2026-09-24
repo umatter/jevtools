@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -76,6 +77,33 @@ class Limits(BaseModel):
         body = request.to_wire() if isinstance(request, DecisionRequest) else request
         chars = len(canonical_str(body))
         return int(-(-chars * self.token_ratio // self.chars_per_token))
+
+
+def cache_dir() -> Path:
+    """Where ``jevtools probe`` writes limits: ``$JEVTOOLS_CACHE_DIR``, else ``$XDG_CACHE_HOME/jevtools``, else
+    ``~/.cache/jevtools``."""
+    explicit = os.environ.get("JEVTOOLS_CACHE_DIR")
+    if explicit:
+        return Path(explicit)
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    return (Path(xdg) if xdg else Path.home() / ".cache") / "jevtools"
+
+
+def limits_path(backend: str, model: str, directory: str | os.PathLike[str] | None = None) -> Path:
+    """``<cache>/limits-<backend>-<model>.json`` (characters outside ``[A-Za-z0-9._-]`` become ``_``)."""
+
+    def safe(part: str) -> str:
+        return re.sub(r"[^A-Za-z0-9._-]+", "_", part).strip("_") or "default"
+
+    base = Path(directory) if directory is not None else cache_dir()
+    return base / f"limits-{safe(backend)}-{safe(model)}.json"
+
+
+def cached_limits(backend: Any, directory: str | os.PathLike[str] | None = None) -> Limits | None:
+    """The probed :class:`Limits` of ``backend`` (its ``name`` and ``model``) from the cache (spec §8.7: the file
+    ``jevtools probe`` writes "which the validator uses"), or ``None`` if it was never probed."""
+    path = limits_path(str(getattr(backend, "name", "")), str(getattr(backend, "model", "")), directory)
+    return Limits.from_file(path) if path.is_file() else None
 
 
 Rule = Literal[
@@ -164,4 +192,13 @@ def preflight(ballot: Ballot, limits: Limits | None = None, *, catalog: Catalog 
             raise BallotError(None, "call.tokens", f"call {index}: ~{tokens} tokens")
 
 
-__all__ = ["Limits", "Rule", "check_question", "check_values", "preflight"]
+__all__ = [
+    "Limits",
+    "Rule",
+    "cache_dir",
+    "cached_limits",
+    "check_question",
+    "check_values",
+    "limits_path",
+    "preflight",
+]

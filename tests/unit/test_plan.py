@@ -190,6 +190,28 @@ def test_state_cut_drops_oldest_history() -> None:
     assert cut_state(state, Limits())[0] is state
 
 
+def test_state_cut_spares_turns_that_mention_pinned_entities() -> None:
+    """§6.2: the oldest turns go first, except those mentioning pinned entities (the entity store's rule)."""
+    from jevtools.context import Context
+    from jevtools.decision import ToolCall
+    from jevtools.loop import EntityStore
+    from jevtools.plan import pinned_mentions, state_tokens
+
+    turns = [{"role": "user", "text": "Send it to anna.keller@acme.com please " + "x" * 200},
+             {"role": "assistant", "text": "Which one? " + "y" * 200}, {"role": "user", "text": "z" * 40}]  # fmt: skip
+    state = {"request": "x", "history": turns}
+    store = EntityStore()
+    store.pin_call(ToolCall.build("send_email", {"to": "anna.keller@acme.com"}, trace_id="t"), None, turn=1)
+    keep = pinned_mentions(Context(entities=store))
+    assert keep is not None and keep(turns[0]["text"]) and not keep(turns[1]["text"])
+    fits = state_tokens({**state, "history": [turns[0], turns[2]]}, Limits())
+    cut, _ = cut_state(state, Limits(max_state_tokens=fits), keep=keep)
+    assert cut["history"] == [turns[0], turns[2]]  # the older pinned turn outlives the newer unpinned one
+    assert pinned_mentions(Context()) is None
+    cut, _ = cut_state(state, Limits(max_state_tokens=10), keep=keep)  # still too large: pinned turns go last
+    assert cut["history"] == []
+
+
 def test_speculate_overrides() -> None:
     tools = [{"type": "function", "function": {
         "name": f"get_{name}", "description": f"Get {name}.", "x-jev": {"speculate": mode},

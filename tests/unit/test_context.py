@@ -121,3 +121,18 @@ def test_time_and_hash(ctx_default: Context) -> None:
     assert Context(
         sources=[type("S", (), {"name": "contacts", "content_sha256": lambda self: "sha256:x"})()]
     ).source_hashes() == {"contacts": "sha256:x"}
+
+
+def test_a_fixed_utc_offset_without_tz_is_a_zone() -> None:
+    """``now`` from an ISO timestamp with only an offset (no ``tz``): the zone name ``UTC+02:00`` is read as that
+    fixed offset (``context.zone_of``) instead of failing in ``ZoneInfo``."""
+    from datetime import timedelta
+
+    from jevtools.context import zone_of
+
+    now = datetime.fromisoformat("2026-09-24T14:05:00+02:00")
+    ctx = Context(messages="Book it tomorrow at 3pm", now=now)
+    assert ctx.timezone_name == "UTC+02:00" and ctx.current_time() == now
+    assert build_state(ctx)["now"] == "Thursday 2026-09-24 14:05 UTC+02:00 (UTC+02:00)"
+    assert zone_of("UTC-05:30").utcoffset(None) == -timedelta(hours=5, minutes=30)
+    assert zone_of("Europe/Zurich") == ZoneInfo("Europe/Zurich")

@@ -1,0 +1,44 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "tools": [
+      {
+        "name": "list_issues",
+        "title": "List issues",
+        "description": "List the open issues of a repository.",
+        "inputSchema": {"type": "object", "required": ["repo"],
+                        "properties": {"repo": {"type": "string", "description": "The repository, owner/name"},
+                                       "state": {"type": "string", "enum": ["open", "closed", "all"], "default": "open"}}},
+        "annotations": {"readOnlyHint": true, "openWorldHint": true}
+      },
+      {
+        "name": "close_issue",
+        "description": "Close an issue in a repository.",
+        "inputSchema": {"type": "object", "required": ["repo", "number"],
+                        "properties": {"repo": {"type": "string"}, "number": {"type": "integer", "minimum": 1}}},
+        "annotations": {"destructiveHint": true, "idempotentHint": true, "readOnlyHint": false}
+      },
+      {
+        "name": "comment_issue",
+        "description": "Post a comment on an issue.",
+        "inputSchema": {"type": "object", "required": ["repo", "number", "body"],
+                        "properties": {"repo": {"type": "string"}, "number": {"type": "integer"},
+                                       "body": {"type": "string", "description": "The comment text"}}}
+      },
+      {
+        "name": "sync_mirror",
+        "description": "Synchronize the mirror of a repository.",
+        "inputSchema": {"type": "object", "properties": {"repo": {"type": "string"}}},
+        "annotations": {"title": "Sync", "readOnlyHint": null, "destructiveHint": null}
+      },
+      {
+        "name": "label_issue",
+        "description": "Add a label to an issue.",
+        "inputSchema": {"type": "object", "required": ["label"], "properties": {"label": {"type": "string"}}},
+        "outputSchema": {"type": "object", "properties": {"labels": {"type": "array", "items": {"type": "string"}}}},
+        "_meta": {"x-jev": {"risk": "write", "properties": {"label": {"values": ["bug", "feature", "question"]}}}}
+      }
+    ]
+  }
+}

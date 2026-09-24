@@ -1,0 +1,14 @@
+# Source registrations of the §13 scenario, without data (enough for lint).
+[sources.contacts]
+kind = "registry"
+key = "email"
+provides = ["email", "person"]
+
+[sources.accounts]
+kind = "registry"
+key = "id"
+provides = ["account_id"]
+
+[sources.files]
+kind = "files"
+provides = ["path", "file"]

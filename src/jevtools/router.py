@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import warnings
 from collections.abc import Callable, Generator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
@@ -95,7 +96,7 @@ from jevtools.spec.constraints import ConstraintContext
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.spec.schema import validate
 from jevtools.trace import RoundRecord, StoreBodies, Trace, build_trace, call_record
-from jevtools.validate import Limits
+from jevtools.validate import Limits, cached_limits
 from jevtools.wire import Answer, DecisionRequest, DecisionResponse
 
 Revalidator = Callable[[ToolDecode, Context], list[str]]
@@ -191,6 +192,13 @@ class _Session:
     tool_pick: tuple[str, float] | None = None
     replanned: bool = False
     """Set on the re-plan after a failed TOCTOU check (no second revalidation loop)."""
+    loop: bool = False
+    """A resume (or recompile) of a prompt raised in loop mode: the round still asks ``done_after`` (§6.1)."""
+
+    @property
+    def in_loop(self) -> bool:
+        """Whether this decision is an agent-loop step (loop mode, or a resume of a loop-mode prompt)."""
+        return self.mode == "loop" or self.loop
 
 
 @dataclass
@@ -220,12 +228,24 @@ class _Live:
 # --------------------------------------------------------------------------------------------------------------------
 
 
+def _probed_limits(backend: Backend) -> Limits:
+    """The limits ``jevtools probe`` measured for this backend and model (spec §8.7), else the defaults. An
+    unreadable limits file is reported and ignored: the defaults are the conservative documented values."""
+    try:
+        return cached_limits(backend) or Limits()
+    except (OSError, ValueError) as exc:
+        warnings.warn(f"jevtools: ignoring the probed limits file of {backend.name}/{backend.model}: {exc}",
+                      UserWarning, stacklevel=3)  # fmt: skip
+        return Limits()
+
+
 class Router:
     """Decide tool calls with Jev (spec §9.1).
 
     ``tools`` is a :class:`~jevtools.spec.catalog.Catalog` or anything :meth:`Catalog.from_any` accepts (compiled
     against ``context``'s sources). ``revalidate`` replaces the default TOCTOU check; ``calibrators`` map a tier to
-    a fitted :class:`~jevtools.confidence.IsotonicCalibrator`.
+    a fitted :class:`~jevtools.confidence.IsotonicCalibrator`. Without ``limits``, the limits ``jevtools probe``
+    cached for this backend and model are used (:func:`~jevtools.validate.cached_limits`), else the defaults.
     """
 
     def __init__(
@@ -253,7 +273,7 @@ class Router:
         self.filler = filler
         self.escalator = escalator
         self.text_llm = text_llm
-        self.limits = limits or Limits()
+        self.limits = limits if limits is not None else _probed_limits(backend)
         self.trace_store = trace_store
         self.estimator = estimator or TokenEstimator(self.limits.chars_per_token)
         self.calibrators = dict(calibrators or {})
@@ -634,7 +654,7 @@ class Router:
                 if self._fillable(s, slot):
                     fill_ok.append(slot.name)
         return policy_input(decoded, comp, escalator=self._can_escalate(s), widen_ok=widen_ok, fill_ok=fill_ok,
-                            confirmed=s.confirmed, loop=s.mode == "loop")  # fmt: skip
+                            confirmed=s.confirmed, loop=s.in_loop)  # fmt: skip
 
     def _fillable(self, s: _Session, slot: SlotSpec) -> bool:
         if self.filler is None or s.fills >= 1 or Channel.GENERATED not in slot.channels:
@@ -765,8 +785,9 @@ class Router:
         if selection is None and reply is not None:
             selection = parse_short_reply(reply, handle.state.get("options", []))
         live = self._live.get(handle.pending_id)
+        loop = bool(handle.state.get("loop"))
         if handle.expired() or (selection is not None and live is None):
-            s = _Session(ctx=ctx if reply is None else _with_reply(ctx, handle, reply), mode="turn",
+            s = _Session(ctx=ctx if reply is None else _with_reply(ctx, handle, reply), mode="loop" if loop else "turn",
                          tool_choice="auto", resumed_from=handle.pending_id)  # fmt: skip
             s.notes.append("pending expired or not in memory: recompiled")
             return (yield from self._flow(s))
@@ -776,7 +797,7 @@ class Router:
         if reply is None:
             raise ValueError("resume() needs a selection or a reply")
         s = _Session(ctx=_with_reply(ctx, handle, reply), mode="resume", tool_choice="auto",
-                     resumed_from=handle.pending_id)  # fmt: skip
+                     resumed_from=handle.pending_id, loop=loop)  # fmt: skip
         extra = self._reply_candidates(handle, reply)
         for key, carried in (_carried_candidates(live) if live is not None else {}).items():
             extra[key] = [*extra.get(key, []), *carried]
@@ -796,7 +817,7 @@ class Router:
             return (yield from self._finish(s, None, result, None))
         if action.action == "tool":
             fresh = _Session(ctx=ctx, mode=s.mode, tool_choice={"type": "function", "function": {"name": action.tool}},
-                             resumed_from=handle.pending_id)  # fmt: skip
+                             resumed_from=handle.pending_id, loop=s.loop)  # fmt: skip
             return (yield from self._flow(fresh))
         if action.action == "open":
             return (yield from self._open(s, state, action.slot))
@@ -905,7 +926,7 @@ class Router:
             problems = self.revalidate(td, s.ctx)
             if problems:
                 fresh = _Session(ctx=s.ctx, mode=s.mode, tool_choice=s.tool_choice, resumed_from=s.resumed_from,
-                                 replanned=True)  # fmt: skip
+                                 replanned=True, loop=s.loop)  # fmt: skip
                 fresh.notes += [f"TOCTOU: {p}" for p in problems] + ["re-planned"]
                 return (yield from self._flow(fresh))
         if result.outcome is Outcome.ABSTAIN and content is None and self.text_llm is not None:
@@ -1053,7 +1074,8 @@ class Router:
             response_sha256s=responses, call=call, options=actions,
             state={"messages": [t.model_dump(mode="json") for t in s.ctx.messages], "tool": tool,
                    "prompt_text": prompt.text, "options": [o.model_dump() for o in prompt.options],
-                   "open_slot": result.bottleneck if prompt.kind == "open" else None, "rule": result.rule},
+                   "open_slot": result.bottleneck if prompt.kind == "open" else None, "rule": result.rule,
+                   **({"loop": True} if s.in_loop else {})},
         )  # fmt: skip
 
     # -- trace --------------------------------------------------------------------------------------------------

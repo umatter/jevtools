@@ -28,6 +28,7 @@ pydantic-ai = ["pydantic-ai-slim>=1.0,<2"]
 mcp = ["mcp>=1.10"]
 yaml = ["pyyaml"]
 jsonschema = ["jsonschema>=4"]
+all = ["jevtools[serve,langchain,pydantic-ai,mcp,yaml,jsonschema]"]
 dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
 
 [project.scripts]
@@ -50,6 +51,8 @@ markers = [
 line-length = 120
 target-version = "py310"
 src = ["src", "tests"]
+# docs/SPEC.md is normative: its code blocks are quoted as written, never reformatted
+extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

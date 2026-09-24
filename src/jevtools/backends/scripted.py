@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import fnmatch
+import json
 import math
-from collections.abc import Callable, Mapping
+import os
+import threading
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any, Union
+
+from pydantic import TypeAdapter
 
 from jevtools.wire import (
     Answer,
@@ -63,6 +69,65 @@ class ScriptedBackend:
 
     async def adecide(self, request: DecisionRequest) -> DecisionResponse:
         return self.decide(request)
+
+    @classmethod
+    def from_fixture(cls, path: str | os.PathLike[str], **kwargs: Any) -> ScriptedBackend:
+        """A backend scripted by a JSON fixture such as ``examples/fixtures/R2.answers.json`` (spec §8.5).
+
+        The file holds either a plain script ``{qid-or-glob: answer}`` or a document
+        ``{"answers": {…}, "p_top": 0.92, "model": "…", "name": "…"}``; ``{"rounds": [{…}, {…}], …}`` answers the
+        i-th request from ``rounds[i]`` (the last one repeats). Answers are what a script accepts (a label, a
+        ``{label: p}`` map, a Noul probability, a Score level or ``{level: p}`` map) or a wire answer object
+        (``{"type": "choice", …}``). JSON object keys are strings, so Score level maps are read back as integers.
+        ``kwargs`` override the document's ``p_top`` / ``model`` / ``name``.
+        """
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(data, Mapping):
+            raise ValueError(f"{path}: a scripted fixture is a JSON object")
+        options: dict[str, Any] = {}
+        if "answers" in data or "rounds" in data:
+            rounds = data["rounds"] if "rounds" in data else [data["answers"]]
+            options = {key: data[key] for key in ("p_top", "model", "name") if key in data}
+        else:
+            rounds = [data]
+        if not isinstance(rounds, Sequence) or not rounds or not all(isinstance(r, Mapping) for r in rounds):
+            raise ValueError(f"{path}: rounds must be a non-empty list of scripts")
+        return cls(_FixtureScript([_wire_answers(r) for r in rounds]), **{**options, **kwargs})
+
+
+_ANSWER_ADAPTER: TypeAdapter[Answer] = TypeAdapter(Answer)
+
+
+def _wire_answers(script: Mapping[str, Any]) -> dict[str, AnswerSpec]:
+    """A fixture script with wire answer objects (``{"type": …}``) parsed into answer models."""
+    out: dict[str, AnswerSpec] = {}
+    for qid, spec in script.items():
+        if isinstance(spec, Mapping) and spec.get("type") in ("choice", "noul", "score"):
+            out[qid] = _ANSWER_ADAPTER.validate_python(dict(spec))
+        else:
+            out[qid] = spec
+    return out
+
+
+class _FixtureScript:
+    """The callable script of :meth:`ScriptedBackend.from_fixture`: one script per request (the last repeats), with
+    string level keys of Score answers turned back into integers."""
+
+    def __init__(self, rounds: list[dict[str, AnswerSpec]]) -> None:
+        self.rounds = rounds
+        self.calls = 0
+        self._lock = threading.Lock()
+
+    def __call__(self, request: DecisionRequest) -> Mapping[str, AnswerSpec]:
+        with self._lock:
+            script = self.rounds[min(self.calls, len(self.rounds) - 1)]
+            self.calls += 1
+        out: dict[str, AnswerSpec] = dict(script)
+        for qid, question in request.questions.items():
+            spec = _lookup(script, qid)
+            if isinstance(question, ScoreQuestion) and isinstance(spec, Mapping):
+                out[qid] = {int(k): float(v) for k, v in spec.items()}
+        return out
 
 
 def _lookup(script: Mapping[str, AnswerSpec], qid: str) -> AnswerSpec | None:

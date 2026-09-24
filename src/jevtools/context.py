@@ -8,6 +8,7 @@ refers to, in the normative key order ``request, history, now, user, system, pro
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
@@ -21,6 +22,10 @@ from jevtools.canonical import canonical_str, jsonable, sha256_of
 Role = Literal["user", "assistant", "system", "tool"]
 Mode = Literal["turn", "loop", "widen", "resume", "fill"]
 """Round modes recorded in the Ballot (§3.5.7)."""
+
+SETTING_FIELDS: tuple[str, ...] = ("now", "tz", "locale", "user", "shareable", "include_system")
+"""The context *settings* a host document may give (``jevtools.toml`` ``[context]``, an evaluation context file,
+a per-request override); messages, sources, observations and entities travel separately."""
 
 Message = Mapping[str, Any]
 """An OpenAI-style chat message: ``{"role", "content", "tool_calls"?, "tool_call_id"?, "name"?}``."""
@@ -129,6 +134,16 @@ class Observation(BaseModel):
         return f"Step {self.step}: {self.tool}({args}) → {self.status}{tail}"
 
 
+def zone_of(name: str) -> tzinfo:
+    """A tzinfo for an IANA name or a ``UTC±HH:MM`` fixed offset (what :attr:`Context.timezone_name` gives for a
+    ``now`` that carries only a UTC offset, e.g. an ISO timestamp ``…+02:00`` without ``tz``)."""
+    match = re.fullmatch(r"UTC([+-])(\d{2}):(\d{2})", name)
+    if match:
+        sign = 1 if match.group(1) == "+" else -1
+        return timezone(sign * timedelta(hours=int(match.group(2)), minutes=int(match.group(3))))
+    return ZoneInfo(name)
+
+
 @dataclass(frozen=True)
 class Clock:
     """Source of ``now`` in an IANA time zone; ``fixed`` pins it (tests, replays)."""
@@ -138,7 +153,7 @@ class Clock:
 
     def now(self) -> datetime:
         """The current time as an aware datetime in ``tz``."""
-        zone = ZoneInfo(self.tz)
+        zone = zone_of(self.tz)
         if self.fixed is None:
             return datetime.now(zone)
         fixed = self.fixed if self.fixed.tzinfo is not None else self.fixed.replace(tzinfo=zone)
@@ -158,7 +173,7 @@ def render_now(dt: datetime, tz: str | None = None) -> str:
     ``tz`` converts first (naive datetimes are taken to be in ``tz``); without it the datetime's own zone name is used.
     """
     if tz is not None:
-        zone = ZoneInfo(tz)
+        zone = zone_of(tz)
         dt = dt.replace(tzinfo=zone) if dt.tzinfo is None else dt.astimezone(zone)
     if dt.tzinfo is None:
         raise ValueError("render_now() needs an aware datetime or a tz")
@@ -237,7 +252,7 @@ class Context(BaseModel):
         if self.now is not None:
             return Clock(zone_name, self.now).now()
         clock = self.clock or Clock(zone_name)
-        return clock.now().astimezone(ZoneInfo(zone_name))
+        return clock.now().astimezone(zone_of(zone_name))
 
     # -- conversation split -------------------------------------------------------------------------------------
 
@@ -405,6 +420,7 @@ def build_state(ctx: Context, mode: str = "turn") -> dict[str, Any]:
 
 
 __all__ = [
+    "SETTING_FIELDS",
     "Clock",
     "Context",
     "Message",

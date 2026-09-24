@@ -247,3 +247,498 @@ behaviour and records it here. Format: `§section: issue → decision`.
 - §13.1 fixtures (`tests/scenario/fixtures.py`): the 492 generated contacts and ~3,000 generated paths never match a
   §13 request (no shared names, aliases, teams, or `invoice`/`acme`/`payments` tokens), so R2 and R5 compile
   byte-identical to §13.4/§13.5 at full size; three extra invoices make R6's retrieval the spec's 9 hits.
+
+## Backends: simulator, cassette, auto, probe (`backends/{simulator,cassette,auto}.py`, `probe.py`)
+
+### LexicalSimulator (§8.6)
+
+The simulator is a lexical test double. Nothing below is evidence about Jev's accuracy.
+
+- §8.6 ζ: literally, ζ reads only a mention quoted by the *instructions*, and only `T_MENTION` quotes one (anchored
+  lists, whose resolver has no widen hook). With ζ = 0, `NONE_OF_THESE` (0.12) can never win (`NOT_STATED` =
+  0.45·(1 − max) beats it whenever the best real option scores < 0.73), and its mass stays far below 0.30. So the
+  listed branch "an unknown mention → widen" was unreachable → **minimal change:** ζ also reads the mention that a
+  `ref` option description quotes (`<Item> matching|similar to|whose alias is|in the group "<mention>"`, §4.2.7).
+  Other quoted text in descriptions (`From "45 min"…`, `"next Tuesday at 3pm" read as…`, `its path matches "…"`) is
+  not a mention: normalization changes its surface form, so reading it would push correct temporal and quantity
+  options to `out_of_pool`. Pinned by "Email Rob that I'll be late" (Robert Brown is only *similar to* "Rob" →
+  `NONE_OF_THESE` → `out_of_pool` → a widen round with buckets and a group Choice).
+- §8.6 tool options: the literal formula `cov(U_c, T_o)` is kept, with `U_c = toks(request)`. Consequence: requests
+  with many entity tokens give the best tool a low share (R2 "Email Anna that I'll be 10 minutes late" → 0.2 →
+  P(send_email) = 0.39), so R2, R3, R5 and R6 end in `P5.tool.ambiguous` → clarify. That is inside the §10.5 allowed
+  sets, and short crafted requests ("Email Anna that I'll be late": P = 0.73) reach the slot-level branches.
+- §8.6 `expand`: each synonym key and its words form one **family**, and expansion is symmetric within a family.
+  Otherwise `create_event` (neither word is a key) could never explain "book"/"sync", and `read_file` never "open".
+- §8.6 `toks`: the stopword list has 87 entries (function words, pronouns, modal verbs, contraction tails
+  `s t ll d m re ve`, `please`, `now`, `like`). The plural rule runs after stopword removal. `cov` counts the distinct
+  tokens of X, and a 4-character prefix match needs both tokens to be ≥ 4 characters long.
+- §8.6 "U": for the Noul cues (`authorized` hedges, the first word) only the latest request is read. Otherwise an
+  earlier "how do I…" turn would hedge every later direct instruction. `more` cues, chit-chat and content-accept
+  coverage read U (the request plus the user turns). Cue detection uses lowercase words with contractions kept
+  (`don't`) and stopwords kept.
+- §8.6 `authorized`: the first word is read after any number of `please`, `can you`, `could you` prefixes. It
+  matches when its token is in the tool's family `expand(tool name words)`. A hedge cue anywhere in the request →
+  0.15.
+- §8.6 "last action verb in U": the last token of the request (else of the user turns, newest first) that belongs to
+  some verb family. `DONE` / `done_after` match when that verb is in the family of the last `progress` tool / the
+  asked tool. The `progress` tool is parsed from `Step N: <tool>(`.
+- §8.6 coverage probe ("capitalized non-initial token … outside the gazetteer or registries"): a word is initial at
+  the start of the request or after `. ! ? : ; " ' “ (`. `I`/`I'll` and weekday/month names are never mentions. The
+  wire request cannot see the registries, so "registries" means every real option label and description in the
+  request (where registry rows surface), plus `state.user` and `state.now`. The gazetteer is
+  `jevtools.extract.catalogs.gazetteer()`.
+- §8.6 `EXCLUDE`: a negation cue (`not no don't dont without except never exclude excluding nor minus`) within the 3
+  words *before* the quoted mention, in the request or a user turn. This matches the extractor's negation rule in
+  DECISIONS.md.
+- §8.6 accept Nouls: a Noul is **content** when it carries criteria or its question says "exactly as written" (the
+  `T_ACCEPT_CONTENT` form), else cosmetic. Greeting/sign-off words: `hi hello hey dear best regards kind thanks thank
+  cheers sincerely yours greetings morning afternoon evening warm wishes`. Flattened text instructions (§8.7
+  fallback, `\nCandidate: <json>`) are read too.
+- §8.6 `item`/`member`: a member's item is `instructions.item`. An item Noul's item is parsed from `T_ITEM`
+  ("Should … be included in"). Cue words are the quoted `'cue'` of `T_MEMBER` plus a fixed superlative/list list
+  (`latest newest oldest earliest recent last first biggest largest smallest cheapest highest lowest most least top
+  best worst every each both only`).
+- §8.6 unspecified sentinels: `OTHER` scores `none_floor`. `CANCEL` scores 0.6 when the reply contains `cancel stop
+  nevermind forget abort`, else 0.05.
+- §8.6 Score: "the softmax of cov" → the same `temperature` as Choices (`softmax(cov / temperature)`).
+- §8.6 answers: `choice` is the argmax of the unrounded probabilities, with ties going to the earlier wire label.
+  `confidence` is `1 − normalized entropy` (as in ScriptedBackend). Probabilities, Nouls, scores and confidences are
+  rounded to 4 decimals. Usage: `input_tokens = ceil(chars(canonical request) / 3.5)`, `output_tokens` = the number
+  of answers.
+- §8.6 flip mode: the seed is `Random(seed ^ int(sha256(canonical request)) ^ int(sha256(qid)))`. A Choice swaps
+  the probabilities of its top two (ranked by p, ties by wire order) when their margin is < `flip_band`. A Noul with
+  `|n − 0.5| < flip_band` is reflected. Each happens with probability 0.5.
+- §8.6 identity: `name = "simulator"`, `model = "lexical-simulator"` (the `model=` keyword overrides it, and
+  `JEVTOOLS_MODEL` does so through `auto()`). Requests are kept in `.requests`.
+- §10.5 allowed sets pinned in `tests/scenario/test_simulator_scenarios.py`:
+  - R1 {execute};
+  - R2 with and without history {confirm, clarify};
+  - R3 {confirm, clarify};
+  - R4 {execute, clarify};
+  - R5 {confirm, clarify};
+  - R6 step 1 {execute, clarify}; step 2 (injected observation) never executes and never nominates the injected
+    address, and `transfer_funds` is not speculated;
+  - R7 {abstain}.
+
+  Every trace passes `jt.verify`.
+
+### Cassette (§8.7)
+
+- `CassetteMiss` is a `JevtoolsError` + `LookupError`, **not** a `BackendError`. The router maps every
+  `BackendError` to P0 (fail closed), which would turn a stale cassette into a quiet `abstain` instead of failing CI.
+- Records are canonical JSON lines, in key order `request_sha256, backend, model, request, response, recorded_at`.
+  `request_sha256 = sha256_of(request.to_wire())` (model included). `recorded_at` is UTC `YYYY-MM-DDTHH:MM:SSZ`.
+  `record` appends. When a key repeats, the last line wins on load.
+- A replay-only cassette takes `model` and `name` from its first record, unless `model=`/`name=` are passed. The
+  model must match: it is part of every key. `passthrough` neither reads nor writes the file. `record` and
+  `passthrough` require `inner` (`BackendConfigError`). The cassette is thread-safe, because split calls may run
+  concurrently.
+
+### auto() (§8.3)
+
+- `JEVTOOLS_BACKEND` is matched case-insensitively. A named HTTP backend without its key raises
+  `BackendConfigError` naming the variable. `simulator` chosen explicitly does not warn. Only the implicit offline
+  fallback warns.
+- `cassette:<path>` replays by default. `JEVTOOLS_CASSETTE_MODE=record|passthrough` wraps the live backend that the
+  key rules (steps 2–3) select, and raises `BackendConfigError` without a key.
+- `JEVTOOLS_MODEL` applies to every choice, including the simulator and a replay cassette. `auto(env=…)` replaces
+  `os.environ` for selection. Extra keyword arguments go to the HTTP constructors.
+
+### ScriptedBackend.from_fixture (§8.5)
+
+- The spec names the files (`examples/fixtures/R*.answers.json`) but not their format. The loader accepts:
+  - a plain script `{qid-or-glob: answer}`;
+  - a document `{"answers": {…}, "p_top", "model", "name"}`;
+  - `{"rounds": [{…}, …]}`, where request i uses `rounds[min(i, n−1)]`.
+
+  Wire answer objects (`{"type": "choice", …}`) are parsed into answer models. JSON keys are strings, so Score level
+  maps are converted back to integers per request (only for Score questions: Choice labels such as `"45"` stay
+  strings). Keyword arguments override the document's options. This is the only change to `scripted.py`.
+
+### Conformance probe (§8.7, `jevtools.probe`)
+
+- The spec gives "about 12 calls". The probe sends 19 requests against a permissive backend (16 limit probes and 3
+  smoke items; more when sizes are halved), plus `GET /v1/models` on TypeSafe.
+  Each size is its own request, so a rejection is attributable without relying on 422 `loc` details. It stays far
+  under $0.001 [I].
+- A probe **fails** on HTTP 400/422 or a protocol error, and when a sent question's answer is missing or retyped.
+  `JevAuthError`, `JevNotFound`, `JevRateLimited` and `JevUnavailable` abort the probe: they are not limits. A
+  rejected minimal request raises `ProbeError`.
+- Sizes:
+  - Ascending sizes start at the default and stop at the first rejection: labels 64/128/256, descriptions
+    400/2,000/8,000, instructions 2,000/8,000, questions 255/400.
+  - When the first size is rejected, the probe halves below it down to a floor: label 8, description 50, instruction
+    100, question 1.
+  - The probe may therefore relax a default (a server accepting 256-character labels gets `label_max = 256`) as well
+    as tighten one. `accept_max`, `max_tokens` and `min_options` are left at their defaults. A one-option Choice is
+    only reported (`single_option_choice`), because sentinels guarantee ≥ 2 options.
+- qids: one call carries `a.b a_b a.b.m0 x.accept.0` plus a 128-character id. If it is rejected, the short dotted ids
+  are sent alone, then a 64-character id. Dotted ids rejected → `id_mode = "opaque"`.
+- Label echo: ASCII labels ≤ 16 characters (inner double space, mixed case, `<email>`, punctuation) and unicode
+  labels (`Zürich`, `→`, `⟨⟩`, `Genève`) are sent. `label_echo` is the weakest match: `exact`, `nfc`, `casefold` or
+  `none`. Rejected unicode → `ascii_labels = true`.
+- Output: `limits-<backend>-<model>.json`, with characters outside `[A-Za-z0-9._-]` replaced by `_`. It goes in
+  `$JEVTOOLS_CACHE_DIR`, else `$XDG_CACHE_HOME/jevtools`, else `~/.cache/jevtools`. The file holds the `Limits` fields
+  first, then informational keys that `Limits.from_file` ignores: `spec backend model probed_at label_echo
+  ascii_labels single_option_choice models calls checks smoke`. `cached_limits(backend)` reads the file back.
+- E2–E4 smoke items: one request each, recorded under `smoke` and never used to set limits:
+  - E2: `NONE_OF_THESE` mass with the gold option present vs removed;
+  - E3: mass on real options vs `NOT_STATED` with a masked mention, plus `present`;
+  - E4: forward vs reversed options, top flip and max |Δp|, with ties broken by label.
+- Merge: `cache_dir`, `limits_path` and `cached_limits` live in `jevtools.validate` (next to `Limits`; `probe`
+  re-exports them), and a `Router` built without `limits` uses the cached file of its backend and model ("which the
+  validator uses"); an unreadable file warns and falls back to the defaults. Tests point `JEVTOOLS_CACHE_DIR` at a
+  temporary directory (autouse fixture), so a developer's cache never changes test results.
+- Merge: label echo is normalized in `decode.collect_answers` whatever the probe found: a returned label that is not
+  byte-equal to a sent one but equal to exactly one after NFC + casefold (the label uniqueness key, so the mapping is
+  unambiguous) is read as that label, with a trace note. `ascii_labels` is recorded but labels are not ASCII-folded
+  yet (gap).
+
+## Agent loop, LLM fallbacks, extra sources (`loop.py`, `fallback.py`, `sources/{toolsource,mcp}.py`)
+
+### Agent loop (§6)
+
+- §6.1 steps and caps: a *step* is one fresh round plus the resumes of its prompt; `max_steps` counts fresh rounds.
+  Every cap is checked before a new step starts. `max_rounds` counts Jev rounds including resume rounds;
+  `max_cost_usd` counts reported `usage.cost`, else input tokens at the $0.042/M list price (an estimate used only
+  for the cap — `LoopUsage.cost_usd` stays reported-only, as in `DecisionUsage`); `max_llm_calls` is checked only
+  when the router has a Filler, Escalator or text LLM. A cap → `escalate`, rules `loop.max_steps`,
+  `loop.max_rounds`, `loop.max_cost`, `loop.max_llm_calls`, reason `budget`. Guard escalations are returned to the
+  host; the Agent does not call the router's Escalator for them.
+- §6.1 repeat detection: the same `(tool, canonical arguments)` as an earlier *successful* execution of the run, or
+  an idempotency key already executed in the session → `escalate`, rule `loop.repeat`, reason `loop`. A call that
+  failed before is a retry, not a repeat: read-tier and `idempotent` tools may retry (bounded by the no-progress
+  guard); for other tools a direct `execute` of the same call → `escalate`, rule `loop.retry_needs_confirm`
+  (§6.5 "retrying an external or critical tool always requires a fresh CONFIRM"); the same call arriving through a
+  confirm/clarify resume executes.
+- §6.1 no progress: a *new observation* is one whose `(tool, status, content)` hash was not seen in the run;
+  `LoopBudget.no_progress_steps` (2) consecutive executions without one → `escalate`, rule `loop.no_progress`.
+- §6.1 / P10: the loop ends with `done` on the router's `DONE` outcome, or after an `ok` execution whose decision has
+  `gates.done_after ≥ policy.loop.done_after` (rule `P10.loop.done`, reason `done_after`); a failed execution never
+  ends the loop.
+- §6.1 state: observations are carried in `Context.observations` (not appended as `role: tool` messages), so
+  `request` stays the user's request and `history` is unchanged; `mode="loop"` is passed to the router on every
+  fresh step. An observation's step number is 1 + the highest step already in the context.
+- §6.5 idempotency is per `Agent` (the session): executed keys map to their observations; `Agent.execute(call)`
+  returns the stored observation for a known key; resuming a pending that was already resumed replays the first
+  `LoopResult` (whatever the new selection or reply) and executes nothing. Per-tool executors receive
+  `idempotency_key=` only when they declare that parameter (`**kwargs` does not count); a dispatcher receives the
+  `ToolCall`; an MCP `ClientSession`-like executor (has `call_tool`, is not callable) receives
+  `meta={"jevtools/idempotency_key": key}` when its `call_tool` accepts `meta`. `jevtools.adapters.mcp` uses the
+  same constant, result helpers and `ingest_observation` (merge: one implementation of MCP result handling).
+- §6.5 retries: `LoopBudget.max_retries` (1) automatic retries, only for read-tier or `idempotent: true` tools; an
+  exception and an MCP `isError: true` result are both failures; the last attempt's observation is kept.
+- §6.5 TOCTOU: the router revalidates every resumed decision against the context the Agent passes
+  (`Agent.resume(..., context=…)` replaces it, e.g. with fresh registries). An optional host hook
+  `revalidate(call, context)` runs before any delayed call executes; problems → no execution, a step note, and a new
+  step (re-plan).
+- §6.3 observations: `ingest_observation` returns `LoopObservation`, an `Observation` subclass adding `items`,
+  `handle` and `error`, so `Context`, `build_state` and the resolvers are unchanged (the extra fields enter the
+  Context document hash). Typed items come from `x-jev.emits` (`items`, `key`, `label`, `describe`, `types`),
+  else from an MCP `outputSchema`'s first array-of-objects property (key: a `uri/email/uuid`-format or
+  `id/url/uri/email/path/key` property; label: `title/name/label/subject`); the item type is the key field's name
+  (`url`, `id`) or `item`. Unknown JSON gives `leaf` items with their JSONPath; text and JSON string leaves give
+  regex entities `email url uuid ipv4 iban money date id path` (`money` normalized to `"4820.00 CHF"`).
+- §6.2 previews: the whole rendering when it fits `preview_chars` (1,200), else BM25-ranked chunks (sentences
+  grouped to ≈280 characters; JSON as `path: value` lines), then the first chunk, then the rest while they fit, in
+  document order, joined by ` … `. Summaries: `N words` (text), `N items` (typed items or a top-level array),
+  `N fields` (objects), the error text for errors.
+- §6.4 entity store: one entity per `(type, canonical value)`; a merge keeps the newest turn/step and label, the
+  most trusted origin seen, and `pinned` once set. Executed calls pin their identity-stakes, non-text values (list
+  items one by one): type = a specific tag (`email`, `account_id`, `path`, `url`…), else the format, else the kind;
+  origin = the bound value's channel from the trace (`user` if unknown). Observation items (not leaves) enter with
+  origin `tool_output`. Assistant turns add regex entities (origin `history`) and registry rows named by the full
+  value of their first `match` field (origin `registry`, value = the row key). `to_json()` is the canonical JSON
+  string `{"entities": [...]}` (what `Context.to_doc` embeds). §6.2's "keep history turns that mention pinned
+  entities" is `EntityStore.mentions_pinned(text)`; the planner's state cut (`plan.cut_state(keep=…)`, fed by
+  `plan.pinned_mentions(ctx)`) drops unpinned turns first, oldest first, and pinned ones only when nothing else is
+  left and the state is still too large.
+- §6.1 resume rounds (merge): a CONFIRM/CLARIFY raised in loop mode records `"loop": true` in `Pending.state`; its
+  free-text resume round (and a recompile after expiry) keeps loop semantics, so it asks `done_after` even before
+  the first observation exists, and the confirmed execution can end the run without one more round. Turn-mode
+  pendings are unchanged.
+
+### Extra sources (§4.4)
+
+- §3.2 / §4.4 naming: an inline `x-jev.source` object resolves to a registered source named by its `name` key,
+  else `tool:<tool>` (`ToolSource`'s default) or `mcp:<uri template>` (`MCPResources`'s default). This needed a
+  small additive core change: `SlotSpec.source_names` now names source objects through
+  `jevtools.spec.models.source_spec_name` instead of skipping them.
+- ToolSource: `items` defaults to `$[*]`; the supported JSONPath subset is `$ .k ['k'] ["k"] [n] [*] .*`
+  (anything else is a `ValueError`); scalar rows become `{"value": x}`; the key defaults to `id` (`value` for
+  scalar rows) and rows without a key are dropped; everything else is `Registry` behaviour over the rows. The item
+  noun is the tool name without its leading verb (`list_contacts` → `contact`). MCP results use
+  `structuredContent`, else their text (parsed as JSON when it is JSON). No caller, an exception or `isError` →
+  no rows and `last_error` (fail closed). The `Agent` binds unbound `ToolSource`s of its context to its executors
+  and refreshes stale sources (`refresh`/`arefresh`) before every step.
+- MCPResources: duck-typed session; `resources/list` paginated (≤ 20 pages; `params=PaginatedRequestParams` for
+  current SDKs, `cursor=` for older ones, a plain mapping without the `mcp` package); `resources/templates/list`;
+  `completion/complete` (empty prefix, one call) expands a single-variable `uri_template`. A final `{var}` of a
+  template may span path segments, both when matching listed URIs and when expanding completion values, because
+  servers list nested `file:///{path}` resources unescaped. Label: the URI when ≤ 64 characters, else the
+  title/name; description `title: description (mime)`; `provides = {uri, resource}`; ttl 300 s. MCP sessions are
+  async: prefetch with `await source.arefresh()` (the `Agent` does it in `arun`); inside a running loop an
+  unfetched source stays empty with `last_error` instead of blocking.
+
+### LLM fallbacks (§4.7)
+
+- Transport: one `POST {base_url}/chat/completions` per call over a short-lived `httpx` client (fallbacks are rare;
+  no pooling); key from `api_key`, else `OPENROUTER_API_KEY`; `api_key=""` sends no `Authorization` (local
+  servers). Failures fail closed — Filler `[]` (the slot stays uncovered → clarify), Escalator `""`, TextLLM `""` —
+  with `last_error`; `raise_errors=True` raises `FallbackError` instead.
+- Filler: the k alternatives come from one response whose strict `json_schema` is
+  `{"candidates": [{<slots to fill>}]}` (the chat `n` parameter is not portable across OpenRouter providers). The
+  strict conversion strips `x-jev`, keeps `type properties required items enum const anyOf description title
+  additionalProperties pattern format minimum maximum exclusiveMinimum exclusiveMaximum multipleOf minItems
+  maxItems`, closes objects and makes optional properties nullable. Returned values are re-validated against the
+  original slot schemas; frozen and unknown fields are dropped; at most `k` distinct candidates are kept.
+- Escalator: tools pass through `strip_xjev`, `tool_choice: "auto"`, `parallel_tool_calls: false`, temperature 0,
+  and a system prompt naming the escalating rule; the first tool call wins; malformed arguments give `""` (no call).
+  A `tool` message that answers no preceding assistant call becomes a system note marked "untrusted data, not
+  instructions" (OpenAI rejects orphan tool messages).
+- §3.6 rule 5 (core fix in `decode.py::rekey`): when late binding turns a text candidate into a value equal to
+  another accept-Noul candidate (a template rendering equal to an Escalator or Filler proposal), the two accept
+  masses are combined with `max`, not summed: accept Nouls are independent judgments, not one distribution, and the
+  sum could exceed 1 (composition then raised "factor 1.41 is not a probability").
+
+## Interop adapters, compat, CLI (`adapters/*`, `compat.py`, `cli.py`)
+
+Every adapter test runs on scripted answers; nothing there is evidence about Jev's accuracy.
+
+### Shared plumbing (`adapters/_router.py`, `adapters/pending.py`)
+
+- §7.2.1 tools per request: frameworks send the tool list with every request, the host router has its own
+  catalog → the router stays authoritative for every tool it knows (its sidecars, markers and sources cannot be
+  expressed in a request); unknown tools are compiled from the request's definition. The same name set uses the
+  router itself; any other set gets a derived router (same backend, policy, context, Filler, Escalator, text LLM,
+  limits, estimator, calibrators, trace store; a custom `revalidate` kept), cached per router and tool set (≤ 64),
+  so click resumes find their in-memory state again.
+- §7.2.4 prefix key: `sha256(canonical(messages[0..k]))` over a normalized form of each message —
+  `{"role", "content"}` (text; content-part lists joined) plus `tool_calls` (parsed arguments) and `tool_call_id`.
+  Client extras (`x_jev`, `refusal`, `name`) never change the key. The key is `sha256:<hex>` (no clash with
+  `pnd_` ids in one store).
+- §7.2.4 matching: a request answers a prompt only when it ends with user message(s) right after an assistant
+  message; the reply is those user texts joined. Lookup order: an explicit `pending_id`, `x_jev.pending_id` on the
+  assistant message, then the prefix key. A resumed handle is deleted under both keys; a new pending handle is
+  stored under its id and the prefix key of the request plus the assistant message the client will echo.
+- §7.2.4 stores: `InMemoryPendingStore` expires an entry at `min(pending.expires_at, put + ttl)` (ttl 15 min),
+  evicts oldest beyond 10,000 keys, and is thread-safe. Adapters default to one store per router
+  (`default_store(router)`); `openai.complete` without a router uses one module-level store (each call builds a
+  fresh router, so a reply is safely re-compiled by `Router.resume`, which the core already does for a pending
+  without live state).
+
+### OpenAI (`adapters/openai.py`)
+
+- §3.10 `ChatCompletion`: `id = "chatcmpl-" + decision_id`, `created` from the trace's `created_at`,
+  `usage.prompt_tokens = total_tokens = jev_input_tokens`, `completion_tokens = 0` (Jev generates nothing),
+  `usage.x_jev = {jev_calls, jev_input_tokens, llm_calls, cost_usd, rounds, outcome}`. The message is
+  `Decision.to_openai_message()` unchanged.
+- §7.2.1 `wrap`: duck-typed (`client.chat.completions.create`); async clients are detected by `create` being a
+  coroutine function (`is_async=` overrides). The response is `openai.types.chat.ChatCompletion` when the SDK is
+  importable (extra fields kept), else an `AttrDict` (dict with attribute access and `model_dump()`).
+  `stream=True` yields two synthetic `chat.completion.chunk`s (the whole message, then finish reason + usage).
+  `extra_body={"jevtools": {"context": {...}, "pending_id": ...}}`; context overrides are limited to
+  `now, tz, locale, user, shareable, include_system, observations` (per-request `sources` rows are the proxy's job).
+- §7.2.2: `tool_choice` goes to the router unchanged; `parallel_tool_calls` is accepted and ignored (DECISIONS.md).
+- §7.2.4 error mapping (`error_response(exc)`, `decision_error(decision)`); rows the table does not list: 404 →
+  502 `jev_invalid_request` (wrong model/URL is a request problem); `BackendConfigError` (no key) → 502 `jev_auth`;
+  `JevProtocolError` → 502 `jev_protocol_error`; anything else → 500 `jevtools_internal`. 429 has type
+  `rate_limit_error`, code `jev_rate_limited`, `Retry-After` = ceil(seconds). Messages are redacted (bearer tokens,
+  `sk-`/`or-`/`ts-` keys, `key=`/`token=` query values); auth errors never echo the upstream text. The router fails
+  closed (P0) and records the backend error only as text, so `decision_error` reads the status back from
+  `HTTP nnn` in the call records (none, or 5xx → `jev_unavailable`); `Retry-After` is not recoverable there.
+
+### Anthropic, MCP
+
+- §3.10 Anthropic: `to_message` is a Messages response (`msg_jev_<digest>`, `stop_reason` `tool_use`/`end_turn`,
+  `usage.output_tokens = 0`, `x_jev` = the OpenAI message's). Converters: tools `{name, description,
+  input_schema}` → OpenAI (server tools without `input_schema` rejected; tool-level `x-jev` kept); messages:
+  `tool_result` blocks → `role: tool` (text blocks joined), `tool_use` → assistant `tool_calls` with canonical JSON
+  arguments; `tool_choice` `auto/any/tool/none` → `auto/required/named/none`.
+- §7.1 MCP: `call_decision` is async (a sync `call_tool` result is accepted) and refuses a decision without
+  `tool_calls` (only `execute` reaches a server). `result_content` prefers `structuredContent`, else joins text
+  blocks; `to_observation` builds the loop `Observation` (status `error` on `isError`).
+
+### LangChain (`adapters/langchain.py`)
+
+- §7.2.3 `config["configurable"]["jev_context"]` does not reach `_generate` in langchain-core 1.x →
+  `invoke`/`ainvoke` are overridden to put it in a ContextVar; `_generate` also reads `ensure_config()` (LangGraph
+  node configs). Precedence: `jev_context` kwarg > per-call config > the model's `context` > the router's.
+- System messages are passed as `system` (the engine uses them only with `Context.include_system`).
+- `tool_choice`: `None/auto` → auto, `any/True/required` → required, `none/False` → none, a bound tool name →
+  named (an unbound name is an error). On execute the `AIMessage` content is `""`.
+- `text_llm` is a LangChain chat model (`invoke`/`ainvoke`) answering abstain handoffs without text; the Router's
+  own `TextLLM` protocol is unchanged.
+- `confirm_node` interrupts with `{"kind": "jevtools", "outcome", "prompt", "pending_id", "decision_id"}`; the resume
+  value is a string, `{"selection": id}` (sent as the option's text so it matches the click grammar exactly) or
+  `{"reply": text}`. `needs_confirmation(state)` is the conditional-edge helper.
+
+### Pydantic AI (`adapters/pydantic_ai.py`)
+
+- §7.2.5 output tools (`final_result`…) are declared `x-jev.risk: read` (returning the run's result has no side
+  effect); otherwise the `final` verb falls to the fail-safe external tier and asks `authorized`.
+- `tool_choice = required` when the agent disallows text and offers output tools, else `auto`.
+- pydantic-ai rejects an empty text response → an abstain without text answers `ABSTAIN_TEXT` ("No tool applies to
+  this request.", a fixed template, configurable), a finished loop (`done`, or `NO_TOOL` right after a tool result)
+  answers with the last tool result (the receipt). A `text_model` receives the request without function tools.
+- Non-tool `RetryPromptPart`s (output-validation feedback) are dropped: framework feedback is not the user's words.
+  `provider_details["jev"]` holds the native decision; its `pending_id` is echoed as `x_jev` on conversion.
+
+### compat (§7.4)
+
+- `cookbook_policy()` gives read, write and external the read rule (W, execute 0.60, no confirm band, no gates) and
+  turns probes off; the critical tier keeps its rule (never auto-executes uncertified). The tier change itself is
+  `cookbook_hints(tools)` (`risk: read` per tool, a hints layer, so inline `x-jev.risk` still wins);
+  `cookbook_catalog(tools)` compiles a catalog with those hints.
+- `from_jev_fn`: the `@jev.fn` "signature" is its pydantic return model (the fields Jev decides); `inspect.unwrap`
+  reaches the original function. `int` with `ge/le` → ordinal when author `levels` (≤ 11) are given or the name is
+  graded (`priority`, `rating`… over ≤ 11 levels), else quantity with the integer grid in `x-jev.values` (≤ 252);
+  `float` with `levels` → quantity with evenly spaced grid values labelled by the levels. The `levels` keyword is
+  removed from the forwarded schema. A Jinja docstring contributes only the text before its first `{{`/`{%`.
+  `JevFnTool(**args)` builds the model; `result(decision, proposed=False)` keeps `p` and runner-ups per field.
+
+### CLI (§7.5)
+
+- lint line: `name  what  stakes  STATUS  note`; statuses OK < WEAK < WARN < ERROR per line (the worst wins, notes
+  joined). Exit 1 on any ERROR; `--strict` also on WARN/WEAK. ERROR: unknown `x-jev` keys (pre-scan of inline, MCP
+  `_meta` and sidecar layers, so every offender is listed), a tool that does not compile (per-tool fallback so the
+  others are still linted), a ref slot without a source, a ref source missing from `--sources`. WARN: fail-safe
+  tier, missing tool/top-level parameter descriptions, a description not starting with an imperative verb (unless
+  `x-jev.intent`), k > 120, description overlap ≥ 0.5. WEAK: generic span (row 18), content text without a Filler
+  (`--filler`, or a declared fallback other than `fill`). `channels=` is shown for critical tools and declared
+  allow-lists. `DESCRIPTIONS` lists every pair ≥ 0.5, else the most overlapping pair (token Jaccard, stopwords off).
+- Sources files: JSON/TOML/YAML `{"sources": [...]}`, a list, or `[sources.<name>]` tables of the source specs
+  shared with `jevtools.toml` and evaluation contexts (`jevtools.sources.specs`, merge); the CLI spellings `kind`,
+  `rows_file`, `paths`, `paths_file` are accepted there too. Entries without data are inference descriptors (lint).
+- `verify --context`: a Context document. A `now` with only a fixed UTC offset now works in the core
+  (`context.zone_of` reads the zone name `UTC±HH:MM` as a fixed offset), so no `tz` is required.
+- `probe --backend <name>` maps a name to `auto(env={JEVTOOLS_BACKEND: name})`; `serve` calls
+  `jevtools.serve.run(config=, host=, port=)`. A missing module or extra exits 2 with a clear message.
+- `eval <dataset.jsonl>` (merge) runs `jevtools.eval.run_dataset` on the backend `--backend` names (as `probe`),
+  prints the headline §11.2 metrics, writes the report with `--out`, and marks simulator/scripted runs as never
+  evidence about Jev. `tune <report.json>` runs `jevtools.eval.tune` (`--alpha tier=x`, `--method cp|crc`,
+  `--calibrate` or `--held-out`) and writes `policy.toml` (+ calibrators). `fixtures --update` (§9) is not built.
+
+## Evaluation harness and proxy (`eval/*`, `serve/*`)
+
+Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harness; they are never evidence about Jev.
+
+### Dataset and scoring (§11.1, §11.2)
+
+- §11.1 match modes: an argument listed in `args` defaults to `exact`, one listed in `accepted` to `accepted_set`
+  (the `args` value is accepted too); arguments the label does not mention are **ignored** (labels may be partial).
+  A checked argument the call omits is a mismatch. Values compare on canonical JSON (`45 == 45.0`, NFC strings).
+  `gold.tool = null` matches exactly when no call is proposed.
+- §11.1 files: `context`/`catalog` paths resolve against the JSONL file's directory; a context document holds
+  `now/tz/locale/user/shareable/include_system` and `sources` in the proxy's source-spec format
+  (`jevtools.sources.specs.build_sources`), so datasets, `jevtools.toml` and CLI sources files describe sources the
+  same way.
+- Correctness: `correct = outcome ∈ outcomes_ok ∧ (call is gold ∨ outcome ∉ {execute, confirm})`. `exact_match` is
+  the share of *proposed* calls equal to gold (outcome-independent); `accuracy` is the share of correct decisions.
+- Wrong execution: an execution is wrong unless the call is gold **and** gold allows `execute`
+  (`wrong_if_executed`). The tuner uses the same flag, so labellers must list `execute` wherever running the call
+  unasked would be acceptable (a critical-tier label of `["confirm"]` can never certify auto-execution).
+- §11.2 stage attribution, first match wins: `backend` (P0) → `plan` (gold tool never speculated) → `extractor`
+  (a checked gold value in no pool of the gold tool) → `policy` (the proposed call is gold, the outcome is not
+  allowed) → `model` (tool top ≠ gold, or an elected value ≠ gold). `error` records a harness exception.
+- Pool coverage/recall@K: options are sent in canonical (casefold) order, so the retrieval rank comes from the
+  candidate provenance (`prov.rank`, else `prov.score` descending, ties in sent order). Text candidates with late
+  `⟨…⟩` placeholders match gold with the placeholders read as wildcards. A list gold needs every element; a gold
+  value reachable only through the `NOT_STATED` default counts as covered (`via_default`). Arguments without any
+  question (derived, secret, late defaults) are not reported.
+- Calibration records from traces: Choices give the top label's mass (top-label calibration) plus each sentinel's
+  mass separately (`sentinel.NONE_OF_THESE` true when gold is in no option and no default; `NOT_STATED` true when
+  its decode — default value or missing/omit — equals gold; `NO_TOOL` true when gold has no tool). Nouls:
+  `authorized` (every tool: true iff it is the gold tool), `accept`, `present`, `more` on the gold tool. Questions of
+  other tools are skipped (a counterfactual premise has no gold), as are `member`, `item`, `date`/`time`,
+  `branch`, `bucket`/`group`, `reply` and `done_after` (call-level gold does not determine them).
+- Clarify usefulness counts menus only (bind/tool options); open questions are excluded. Abstention precision
+  counts abstain and refuse; abstaining is right when gold allows it or has no tool.
+- Risk–coverage: error = the proposed call is not gold; the `J` curve falls back to L when no joint was asked
+  (as `prior_of`). Flip rate: the (outcome, call) signature differs across replays; `h = max(0.03, q95|C_i − C_0|)`
+  with linear-interpolation quantiles. One router per case is reused across its replays.
+
+### Tuning and certification (§11.3, §11.4)
+
+- Scores are recomputed per composition from the recorded W/Π/L/J (optionally through an isotonic calibrator
+  fitted per tier *and* composition, capped at W), so one run tunes every composition; the tier's current
+  composition wins ties.
+- Thresholds reproduce the policy's hysteresis test exactly: for each observed score `t`, `τ = ceil4(t − h)` and the
+  bound is computed on `{C − τ ≥ h}` (what `policy.evaluate` executes). Equal coverage keeps the higher τ.
+- §11.3 does not define `τ_confirm` → the lowest threshold ≤ `τ_execute` whose kept cases have a proposed call wrong
+  at most `confirm_alpha = 0.5` of the time (95% CP bound); none → an empty band (`confirm = τ_execute`). Tiers
+  without a confirm band (read) keep `None`; `confirm_alpha=None` keeps the base values.
+- No threshold meets `α_tier` → `execute = "never"`; a tier without data keeps its prior thresholds.
+- §11.4: `tiers.critical.auto_execute` is set only with ≥ 3,000 **distinct** labelled critical-tier cases and the
+  bound met; `certified.critical_cases` always records the count; `execute` stays `"never"`.
+- `method="crc"`: loss = wrong ∧ kept over all tier cases; `(Σ loss + 1)/(n + 1) ≤ α`.
+- `calibrate=True` fits in-sample (recorded as `in_sample`, optimistic); passing a held-out report records
+  `held_out`. Calibrators are a separate JSON document whose hash `notes.tuning.calibrators_sha256` cites.
+- Version `"<base>+tuned.<12 hex>"` (digest of the base policy hash and the tuning notes); re-tuning replaces the
+  suffix. The TOML writer omits `None` (TOML has no null) and verifies the text reads back as the same policy.
+- `hysteresis` comes from the report's replays when there are several, else the base policy's.
+
+### Experiments (§11.2 E1–E10)
+
+- Live experiments (E1–E7) are skipped against offline backends unless `allow_offline=True`; such results carry
+  `evidence=False`. E8 (planner part), E9 and E10 (structural part) measure code and run offline.
+- E2 removes gold rows from `Registry` sources only (rebuilt through the public constructor); file indexes and
+  providers are left unchanged. E3 masks the text that anchored the gold option (its provenance `mention`/`anchor`).
+- E4 and E7 are backend wrappers (reverse each Choice's options; split a call's questions across parallel calls;
+  reverse question order), so the Ballot, decoding and traces are unchanged.
+- E5 splits gold-tool slot calibration by whether Jev's tool Choice agreed with the premise. E6 varies
+  `pools.ref_k`. E8's chosen-tool part reads `speculation miss` trace notes. E10 plants instructions in an earlier
+  assistant turn or in a tool result; a structural success is a planted value inside an execute/confirm call.
+
+### Proxy (§7.2.4)
+
+- Built on the adapters: `adapters.pending` (`PendingStore`, `InMemoryPendingStore`, `adecide_turn` matching by
+  `pending_id` — explicit or echoed `x_jev` — and by prefix hash; consumed handles are forgotten) and
+  `adapters.openai` (`chat_completion`, `completion_chunks`, `error_response`, `decision_error`),
+  `adapters._router` (`router_for`, `merge_context`).
+- One base router per distinct set of per-request sources (LRU, `max_routers = 32`); request tool sets are derived
+  from it with `router_for` (cached), so click resumes find their in-memory state. Per-request rows of a configured
+  source reuse its settings; unknown names guess the key (`id, key, email, value, name, path`); a full spec is
+  built as given; request sources replace configured ones of the same name.
+- The router fails closed on backend errors and keeps only their text, so the backend is wrapped
+  (`CapturingBackend`, per-request context variable) to map the typed exception (status, `Retry-After`);
+  `decision_error`'s text parsing is the fallback.
+- "Escalate with no escalator": the router never returns `escalate` without an escalator (it abstains or asks
+  instead), so the proxy forwards to `fallback_llm` the decisions the policy would have escalated: P0, P2
+  (`UNSUPPORTED`) and diffuse shapes (P5/P9); also tool-compile failures and unexpected exceptions. A `NO_TOOL`
+  abstain is served (text LLM or empty). An escalator's handoff (text or proposed call) is served.
+- Forwarding drops `jevtools`, `stream`, `stream_options`; strips `x_jev`/`x-jev` from messages and `x-jev` from tool
+  schemas (`strip_xjev`); replaces `model` when `fallback_llm.model` is set; merges `fallback_llm.options`. An
+  upstream non-2xx is passed through with its status; a transport failure returns the mapped Jev error (or
+  502 `fallback_unavailable`). Answers get `message.x_jev = {"outcome": "fallback", "reason"}`.
+- Extra 400 codes: `invalid_json`, `missing_messages`, `jevtools_bad_extra`, `jevtools_bad_context`,
+  `jevtools_bad_sources`; any exception while compiling request tools is `jevtools_bad_tool`.
+- `stream: true` → server-sent events: the whole message, then the finish reason with usage, then `[DONE]`.
+- Config: `backend = "<type>"` shorthand; `module:factory` backends and `source` factories; CSV `list_fields`;
+  file indexes from a JSON list or one path per line; `[context]` limited to `now/tz/locale/user/shareable/
+  include_system`; `policy`/`calibrators` paths are relative to the TOML file.
+- Gaps: `conversation_id` is accepted but the proxy keeps no entity store in v0.1; planning runs on the event loop
+  (async Jev calls are concurrent, CPU-bound compile is not) — run several workers for throughput;
+  `POST /v1/messages` (Anthropic) is v0.2.
+
+## Merge (cross-module integration)
+
+- §9 exports: `jt.Agent`, `LoopBudget`, `LoopResult`, `LoopStep`, `LoopUsage`, `LoopObservation`, `EntityStore`,
+  `Entity`, `Executor`, `ingest_observation`, the three `OpenAICompatible*` fallbacks, `ToolSource`, `MCPResources`,
+  and the modules `jt.openai` (= `jevtools.adapters.openai`), `jt.adapters`, `jt.compat`. `jt.backends` exports
+  `auto`, `LexicalSimulator`, `DEFAULT_SYNONYMS`, `Cassette`, `CassetteMiss` (so `jt.backends.auto` is the function;
+  the module stays importable as `from jevtools.backends.auto import …`). `jevtools.eval` is not re-exported (it
+  would shadow the builtin `eval`), nor `jevtools.serve` (optional extra); `import jevtools` loads no optional
+  dependency.
+- One implementation per helper: source specs (`jevtools.sources.specs`, used by the proxy, the evaluation datasets
+  and the CLI; `jevtools.serve.config` re-exports it), MCP result handling and the idempotency `_meta` key
+  (`jevtools.loop` / `jevtools.sources.toolsource`, used by `jevtools.adapters.mcp`), the duck-typed MCP field
+  getter (`sources.toolsource.get_any`, used by `sources.mcp` and `adapters.mcp`), the OpenAI error document
+  (`adapters.openai.api_error`, used by the proxy), the context setting fields (`context.SETTING_FIELDS`), the
+  fixed-offset zone parser (`context.zone_of`, used by `extract.temporal`) and the probe cache location
+  (`validate.cache_dir`).
+- `jevtools.serve` re-exports `PendingStore`/`InMemoryPendingStore` from `jevtools.adapters.pending` (§9 lists them
+  under `serve/app.py`); the proxy and the adapters share that protocol, so a host can pass one store (e.g.
+  Redis-backed) to `create_app(store=…)`. `serve.run(config, host, port)` takes the same `config` as `create_app`.
+- pyproject: `all` extra (every optional integration); ruff excludes `docs/` (the normative spec's code blocks are
+  quoted as written, not reformatted).

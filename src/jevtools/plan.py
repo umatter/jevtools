@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -136,20 +136,23 @@ def compile_round(
     policy = policy or Policy()
     limits = limits or Limits()
     choice, named = parse_tool_choice(tool_choice, catalog)
-    state, notes = cut_state(build_state(ctx, mode), limits)
+    state, notes = cut_state(build_state(ctx, mode), limits, keep=pinned_mentions(ctx))
     rc = ResolveContext(
         ctx=ctx, catalog=catalog, policy=policy, limits=limits, mode=mode, state=state, round=round,
         has_filler=has_filler, preferred={}, widen={}, injected=injected_by_slot(catalog, extra_candidates or {}),
         mentions=mentions,
     )  # fmt: skip
     forced: list[str] = []
+    loop = False
     if pending is not None:
+        loop = bool(pending.state.get("loop"))  # a resume of a loop-mode prompt still asks done_after (§6.1)
         if pending.state.get("tool"):
             forced = speculate_only = [pending.state["tool"]]
         if reply_options is None:
             reply_options = pending.state.get("options")
     considered = [] if choice == "none" else [catalog.get(named)] if named else list(catalog)
-    builder = _Builder(catalog, rc, considered, choice, speculate_only, extra_candidates or {}, forced=forced)
+    builder = _Builder(catalog, rc, considered, choice, speculate_only, extra_candidates or {}, forced=forced,
+                       loop=loop)  # fmt: skip
     questions, tools = builder.build(policy)
     if reply_options:
         questions.append(reply_question(reply_options))
@@ -205,18 +208,33 @@ def state_tokens(state: Any, limits: Limits) -> int:
     return math.ceil(len(canonical_str(state)) * limits.token_ratio / limits.chars_per_token)
 
 
-def cut_state(state: dict[str, Any], limits: Limits) -> tuple[dict[str, Any], list[str]]:
-    """State cut 1 (§5.5): drop the oldest ``history`` turns while the state exceeds ``max_state_tokens``."""
+def cut_state(
+    state: dict[str, Any], limits: Limits, *, keep: Callable[[str], bool] | None = None
+) -> tuple[dict[str, Any], list[str]]:
+    """State cut 1 (§5.5, §6.2): drop the oldest ``history`` turns while the state exceeds ``max_state_tokens``.
+
+    ``keep(text)`` marks turns to spare (§6.2: turns that mention pinned entities, from the context's entity store):
+    they are dropped only once every other turn is gone and the state is still too large.
+    """
     notes: list[str] = []
     history = list(state.get("history") or [])
     dropped = 0
     while history and state_tokens({**state, "history": history}, limits) > limits.max_state_tokens:
-        history.pop(0)
+        index = 0
+        if keep is not None:
+            index = next((i for i, turn in enumerate(history) if not keep(str(turn.get("text", "")))), 0)
+        history.pop(index)
         dropped += 1
     if dropped:
         notes.append(f"budget: dropped {dropped} oldest history turn(s)")
         state = {**state, "history": history}
     return state, notes
+
+
+def pinned_mentions(ctx: Context) -> Callable[[str], bool] | None:
+    """The §6.2 history rule of the context's entity store (``EntityStore.mentions_pinned``), if it has one."""
+    test = getattr(ctx.entities, "mentions_pinned", None)
+    return test if callable(test) else None
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -417,8 +435,10 @@ class _Builder:
         extra: Mapping[PoolKey, Sequence[Candidate]],
         *,
         forced: Sequence[str] = (),
+        loop: bool = False,
     ) -> None:
         self.catalog = catalog
+        self.loop = loop
         self.rc = rc
         self.considered = list(considered)
         self.choice = choice
@@ -446,7 +466,7 @@ class _Builder:
                 self.probe_only.add(tool.name)
         questions: list[BallotQuestion] = []
         if self.considered and self.choice != "named":
-            loop = is_loop(self.rc.ctx, self.rc.mode)
+            loop = self.loop or is_loop(self.rc.ctx, self.rc.mode)
             done = bool(self.rc.ctx.all_observations())
             questions.append(tool_question(self.considered, choice=self.choice, loop=loop, done=done,
                                            label_max=self.rc.limits.label_max))  # fmt: skip
@@ -497,7 +517,7 @@ class _Builder:
                 continue
             pool = self.pools[(tool.name, slot.path)]
             questions += get_resolver(slot.kind).questions(tool, slot, pool, self.rc)
-        if self.rc.mode == "loop" or is_loop(self.rc.ctx, self.rc.mode):
+        if self.loop or is_loop(self.rc.ctx, self.rc.mode):
             questions.append(done_after_question(tool))
         return questions
 
@@ -621,6 +641,7 @@ __all__ = [
     "authorized_question",
     "compile_round",
     "cut_state",
+    "pinned_mentions",
     "done_after_question",
     "family_units",
     "followup_ballot",

@@ -114,6 +114,25 @@ def test_guards_missing_answer_type_mismatch_and_unknown_labels(scenario_catalog
     assert tool_distribution(plan.ballot, got)["send_email"] == pytest.approx(0.9)
 
 
+def test_echoed_labels_are_normalized_by_their_uniqueness_key(scenario_catalog: Catalog) -> None:
+    """§8.7 label echo: a backend returning ``Send_Email`` for the sent ``send_email`` is read by NFC + casefold (the
+    label uniqueness key, so the match is unambiguous); a duplicate of an exactly echoed label stays ignored."""
+    from jevtools.wire import ChoiceAnswer
+
+    with resolvers(*scenario_resolvers(amount=())):
+        plan = compile_round(scenario_catalog, scenario_context(R2_MESSAGES))
+    response = ScriptedBackend(R2_SCRIPT).decide(plan.ballot.to_requests("m")[0])
+    echoed = ChoiceAnswer(choice="SEND_EMAIL", confidence=0.8,
+                          probabilities={"SEND_EMAIL": 0.7, "NO_TOOL": 0.2, "no_tool": 0.1})  # fmt: skip
+    got, notes = collect_answers(plan.ballot, [response.model_copy(update={
+        "answers": {**response.answers, "tool": echoed}})])  # fmt: skip
+    tool = got["tool"]
+    assert isinstance(tool, ChoiceAnswer) and tool.choice == "send_email"
+    assert tool_distribution(plan.ballot, got)["send_email"] == pytest.approx(0.7)
+    assert "tool: label 'SEND_EMAIL' read as 'send_email' (echo normalized)" in notes
+    assert "tool: ignored unknown label 'no_tool'" in notes
+
+
 def test_opaque_ids_round_trip(scenario_catalog: Catalog) -> None:
     with resolvers(*scenario_resolvers(amount=())):
         plan = compile_round(scenario_catalog, scenario_context(R2_MESSAGES))

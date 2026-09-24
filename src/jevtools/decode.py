@@ -28,7 +28,7 @@ from typing import Any
 
 from jevtools.backends.errors import JevProtocolError
 from jevtools.ballot import Ballot, BallotQuestion, tool_qid
-from jevtools.candidates import Bottom, Channel, Pool, display_value, value_key
+from jevtools.candidates import Bottom, Channel, Pool, display_value, label_key, value_key
 from jevtools.confidence import CallMap, Composition, Factors, call_map
 from jevtools.kinds import late as late_recipes
 from jevtools.kinds.base import (
@@ -166,10 +166,31 @@ def _checked(question: BallotQuestion, answer: Answer | None, notes: list[str]) 
     if isinstance(answer, ChoiceAnswer):
         if any(not 0.0 <= p <= 1.0 for p in answer.probabilities.values()):
             raise JevProtocolError(f"{question.qid}: probability outside [0, 1]")
-        sent = set(question.labels)
-        notes += [f"{question.qid}: ignored unknown label {label!r}" for label in answer.probabilities
-                  if label not in sent]  # fmt: skip
+        answer = _normalize_echo(question, answer, notes)
     return answer
+
+
+def _normalize_echo(question: BallotQuestion, answer: ChoiceAnswer, notes: list[str]) -> ChoiceAnswer:
+    """Map echoed labels back to the sent ones (§8.7 label echo): an exact key is used as is; a key that is not
+    byte-equal to any sent label but equal to exactly one after NFC and casefold (the label uniqueness key, so the
+    match is unambiguous) is read as that label; anything else is ignored and noted."""
+    sent = set(question.labels)
+    unknown = [label for label in answer.probabilities if label not in sent]
+    if not unknown:
+        return answer
+    by_key = {label_key(label): label for label in question.labels}
+    probabilities = {k: v for k, v in answer.probabilities.items() if k in sent}
+    choice = answer.choice
+    for label in unknown:
+        target = by_key.get(label_key(label))
+        if target is None or target in probabilities:
+            notes.append(f"{question.qid}: ignored unknown label {label!r}")
+            continue
+        notes.append(f"{question.qid}: label {label!r} read as {target!r} (echo normalized)")
+        probabilities[target] = answer.probabilities[label]
+        if choice == label:
+            choice = target
+    return answer.model_copy(update={"probabilities": probabilities, "choice": choice})
 
 
 def noul(answers: Mapping[str, Answer], qid: str) -> float | None:
@@ -359,12 +380,14 @@ def discard_keys(result: SlotResult, keys: Iterable[str], *, out_of_pool: float,
 
 def rekey(result: SlotResult, key: str, value: Any) -> SlotResult:
     """Replace the value behind ``key`` by a composed value (late binding) and elect it (an equal existing value
-    pools with it)."""
+    pools with it; for accept Nouls, which are independent judgments rather than one distribution, the larger
+    ``n`` is kept, so a factor never exceeds 1)."""
     new_key = value_key(value)
+    accept = result.kind == "text"
     dist: dict[str, float] = {}
     for k, p in result.dist.items():
         target = new_key if k == key else k
-        dist[target] = dist.get(target, 0.0) + p
+        dist[target] = max(dist.get(target, 0.0), p) if accept else dist.get(target, 0.0) + p
     values = {k: v for k, v in result.values.items() if k != key}
     values[new_key] = value
     entries = {k: e for k, e in result.entries.items() if k != key}

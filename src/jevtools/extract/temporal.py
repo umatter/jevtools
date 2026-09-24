@@ -18,10 +18,11 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from zoneinfo import ZoneInfo, available_timezones
+from zoneinfo import available_timezones
 
+from jevtools.context import zone_of
 from jevtools.extract.base import Mention, SourceText
 from jevtools.extract.locales import Locale, all_locales
 from jevtools.extract.tokens import fold
@@ -162,15 +163,6 @@ class TemporalValue:
 # --------------------------------------------------------------------------------------------------------------------
 # Calendar helpers (DST-aware)
 # --------------------------------------------------------------------------------------------------------------------
-
-
-def zone_of(name: str) -> tzinfo:
-    """A tzinfo for an IANA name or a ``UTC±HH:MM`` fixed offset."""
-    match = re.fullmatch(r"UTC([+-])(\d{2}):(\d{2})", name)
-    if match:
-        sign = 1 if match.group(1) == "+" else -1
-        return timezone(sign * timedelta(hours=int(match.group(2)), minutes=int(match.group(3))))
-    return ZoneInfo(name)
 
 
 def localize(day: date, clock: time, zone_name: str) -> list[tuple[datetime, str | None, str]]:
