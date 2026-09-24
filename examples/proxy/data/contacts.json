@@ -1,0 +1,22 @@
+[
+  {"name": "Anna Keller", "email": "anna.keller@acme.com", "team": "ACME", "notes": "Account Manager at ACME; last emailed 2 days ago", "last": "2026-09-22"},
+  {"name": "Anna Rossi", "email": "anna.rossi@gmail.com", "notes": "personal contact; last emailed 3 weeks ago", "last": "2026-09-03"},
+  {"name": "Annabel Frey", "email": "annabel.frey@muster.ch", "team": "Finance", "notes": "Finance, the user's own company; last emailed 5 months ago", "last": "2026-04-20"},
+  {"name": "Bob Meier", "email": "bob.meier@muster.ch", "team": "Payments", "notes": "Payments team, the user's own company; 14 shared meetings in the last 90 days", "last": "2026-09-23"},
+  {"name": "Robert Brown", "email": "rbrown@partner.io", "aliases": ["Bob"], "notes": "Partner Inc.; last met 4 months ago", "last": "2026-05-12"},
+  {"name": "Carol Liu", "email": "carol.liu@muster.ch", "team": "Payments", "notes": "Payments team, the user's own company; 9 shared meetings in the last 90 days", "last": "2026-09-21"},
+  {"name": "Caroline Weber", "email": "caroline.weber@muster.ch", "team": "Legal", "notes": "Legal, the user's own company; no shared meetings", "last": "2025-11-02"},
+  {"name": "Finance Team", "email": "finance@muster.ch", "notes": "group mailbox of the Finance team", "last": "2026-09-01"},
+  {"name": "Liam Ammann", "email": "liam.ammann@muster.ch", "team": "Engineering", "notes": "Engineering, the user's own company; last emailed 1 months ago", "last": "2026-08-25"},
+  {"name": "Noah Ammann", "email": "noah.ammann@example.com", "team": "Sales", "notes": "Sales; last emailed 2 months ago", "last": "2026-07-25"},
+  {"name": "Mia Ammann", "email": "mia.ammann@example.net", "team": "Marketing", "notes": "Marketing; last emailed 3 months ago", "last": "2026-06-24"},
+  {"name": "Emma Ammann", "email": "emma.ammann@muster.ch", "team": "Support", "notes": "Support, the user's own company; last emailed 4 months ago", "last": "2026-05-24"},
+  {"name": "Luca Ammann", "email": "luca.ammann@example.com", "team": "Operations", "notes": "Operations; last emailed 5 months ago", "last": "2026-04-23"},
+  {"name": "Lea Ammann", "email": "lea.ammann@example.net", "team": "Research", "notes": "Research; last emailed 6 months ago", "last": "2026-03-23"},
+  {"name": "Elias Ammann", "email": "elias.ammann@muster.ch", "team": "Design", "notes": "Design, the user's own company; last emailed 7 months ago", "last": "2026-02-20"},
+  {"name": "Nora Ammann", "email": "nora.ammann@example.com", "team": "Logistics", "notes": "Logistics; last emailed 8 months ago", "last": "2026-01-20"},
+  {"name": "Jonas Ammann", "email": "jonas.ammann@example.net", "team": "Procurement", "notes": "Procurement; last emailed 9 months ago", "last": "2025-12-20"},
+  {"name": "Sara Ammann", "email": "sara.ammann@muster.ch", "team": "Security", "notes": "Security, the user's own company; last emailed 10 months ago", "last": "2025-11-19"},
+  {"name": "David Ammann", "email": "david.ammann@example.com", "team": "Facilities", "notes": "Facilities; last emailed 11 months ago", "last": "2025-10-19"},
+  {"name": "Julia Ammann", "email": "julia.ammann@example.net", "team": "Training", "notes": "Training; last emailed 1 months ago", "last": "2026-08-14"}
+]

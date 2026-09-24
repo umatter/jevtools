@@ -16,8 +16,15 @@ Choice options are scored, then ``p = softmax(s / temperature)`` rounded to 4 de
 qid suffix; Scores are the softmax of each level's coverage of ``A``. ``flip_band > 0`` emulates near-threshold
 instability, reproducibly per ``(seed, sha256(request), qid)``.
 
+Tool options (``qid == "tool"``) are scored by :meth:`LexicalSimulator.tool_score`: ``0.6·verb + 0.4·own``, where
+``verb`` is 1 when the request's leading action word belongs to the tool's verb family and ``own`` is the coverage
+of the tool's own name tokens by the family-expanded ``U``. The literal §8.6 rule (the share of the request's content
+tokens the tool explains) made every long request clarify on the tool question; the change is recorded in
+``docs/DECISIONS.md`` (Core polish).
+
 Deviations from the literal §8.6 text are recorded in the Backends section of ``docs/DECISIONS.md`` (ζ also reads
-the mention a ``ref`` option description quotes; ``OTHER``/``CANCEL`` scores; Score temperature).
+the mention a ``ref`` option description quotes; ``OTHER``/``CANCEL`` scores; Score temperature) and in
+its Core polish section (tool scoring, the extra family words).
 """
 
 from __future__ import annotations
@@ -62,15 +69,30 @@ SIMULATOR_MODEL = "lexical-simulator"
 """The model id the simulator reports (it is not a model)."""
 
 DEFAULT_SYNONYMS: Mapping[str, tuple[str, ...]] = {
-    "send": ("email", "mail"),
-    "book": ("event", "meeting", "sync", "calendar", "schedule"),
+    "send": ("email", "mail", "forward", "reply"),
+    "book": ("event", "meeting", "sync", "calendar", "schedule", "invite"),
     "move": ("transfer", "money", "pay"),
     "open": ("file", "read", "config"),
     "weather": ("temperature", "forecast"),
     "search": ("find", "look"),
 }
-"""Verb families of §8.6. Each key and its words form one family; ``expand`` is symmetric within a family, so
-``create_event`` (via ``event``) explains "book" and ``read_file`` explains "open"."""
+"""Verb families of §8.6 (plus ``forward``/``reply`` and ``invite``, see ``docs/DECISIONS.md``). Each key and
+its words form one family; ``expand`` is symmetric within a family, so ``create_event`` (via ``event``) explains
+"book" and ``read_file`` explains "open"."""
+
+OBJECT_NOUNS: Mapping[str, tuple[str, ...]] = {
+    "open": ("document", "invoice", "pdf", "report", "readme", "spreadsheet"),
+}
+"""Object nouns that point a request at a family's tools, for tool scoring only ("Find the latest invoice…" is about
+a file). ``DONE``, ``done_after`` and ``authorized`` keep reading the verb families alone, so "Pay the ACME invoice"
+after reading the invoice is not done."""
+
+GENERIC_VERBS: frozenset[str] = frozenset({"find", "look", "get", "show", "check", "see", "fetch"})
+"""Family words too general to lead a request when a more specific one follows: "Find the latest invoice…" is led by
+``invoice`` (a file), "Find a pasta recipe" by ``find`` (search)."""
+TOOL_VERB_WEIGHT = 0.6
+TOOL_OWN_WEIGHT = 0.4
+"""``tool_score = 0.6·verb + 0.4·own`` (see :meth:`LexicalSimulator.tool_score`)."""
 
 STOPWORDS: frozenset[str] = frozenset(
     {
@@ -382,6 +404,7 @@ class LexicalSimulator:
         synonyms: Mapping[str, Sequence[str]] = DEFAULT_SYNONYMS,
         *,
         model: str = SIMULATOR_MODEL,
+        object_nouns: Mapping[str, Sequence[str]] = OBJECT_NOUNS,
     ) -> None:
         if temperature <= 0:
             raise ValueError("temperature must be > 0")
@@ -393,6 +416,10 @@ class LexicalSimulator:
         self.model = model
         self._families = families(self.synonyms)
         self._actions = frozenset(w for fam in self._families for w in fam)
+        self.object_nouns = {k: tuple(v) for k, v in object_nouns.items()}
+        keys = [*self.synonyms, *(k for k in self.object_nouns if k not in self.synonyms)]
+        self._lead_families = families({k: (*self.synonyms.get(k, ()), *self.object_nouns.get(k, ())) for k in keys})
+        self._lead_words = frozenset(w for fam in self._lead_families for w in fam)
         self.requests: list[DecisionRequest] = []
 
     def __repr__(self) -> str:
@@ -442,9 +469,34 @@ class LexicalSimulator:
         return 0.75 * cov(toks(label), view.a) + 0.25 * cov(toks(text), view.a)
 
     def tool_score(self, label: str, text: Any, view: RequestView) -> float:
-        """A tool option: ``cov(U_c, T_o)`` with ``T_o = expand(label.split("_")) ∪ toks(text)``."""
-        tool_tokens = expand(toks(" ".join(label.split("_"))), self._families) | set(toks(text))
-        return cov(view.request_toks, tool_tokens)
+        """A tool option: ``0.6·verb + 0.4·own`` (a deviation from §8.6, see the module docstring).
+
+        - ``verb`` = 1 when the request's leading action word (:meth:`lead_verb`) is in the tool's verb family:
+          ``expand`` of its name tokens plus the first word of its description (``read_file`` "Open a file…" →
+          the ``open`` family);
+        - ``own`` = ``cov(toks(label.split("_")), expand(U))``: how much of the tool's own name the request (with
+          its family words) covers (``send_email`` is fully covered by "Email Anna…").
+        """
+        own = toks(" ".join(label.split("_")))
+        first = toks(_text(text).split(" ", 1)[0]) if _text(text).strip() else []
+        family = expand([*own, *first], self._lead_families)
+        lead = self.lead_verb(view)
+        verb = 1.0 if lead is not None and lead in family else 0.0
+        return TOOL_VERB_WEIGHT * verb + TOOL_OWN_WEIGHT * cov(own, expand(view.u.tokens, self._lead_families))
+
+    def lead_verb(self, view: RequestView) -> str | None:
+        """The request's leading action word: its first family word (verb families plus :data:`OBJECT_NOUNS`) that
+        no ``progress`` tool already explains, skipping :data:`GENERIC_VERBS` when a more specific family word
+        follows. A generic word leads only before the first step (``progress`` empty); ``None`` when nothing
+        leads."""
+        done: set[str] = set()
+        for tool in view.progress_tools:
+            done |= expand(toks(" ".join(tool.split("_"))), self._lead_families)
+        words = [t for t in view.request_toks if t in self._lead_words and t not in done]
+        specific = [t for t in words if t not in GENERIC_VERBS]
+        if specific:
+            return specific[0]
+        return words[0] if words and not view.progress_tools else None
 
     def choice_scores(self, qid: str, question: ChoiceQuestion, view: RequestView) -> dict[str, float]:
         """The score of every option (real options and sentinels), in wire order."""
@@ -677,7 +729,9 @@ def _instruction_parts(instructions: Any, key: str) -> tuple[str, Any]:
 __all__ = [
     "CHITCHAT",
     "DEFAULT_SYNONYMS",
+    "GENERIC_VERBS",
     "HEDGE_CUES",
+    "OBJECT_NOUNS",
     "SIMULATOR_MODEL",
     "STOPWORDS",
     "LexicalSimulator",

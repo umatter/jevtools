@@ -122,12 +122,30 @@ def test_real_options_score_by_label_and_description_coverage() -> None:
     assert all(len(repr(p).split(".")[-1]) <= 4 for p in got.values())
 
 
-def test_tool_options_use_request_coverage_with_synonyms() -> None:
+def test_tool_options_score_the_lead_verb_and_own_tokens() -> None:
     question = ChoiceQuestion(instructions="Which ONE action?", criteria=dict(TOOLS))
     got = answer("Book a sync", "tool", question)
-    assert isinstance(got, ChoiceAnswer) and got.choice == "create_event"  # book, sync → the event family
-    # U_c = {book, sync}: create_event explains both (1.0); NO_TOOL 0.2·(1 − 1) = 0; UNSUPPORTED 0.05
-    assert got.probabilities["create_event"] == round(softmax([1.0, 0, 0, 0, 0.05])[0], 4)
+    assert isinstance(got, ChoiceAnswer) and got.choice == "create_event"  # "book" leads: the event family
+    # create_event: 0.6·verb(book) + 0.4·cov({create, event}, expand{book, sync}) = 0.6 + 0.4·0.5 = 0.8;
+    # get_weather, send_email 0; NO_TOOL 0.2·(1 − 0.8) = 0.04; UNSUPPORTED 0.05 (a deviation from §8.6)
+    assert got.probabilities["create_event"] == round(softmax([0.8, 0, 0, 0.04, 0.05])[0], 4)
+    long = answer("Email Anna that I'll be 10 minutes late for the quarterly review with ACME", "tool", question)
+    assert isinstance(long, ChoiceAnswer) and long.choice == "send_email" and long.probabilities["send_email"] > 0.99
+
+
+def test_lead_verb_skips_generic_words_and_steps_already_done() -> None:
+    tools = {"read_file": "Open a file in the user's workspace.", "search_web": "Search the public web.",
+             "send_email": "Send an email from the user to one recipient.", **{k: TOOLS[k] for k in
+                                                                               ("NO_TOOL", "UNSUPPORTED")}}  # fmt: skip
+    question = ChoiceQuestion(criteria=tools)
+    text = "Find the latest invoice from ACME and forward it to finance"
+    step1 = answer(text, "tool", question)
+    assert isinstance(step1, ChoiceAnswer) and step1.choice == "read_file"  # "invoice" (a file) leads, not "find"
+    progress = ['Step 1: read_file(path="finance/invoices/acme/2026-09-15_ACME_INV-2291.pdf") → ok, 40 words']
+    step2 = answer(text, "tool", question, progress=progress)
+    assert isinstance(step2, ChoiceAnswer) and step2.choice == "send_email"  # the read is done: "forward" leads
+    recipe = answer("Find a good pasta recipe", "tool", question)
+    assert isinstance(recipe, ChoiceAnswer) and recipe.choice == "search_web"  # a generic word leads when alone
 
 
 def test_no_tool_for_chit_chat() -> None:
@@ -275,7 +293,8 @@ def test_more_item_member_done_after_and_others() -> None:
     item = NoulQuestion(instructions="Suppose … Should Carol Liu <carol.liu@muster.ch> be included in the invitees?")
     assert answer("Invite Carol Liu", "create_event.attendees.item.0", item) == NoulAnswer(noul=0.9)
     done_after = NoulQuestion(instructions="Would everything `request` asks for then be done?")
-    assert answer(text, "search_web.done_after", done_after) == NoulAnswer(noul=0.9)  # "find" → search
+    assert answer(text, "send_email.done_after", done_after) == NoulAnswer(noul=0.9)  # "forward" → send
+    assert answer(text, "search_web.done_after", done_after) == NoulAnswer(noul=0.1)
     assert answer(text, "read_file.done_after", done_after) == NoulAnswer(noul=0.1)
     assert answer(text, "read_file.something_else", NoulQuestion()) == NoulAnswer(noul=0.5)
 

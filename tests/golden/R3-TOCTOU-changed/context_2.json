@@ -1,0 +1,116 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "text": "Move 250 CHF from my savings to checking",
+      "name": null,
+      "tool_call_id": null,
+      "tool_calls": [],
+      "content": "Move 250 CHF from my savings to checking"
+    }
+  ],
+  "now": "2026-09-24T14:05:00+02:00",
+  "tz": "Europe/Zurich",
+  "locale": "en-CH",
+  "user": {
+    "name": "Sam Muster",
+    "home_city": "Zurich"
+  },
+  "shareable": null,
+  "sources": [
+    {
+      "name": "contacts",
+      "type": "registry",
+      "rows_file": "../fixtures/contacts.json",
+      "key": "email",
+      "label": "{name} <{email}>",
+      "describe": "{notes}",
+      "match": [
+        "name",
+        "aliases",
+        "team"
+      ],
+      "provides": [
+        "email",
+        "person"
+      ],
+      "attrs": [
+        "name",
+        "team"
+      ],
+      "recency": "last",
+      "hierarchy": "team"
+    },
+    {
+      "name": "accounts",
+      "type": "registry",
+      "rows": [
+        {
+          "id": "acc_7731",
+          "nickname": "Savings",
+          "currency": "CHF",
+          "iban_masked": "CH93…2957",
+          "balance": 100.0
+        },
+        {
+          "id": "acc_2210",
+          "nickname": "Checking",
+          "currency": "CHF",
+          "iban_masked": "CH56…1180",
+          "balance": 3100.0
+        },
+        {
+          "id": "acc_4410",
+          "nickname": "Travel savings",
+          "currency": "EUR",
+          "iban_masked": "CH08…4410",
+          "balance": 900.0
+        },
+        {
+          "id": "acc_5102",
+          "nickname": "Joint household",
+          "currency": "CHF",
+          "iban_masked": "CH12…5102",
+          "balance": 4200.0
+        }
+      ],
+      "key": "id",
+      "label": "{nickname} · {currency} · {iban_masked}",
+      "describe": "{nickname} account in {currency}",
+      "match": [
+        "nickname"
+      ],
+      "provides": [
+        "account_id"
+      ],
+      "attrs": [
+        "nickname",
+        "currency",
+        "balance"
+      ]
+    },
+    {
+      "name": "files",
+      "type": "files",
+      "paths_file": "../fixtures/files.json",
+      "synonyms": {
+        "config": [
+          "conf",
+          "cfg",
+          "settings",
+          "values",
+          "yaml",
+          "toml",
+          "ini",
+          "env"
+        ],
+        "payments": [
+          "payment",
+          "pay"
+        ]
+      }
+    }
+  ],
+  "observations": [],
+  "include_system": false
+}

@@ -1,0 +1,6 @@
+[
+  {"id": "acc_7731", "nickname": "Savings", "currency": "CHF", "iban_masked": "CH93…2957", "balance": 12500.0},
+  {"id": "acc_2210", "nickname": "Checking", "currency": "CHF", "iban_masked": "CH56…1180", "balance": 3100.0},
+  {"id": "acc_4410", "nickname": "Travel savings", "currency": "EUR", "iban_masked": "CH08…4410", "balance": 900.0},
+  {"id": "acc_5102", "nickname": "Joint household", "currency": "CHF", "iban_masked": "CH12…5102", "balance": 4200.0}
+]

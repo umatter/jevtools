@@ -1,0 +1,55 @@
+{
+  "case": "R3",
+  "spec": "jevtools/0.1",
+  "summary": "Critical tier: joint Choice, L/J, confirm (never auto-executes).",
+  "evidence": "Scripted answers: the spec §13.3 illustrative numbers [I]. The fixtures pin bytes, plumbing and policy branches; they are never evidence about Jev's accuracy.",
+  "model": "~typesafe/jev-latest",
+  "backend": "scripted",
+  "policy": "jevtools-default-0.1",
+  "limits": {},
+  "catalog": "catalog.json",
+  "contexts": [
+    "context.json"
+  ],
+  "steps": [
+    {
+      "action": "decide",
+      "context": "context.json",
+      "mode": "turn"
+    }
+  ],
+  "verify": {
+    "with_context": true
+  },
+  "ballot": "ballot.json",
+  "ballot_requests": [
+    "request.json"
+  ],
+  "exchanges": [
+    {
+      "step": 1,
+      "request": "request.json",
+      "response": "response.json"
+    }
+  ],
+  "decisions": [
+    "decision.json"
+  ],
+  "traces": [
+    "trace.json"
+  ],
+  "expect": {
+    "outcome": "confirm",
+    "rule": "P9.critical.confirm_band",
+    "call": {
+      "name": "transfer_funds",
+      "arguments": {
+        "from_account": "acc_7731",
+        "to_account": "acc_2210",
+        "amount": "250.00",
+        "currency": "CHF"
+      }
+    },
+    "prompt": "Transfer 250.00 CHF from Savings · CHF · CH93…2957 to Checking · CHF · CH56…1180?"
+  }
+}

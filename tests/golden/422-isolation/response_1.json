@@ -1,0 +1,1 @@
+{"error":{"type":"JevValidationError","status":422,"message":"HTTP 422: questions.get_weather.unit.choice.criteria: bad","detail":[{"loc":["body","questions","get_weather.unit","choice","criteria"],"msg":"bad","type":"value_error"}]}}

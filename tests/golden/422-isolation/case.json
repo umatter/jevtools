@@ -1,0 +1,60 @@
+{
+  "case": "422-isolation",
+  "spec": "jevtools/0.1",
+  "summary": "A 422 names get_weather.unit: the family is dropped and the call re-sent once.",
+  "evidence": "Scripted answers: the spec §13.3 illustrative numbers [I]. The fixtures pin bytes, plumbing and policy branches; they are never evidence about Jev's accuracy.",
+  "model": "~typesafe/jev-latest",
+  "backend": "scripted",
+  "policy": "jevtools-default-0.1",
+  "limits": {},
+  "catalog": "catalog.json",
+  "contexts": [
+    "context.json"
+  ],
+  "steps": [
+    {
+      "action": "decide",
+      "context": "context.json",
+      "mode": "turn"
+    }
+  ],
+  "verify": {
+    "with_context": false,
+    "why_not": "the traced round-1 Ballot is the isolated one (its family dropped)"
+  },
+  "ballot": "ballot.json",
+  "ballot_requests": [
+    "request_1.json"
+  ],
+  "exchanges": [
+    {
+      "step": 1,
+      "request": "request_1.json",
+      "response": "response_1.json"
+    },
+    {
+      "step": 1,
+      "request": "request_2.json",
+      "response": "response_2.json"
+    }
+  ],
+  "decisions": [
+    "decision.json"
+  ],
+  "traces": [
+    "trace.json"
+  ],
+  "expect": {
+    "outcome": "confirm",
+    "rule": "P9.external.confirm_band",
+    "call": {
+      "name": "send_email",
+      "arguments": {
+        "to": "anna.keller@acme.com",
+        "subject": "Running 10 minutes late",
+        "body": "Hi Anna,\n\nI'll be 10 minutes late.\n\nBest,\nSam"
+      }
+    },
+    "prompt": "Send an email to Anna Keller <anna.keller@acme.com> — subject line \"Running 10 minutes late\", body \"Hi Anna, I'll be 10 minutes late. Best, Sam\"?"
+  }
+}

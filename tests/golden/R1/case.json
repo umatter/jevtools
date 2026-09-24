@@ -1,0 +1,53 @@
+{
+  "case": "R1",
+  "spec": "jevtools/0.1",
+  "summary": "Read tier: weather in Zurich in Fahrenheit executes.",
+  "evidence": "Scripted answers: the spec §13.3 illustrative numbers [I]. The fixtures pin bytes, plumbing and policy branches; they are never evidence about Jev's accuracy.",
+  "model": "~typesafe/jev-latest",
+  "backend": "scripted",
+  "policy": "jevtools-default-0.1",
+  "limits": {},
+  "catalog": "catalog.json",
+  "contexts": [
+    "context.json"
+  ],
+  "steps": [
+    {
+      "action": "decide",
+      "context": "context.json",
+      "mode": "turn"
+    }
+  ],
+  "verify": {
+    "with_context": true
+  },
+  "ballot": "ballot.json",
+  "ballot_requests": [
+    "request.json"
+  ],
+  "exchanges": [
+    {
+      "step": 1,
+      "request": "request.json",
+      "response": "response.json"
+    }
+  ],
+  "decisions": [
+    "decision.json"
+  ],
+  "traces": [
+    "trace.json"
+  ],
+  "expect": {
+    "outcome": "execute",
+    "rule": "P9.read.execute",
+    "call": {
+      "name": "get_weather",
+      "arguments": {
+        "city": "Zurich",
+        "unit": "fahrenheit"
+      }
+    },
+    "prompt": null
+  }
+}

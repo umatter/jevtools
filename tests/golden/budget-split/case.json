@@ -1,0 +1,67 @@
+{
+  "case": "budget-split",
+  "spec": "jevtools/0.1",
+  "summary": "At most 8 questions per call: probe-only tools are cut and the rest is split into parallel calls of one round.",
+  "evidence": "Scripted answers: the spec §13.3 illustrative numbers [I]. The fixtures pin bytes, plumbing and policy branches; they are never evidence about Jev's accuracy.",
+  "model": "~typesafe/jev-latest",
+  "backend": "scripted",
+  "policy": "jevtools-default-0.1",
+  "limits": {
+    "max_questions": 8
+  },
+  "catalog": "catalog.json",
+  "contexts": [
+    "context.json"
+  ],
+  "steps": [
+    {
+      "action": "decide",
+      "context": "context.json",
+      "mode": "turn"
+    }
+  ],
+  "verify": {
+    "with_context": false,
+    "why_not": "verify compiles with the default limits; this Ballot was cut and split by max_questions=8"
+  },
+  "ballot": "ballot.json",
+  "ballot_requests": [
+    "request_1.json",
+    "request_2.json"
+  ],
+  "exchanges": [
+    {
+      "step": 1,
+      "request": "request_1.json",
+      "response": "response_1.json"
+    },
+    {
+      "step": 1,
+      "request": "request_2.json",
+      "response": "response_2.json"
+    }
+  ],
+  "decisions": [
+    "decision.json"
+  ],
+  "traces": [
+    "trace.json"
+  ],
+  "expect": {
+    "outcome": "confirm",
+    "rule": "P9.external.confirm_band",
+    "call": {
+      "name": "create_event",
+      "arguments": {
+        "title": "Sync with Bob and Carol",
+        "start": "2026-09-29T15:00:00+02:00",
+        "duration_minutes": 45,
+        "attendees": [
+          "bob.meier@muster.ch",
+          "carol.liu@muster.ch"
+        ]
+      }
+    },
+    "prompt": "Create a calendar event — event title \"Sync with Bob and Carol\", start Tue 2026-09-29 15:00 (Europe/Zurich), duration 45 minutes, invitees Bob Meier <bob.meier@muster.ch> and Carol Liu <carol.liu@muster.ch>?"
+  }
+}

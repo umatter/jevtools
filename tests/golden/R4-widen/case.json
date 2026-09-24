@@ -1,0 +1,60 @@
+{
+  "case": "R4-widen",
+  "spec": "jevtools/0.1",
+  "summary": "A miss widens (buckets + group), then the hierarchy round, then clarify(open).",
+  "evidence": "Scripted answers: the spec §13.3 illustrative numbers [I]. The fixtures pin bytes, plumbing and policy branches; they are never evidence about Jev's accuracy.",
+  "model": "~typesafe/jev-latest",
+  "backend": "scripted",
+  "policy": "jevtools-default-0.1",
+  "limits": {},
+  "catalog": "catalog.json",
+  "contexts": [
+    "context.json"
+  ],
+  "steps": [
+    {
+      "action": "decide",
+      "context": "context.json",
+      "mode": "turn"
+    }
+  ],
+  "verify": {
+    "with_context": true
+  },
+  "ballot": "ballot.json",
+  "ballot_requests": [
+    "request_1.json"
+  ],
+  "exchanges": [
+    {
+      "step": 1,
+      "request": "request_1.json",
+      "response": "response_1.json"
+    },
+    {
+      "step": 1,
+      "request": "request_2.json",
+      "response": "response_2.json"
+    },
+    {
+      "step": 1,
+      "request": "request_3.json",
+      "response": "response_3.json"
+    }
+  ],
+  "decisions": [
+    "decision.json"
+  ],
+  "traces": [
+    "trace.json"
+  ],
+  "expect": {
+    "outcome": "clarify",
+    "rule": "P7.slot.shape",
+    "call": {
+      "name": "read_file",
+      "arguments": {}
+    },
+    "prompt": "What should the workspace-relative file path be?"
+  }
+}

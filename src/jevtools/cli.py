@@ -12,12 +12,15 @@
                                   [--out report.json] [--no-traces]
     jevtools tune <report.json> [--out DIR] [--policy base.toml] [--alpha write=0.01 …] [--method cp|crc]
                                 [--calibrate | --held-out report.json]
+    jevtools fixtures [--update] [--dir tests/golden] [--case NAME …]
 
 ``lint`` prints one line per tool and per slot (``name  description  stakes  STATUS  note``) plus the description
 overlap check, and exits 1 when any check is an ERROR (``--strict``: also WARN/WEAK). ``explain`` renders a trace
 for humans (bindings, factors, composition, the rule that fired). ``verify`` re-checks a trace with the model out of
 the loop (``jt.verify``). ``eval`` runs a labelled dataset (§11.2) and ``tune`` writes a tuned ``policy.toml``
-(§11.3). ``probe``, ``serve``, ``eval`` and ``tune`` import their modules lazily.
+(§11.3). ``fixtures`` regenerates (``--update``) or checks the golden conformance fixtures of §10.2; it runs from a
+repository checkout (the case definitions live in ``tests/golden/cases.py``). ``probe``, ``serve``, ``eval``,
+``tune`` and ``fixtures`` import their modules lazily.
 
 Catalog files: an OpenAI tools list, an MCP ``tools/list`` result (``{"tools": [...]}``, optionally inside a
 JSON-RPC ``result``) or a list of MCP tools. Source files (JSON, TOML or YAML): ``{"sources": [...]}``, a list, or
@@ -242,7 +245,17 @@ def _unknown_keys(raw: RawTool, sidecar: Sidecar | None, names: Sequence[str]) -
 
 
 def _source_info(specs: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
-    return {str(s["name"]): s for s in specs}
+    """Source entries by name, with the defaults a built source has: ``kind`` or ``type`` (or ``paths``) names the
+    kind, and a file index without declared tags provides ``path`` and ``file`` (as :class:`FileIndex` does)."""
+    info: dict[str, Mapping[str, Any]] = {}
+    for spec in specs:
+        entry = dict(spec)
+        files = "paths" in entry or "paths_file" in entry
+        entry["kind"] = entry.get("kind") or entry.get("type") or ("files" if files else "registry")
+        if entry["kind"] == "files" and not entry.get("provides"):
+            entry["provides"] = ["path", "file"]
+        info[str(entry["name"])] = entry
+    return info
 
 
 def describe_slot(slot: SlotSpec, sources: Mapping[str, Mapping[str, Any]], policy: Policy) -> str:
@@ -740,6 +753,55 @@ def _cmd_tune(args: argparse.Namespace, out: TextIO) -> int:
 
 
 # --------------------------------------------------------------------------------------------------------------------
+# fixtures (§10.2)
+# --------------------------------------------------------------------------------------------------------------------
+
+GOLDEN_MODULE = "tests.golden.cases"
+"""The golden case definitions (a repository module: they replay the scenario scripts of the test suite)."""
+
+
+def _golden(directory: Path, err: TextIO) -> Any | None:
+    """Import :data:`GOLDEN_MODULE`, adding the checkout that holds ``directory`` (``<root>/tests/golden``) or the
+    working directory to ``sys.path`` when needed."""
+    try:
+        return importlib.import_module(GOLDEN_MODULE)
+    except ImportError:
+        pass
+    resolved = directory.resolve()
+    roots = [resolved.parents[1]] if len(resolved.parents) > 1 and resolved.parent.name == "tests" else []
+    for root in [*roots, Path.cwd()]:
+        if (root / "tests" / "golden" / "cases.py").is_file() and str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+    try:
+        return importlib.import_module(GOLDEN_MODULE)
+    except ImportError as exc:
+        print(f"jevtools fixtures: {GOLDEN_MODULE} is not importable ({exc}); run from a jevtools checkout", file=err)
+        return None
+
+
+def _cmd_fixtures(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    directory = Path(args.dir)
+    golden = _golden(directory, err)
+    if golden is None:
+        return 2
+    names = args.case or None
+    if args.update:
+        written = golden.update_fixtures(directory, names)
+        print(f"wrote {len(written)} fixture file(s) under {directory}", file=out)
+        print(f"note: {golden.EVIDENCE}", file=out)
+        return 0
+    problems = golden.check_fixtures(directory, names)
+    for problem in problems:
+        print(problem, file=out)
+    if problems:
+        print(f"{len(problems)} fixture file(s) out of date: run `jevtools fixtures --update --dir {directory}`",
+              file=out)  # fmt: skip
+        return 1
+    print(f"golden fixtures under {directory} are up to date", file=out)
+    return 0
+
+
+# --------------------------------------------------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------------------------------------------------
 
@@ -798,6 +860,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", help="write the full report (JSON; the input of `jevtools tune`)")
     p.add_argument("--no-traces", action="store_true", help="do not keep traces in the report")
 
+    p = sub.add_parser("fixtures", help="check or regenerate the golden conformance fixtures (§10.2)")
+    p.add_argument("--update", action="store_true", help="regenerate the fixture files (else: check them)")
+    p.add_argument("--dir", default="tests/golden", help="the golden fixture directory (default: tests/golden)")
+    p.add_argument("--case", action="append", help="only this case (repeatable)")
+
     p = sub.add_parser("tune", help="tune policy thresholds on an evaluation report (§11.3, §11.4)")
     p.add_argument("report", help="report JSON written by `jevtools eval --out`")
     p.add_argument("--out", default=".", help="directory for policy.toml (and policy.calibrators.json)")
@@ -829,6 +896,8 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None, err: T
             return _cmd_probe(args, out, err)
         if args.command == "eval":
             return _cmd_eval(args, out, err)
+        if args.command == "fixtures":
+            return _cmd_fixtures(args, out, err)
         if args.command == "tune":
             return _cmd_tune(args, out)
         return _cmd_serve(args, out, err)

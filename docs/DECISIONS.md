@@ -85,8 +85,8 @@ behaviour and records it here. Format: `§section: issue → decision`.
   number (ids like `"0123"` compare as strings); date-only strings compare as dates.
 - §7.1 callables: a parameter named `idempotency_key` is never a slot (the executor passes it, §6.5); Google- and
   Sphinx-style docstring parameter descriptions become schema descriptions.
-- §9: TOML on Python 3.10 needs `tomli`, which is not a hard dependency; `Policy.from_toml(path)` reads a file and
-  `Policy.from_toml_text(text)` parses content.
+- §9: TOML on Python 3.10 needs `tomli` (a conditional dependency since the final merge, see the last section);
+  `Policy.from_toml(path)` reads a file and `Policy.from_toml_text(text)` parses content.
 
 ## Engine (plan, decode, confidence, policy, prompts, trace, backends, router)
 
@@ -742,3 +742,265 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
   Redis-backed) to `create_app(store=…)`. `serve.run(config, host, port)` takes the same `config` as `create_app`.
 - pyproject: `all` extra (every optional integration); ruff excludes `docs/` (the normative spec's code blocks are
   quoted as written, not reformatted).
+
+## Examples and the demo world (`src/jevtools/demo`, `examples/`, `tests/examples`)
+
+- §12/§13 demo world: the scenario fixtures moved from `tests/scenario/{fixtures,scripts}.py` to the package
+  `jevtools.demo` (`scenario.py`: clock, user, sources, catalog, routers, a fake `Workspace`; `scripts.py`: the §13.3
+  answer scripts), so examples never import from `tests/`. Every piece of data there is synthetic, and the module
+  docstrings say so. `tests/scenario/{fixtures,scripts}.py` are now thin re-exports that keep every earlier name.
+  `tests.scenario.fixtures:contacts` still works as a `module:function` source factory, and `CATALOG_PATH` stays in
+  the tests.
+- §13.2 catalog: `jevtools.demo.scenario.SCENARIO_TOOLS` embeds the six tools as a Python literal. A package cannot
+  read `tests/fixtures`. `scenario_tools()` returns a deep copy, and a test pins it equal to
+  `tests/fixtures/scenario_catalog.json`.
+- New demo names:
+  - `demo_router(backend, …)` builds a scenario router over any backend: sim, live or recording.
+    `scenario_router(script)` keeps its old signature and model.
+  - `SCENARIO_MODEL` is `~typesafe/jev-latest`.
+  - `R1_DONE`, `R2_REPLY`/`R2_FREE_TEXT`, `R6_REFUSE_STEP2`, and the R6 step scripts, which duplicate
+    `tests/loop/support.py`. That file is owned elsewhere and could become a re-export of `jevtools.demo`.
+- `demo.scripts.criteria` and `demo.scripts.accept_candidate` raise `TypeError` instead of failing an `assert`
+  (library code). `member_answers` skips member Nouls without object instructions instead of asserting.
+- §12 fixtures (`examples/fixtures/*.answers.json`, `ScriptedBackend.from_fixture` format):
+  - Naming: one file per request variant: `R1`, `R1-dropin`, `R2`, `R2-no-history`, `R2-free-text`, `R3`, `R4`,
+    `R4-miss`, `R4-found-in-bucket`, `R5`, `R6`, `R6-refuse`, `R7`.
+  - Every file carries `note` (illustrative [I], never evidence about Jev), `request` and `model`; the loader
+    ignores `note` and `request`.
+  - Static scripts are stored as `answers`, with globs kept.
+  - Callable scripts (the R4 bucket hit, the R6 steps) are replayed once over the demo world and stored as
+    per-request `rounds`, with exact qids.
+  - `examples/fixtures/regenerate.py [--check]` writes them, and also `examples/proxy/data/*.json`. A test fails when
+    any generated file is stale.
+  - `helpdesk.answers.json` (example 08) is hand-written.
+- §12 `--backend`:
+  - `scripted` is the default.
+  - `sim` is `LexicalSimulator()`.
+  - `live` is `jt.backends.auto()` without `allow_offline`. It is checked at argument parsing, so a missing key
+    exits with status 2 and a hint before anything prints.
+  - Sections that only make sense with a scripted answer (the R4 misses, the R6 refused variant) are skipped with
+    a note under `sim`/`live`.
+  - Every run prints that scripted and simulated answers are never evidence about Jev's accuracy.
+- §12 "print the Decision, the rendered prompt and a trace summary": `examples/_show.py` prints the following:
+  - the questions per round, with count and ids grouped by tool, read from the trace's stored request bodies;
+    `07` reads them from a recording backend wrapper, because `complete()` returns documents;
+  - outcome and rule, the call, `C (composition, tier) · W · PI · L · J` with the tier's bands, bottleneck and gates;
+  - slots with alternatives, the prompt with its option ids, and trace id, rounds, Jev calls, input tokens,
+    pending, resumed-from, idempotency key and notes.
+- Non-interactive runs click like a user would: `ok` when it is offered, else the option the example names, else the
+  first option. `03` and `05` click the first option or the named alternative.
+- §12 "the §13.5 request JSON printed byte-exact": `05` prints the compiled round-1 request (`router.compile(…)` →
+  `Ballot.to_requests(router.model)`, no network) as order-preserving JSON. Containers stay on one line when they fit,
+  as in the spec listing, and a count line reports `14 questions, 6,003 characters compact`. The test parses the
+  printed JSON back and compares it, key order included, with `tests/fixtures/spec_r5_request.json`. The spec's
+  hand wrapping of long lines is not reproduced.
+- `07` uses `jt.openai.complete(messages, tools, backend=…, context=…)` for the tool loop, with a fresh router per
+  call and `role: tool` messages as observations. The confirm card uses `router=` with the demo router, so the
+  echoed card plus "ok" resumes as a click with no Jev call. Without a router, the reply is recompiled, which costs
+  one round.
+- `08` defines a new synthetic domain (a support desk):
+  - `@jt.tool` functions with `jt.Ref`/`Literal`/`jt.Span`/`jt.Noun`;
+  - two `jt.Registry` sources;
+  - a foreign plain-JSON tool annotated only through `jt.hints`;
+  - a tier set by hints, since "assign" is not in the verb table.
+
+  Its agents registry provides `agent`, not `email`/`person`, so the invitee rule does not apply.
+- Proxy example:
+  - `examples/proxy/jevtools.toml` uses `backend.type = "auto"` with `allow_offline = true`, so it runs without a
+    key on the simulator, with a warning. The README and the TOML say to set it to `false` in production.
+  - `client.py` uses only the OpenAI SDK. `main(argv, http_client=…)` lets the test drive it through Starlette's
+    `TestClient`.
+  - The test uses a small stub of `openai.OpenAI` when the SDK is not installed. It was also verified with the
+    real SDK (openai 3.19) against `jevtools serve` under uvicorn.
+- Every example test is marked `fast` (registered in `pyproject.toml` at the final merge; it was first registered in
+  `tests/examples/conftest.py`).
+
+## Core polish: prompts, simulator tool scoring, quantity grids, golden fixtures
+
+### Prompt rendering (§3.8.4; `prompts.py`)
+
+- §3.2 `render` default: the spec's `"{intent}: p1=…, p2=…"` dumped raw values: e-mail addresses instead of
+  labels, a multi-line body inline, parameter names. A tool without `x-jev.render` now uses a deterministic
+  template (`natural_call`). It is never generated text. The rules:
+  - **Head.** `short_intent`: from the third word on, the intent is split before `from to between for in into on
+    with and by via using at about`. A phrase is dropped when its content words are empty or appear in a slot's
+    name or noun. `send an email from the user to one recipient` → `send an email`; `get the current weather for
+    a city` → `get the current weather`. A phrase no slot restates stays (`post a message to the #general
+    channel`).
+  - **Lead phrases.** A parameter named like a preposition (`to from cc bcc into onto at on in for with via by`),
+    or `to_*`/`from_*`, attaches to the head: `to Anna Keller <anna.keller@acme.com>`. The other slots follow an
+    em dash as `<term> <value>`, joined with commas.
+  - **Terms.** The slot noun without its article when it has ≤ 2 words and ≤ 20 characters (`subject line`,
+    `invitees`), else the humanized parameter name without a unit suffix (`duration_minutes` → `duration`).
+  - **Values.**
+    - `ref`/`enum`/`temporal`/`ordinal`: the candidate label.
+    - `text`: a quoted one-line preview of at most 60 characters, cut at a word with `…`.
+    - `quantity`: the value plus its unit word (`45 minutes`, singular for 1, `50%`).
+    - `flag`: `yes`/`no`.
+    - Lists: item labels joined with `, … and …`.
+    - Empty values and secrets are omitted.
+  - **Length.** Above 200 characters (menus, joint options) or 320 (confirm cards), cosmetic values are dropped.
+    A menu's own slot is always kept. `Decision.call` keeps the full call.
+  - R2 renders as: `Send an email to Anna Keller <anna.keller@acme.com> — subject line "Running 10 minutes late",
+    body "Hi Anna, I'll be 10 minutes late. Best, Sam"?`
+- The same default renders **joint option labels** of tools that have `groups` but no `x-jev.render` (§3.2 uses one
+  `render` for both). In the scenario only `transfer_funds` has a joint question, and it declares `render`, so no
+  scenario ballot changed. For other catalogs, joint labels change from `intent: p=…` to the natural form. They
+  are still elided to 64 characters by `make_label`.
+- `x-jev.render` and `confirm_template` are unchanged: R3 still reads `Transfer 250.00 CHF from Savings · CHF ·
+  CH93…2957 to Checking · CHF · CH56…1180?`. External and critical clarify menus still show the complete resulting
+  call per option.
+- List items keep their part labels: `Binding.of_result` reads `SlotResult.parts`, so attendees render as
+  `Bob Meier <bob.meier@muster.ch> and Carol Liu <carol.liu@muster.ch>`. `router._bindings` now calls it; that is
+  a one-line change.
+
+### Simulator tool scoring (§8.6; `backends/simulator.py`)
+
+- §8.6 tool options: the literal `cov(U_c, T_o)` (the share of the request's content tokens the tool explains)
+  made every long request clarify on the tool question: R2, R3, R5 and R6 → `P5.tool.ambiguous`. Tool options now
+  score `0.6·verb + 0.4·own`:
+  - `verb` = 1 when the request's leading action word is in the tool's verb family. The family is `expand` of the
+    tool's name tokens plus the first word of its description.
+  - `own` = `cov(toks(name), expand(U))`: how much of the tool's own name the request covers, family words
+    included.
+  - Other options keep their §8.6 scores (`NO_TOOL`, `UNSUPPORTED`, `DONE`…).
+- **Leading action word:** the first family word of the request that no `progress` tool already explains.
+  - Generic words (`find look get show check see fetch`) lead only when no specific family word follows, and only
+    before the first step.
+  - So "Find the latest invoice…" is led by `invoice` at step 1 (`read_file`) and by `forward` at step 2
+    (`send_email`, since `read_file` already ran), while "Find a good pasta recipe" is led by `find`
+    (`search_web`).
+- **Families:**
+  - `send` gains `forward` and `reply`; `book` gains `invite`.
+  - The new `OBJECT_NOUNS` (`open`: `document invoice pdf report readme spreadsheet`) are used **only** for tool
+    scoring. `DONE`, `done_after` and `authorized` keep reading the verb families, so "Pay the ACME invoice" after
+    reading the invoice is not scored as done.
+  - With `forward` in the `send` family, the R6 request's last action is `forward`: `send_email.done_after` answers
+    0.9 and `search_web.done_after` 0.1. The unit test was updated.
+- **Outcomes with the simulator** (tests/scenario/test_simulator_scenarios.py now pins them; each is a subset of the
+  §10.5 allowed set):
+
+  | Case | Outcome and rule | Note |
+  |---|---|---|
+  | R1 | execute | |
+  | R2 (history) | confirm, Anna Keller | |
+  | R2 without history | clarify, `P8.consistency` on `to` | |
+  | R3 | clarify, `P8.consistency` | `order_sensitive`: a lexical double cannot tell from/to apart |
+  | R4 | clarify, `P9.read.diffuse` | 40 config paths share the request's words |
+  | R5 | clarify, `P9.external.ambiguous` on the invitees | |
+  | R6 step 1 | execute `read_file` | |
+  | R6 step 2 | clarify on `to`, `send_email` | recipient `finance@muster.ch`; the forwarded file text is late-bound into the body |
+  | R7 | abstain | |
+
+  No case clarifies on the tool question. The §8.6 guarantee list still holds and is still pinned:
+  - two Annas → clarify;
+  - `Rob` → widen;
+  - a joke → abstain;
+  - a hedge → `P4` not authorized;
+  - an invoice-only amount → refuse (`transfer_funds` now wins at 0.98).
+
+  Determinism and flip mode are unchanged. The simulator stays a lexical test double: **its outputs are never
+  evidence about Jev's accuracy.**
+
+### Quantity grids (§4.2.4; `kinds/quantity.py`, `prompts.py`, `router.py`)
+
+- **Resolver hook.** Resolvers may implement `clarify_values(tool, slot, pool, rc) -> list[Candidate]`, duck-typed
+  like `widen`. Only `quantity` does. `money` offers no grid, because amounts must be stated (the critical tier).
+- **When a grid is offered.** Only when the slot is required, has no default or `default_from`, and nothing was
+  stated: no pool candidate and none blocked by the allow-list.
+  - The grid is `x-jev.values` if declared, else the unit's row: minutes 15/30/45/60, hours 1/2/4/8, seconds
+    10/30/60/120, days 1/2/3/7, weeks 1–4, months 1/3/6/12, years 1/2/3/5, percent 25/50/75/100, milliseconds
+    100/250/500/1000.
+  - Values that fail the schema or a unary constraint are dropped.
+  - At most `min(4, ambiguous_k)` values are offered, evenly spaced with both ends kept: index
+    `⌊i·(n−1)/(k−1) + ½⌋`. So `from_jev_fn`'s `ge=1, le=20` offers 1, 7, 14, 20.
+  - Grid candidates carry `channel=author, prov={"grid": true}`. They never enter a pool or a Ballot.
+- **The menu.** When the policy asks an open question (P6 or a `missing` shape) and the hook returns values, the
+  router shows a grid menu instead.
+  - Text: `x-jev.ask`, or `What should {noun} be?`.
+  - Options: `pick:<slot>:<i>` values such as `45 minutes`, plus `Something else`.
+  - When the rest of the call was decoded, external and critical options show the complete call. As on a clarify
+    menu, the click is then a binding and a confirmation (no Jev call).
+  - `Something else` (`reason = change`) opens the plain question, so the grid does not come back.
+- **Deviation: a grid click on an unspeculated tool.** When the tool was never speculated (P6, e.g. a `@jev.fn`
+  tool whose required `seats` was not stated), no other slot has answers yet, so §3.8.5's "click: no Jev call"
+  cannot hold. The click binds the value (p = 1, channel `user`, also injected as a user candidate) and runs one
+  round with the tool named in `tool_choice`. It is not a confirmation. For open clarifies shown as grid menus,
+  the pending state now records `tool` and `open_slot`, so free-text replies behave as before.
+- **Gap (not changed here).** A `@jev.fn` field whose description is a question ("How many seats are affected")
+  gets the noun `the how many seats are affected`, so its open question reads oddly. Noun inference lives in
+  `spec/infer.py`.
+
+### Golden conformance fixtures (§10.2; `tests/golden/`, `jevtools fixtures`)
+
+- **Cases.** 16 cases: R1–R7, R2-no-history, R2-click, R3-TOCTOU-changed, R4-widen, R6-step1, R6-step2,
+  R6-injection, 422-isolation and budget-split.
+  - `R6` is the full agent loop: step 1 executes, step 2 confirms, the click executes, done. Its tool executions are
+    recorded in the manifest. `R6-step1`, `R6-step2` and `R6-injection` are single Router decisions in loop mode;
+    steps 2 and injection carry a plain `Observation` of the invoice.
+  - `R4-widen` uses the full miss path (buckets + group, then hierarchy, then clarify(open)). `budget-split` is R5
+    with `max_questions = 8`.
+- **Format** (details in `tests/golden/README.md`).
+  - A `case.json` manifest drives the replay (steps, exchanges, executions, output files), so the test and a port
+    need only the files.
+  - One exchange uses `request.json`/`response.json`; several use `request_<i>.json` in call order.
+  - The final outputs are `decision.json`/`trace.json`; earlier steps are `decision_<k>.json`/`trace_<k>.json`.
+  - A failed call's response is `{"error": {type, status, message, detail}}`.
+  - Outputs are canonical JSON (§3.1). Inputs are indented JSON.
+  - `context.json` holds source specs: `contacts` and `files` read the shared rows in `tests/golden/fixtures/`;
+    `accounts` is inline.
+  - Trace `created_at` → `2026-09-24T12:05:00Z` and `latency_ms` → 0: their only non-deterministic fields.
+- **Assertions.** Beyond the four of §10.2:
+  - every later request is compared byte for byte by the replay backend;
+  - regenerated traces must equal the stored ones;
+  - `test_fixtures_are_up_to_date` regenerates every case (about 6 s) and fails on any stale file.
+  - The fixtures replay byte-identically under Python 3.10 and 3.11.
+- **Verify without a context.** `verify` runs without the context for `422-isolation` and `budget-split`
+  (`verify.with_context = false`), because it cannot rebuild their round-1 Ballot:
+  - the trace records the isolated Ballot;
+  - `verify` compiles with the default limits.
+
+  Re-decoding, values, channels, composition and policy are still checked. Recording limits and isolation in the
+  trace would let `verify` rebuild these too; that is a `trace.py`/`router.py` change, not made here.
+- **Where the definitions live.** `tests/golden/cases.py`: the answers come from `tests.scenario.scripts` (a
+  re-export of `jevtools.demo`). `jevtools fixtures [--update] [--dir] [--case]` imports it lazily, adding the
+  checkout root to `sys.path` when needed, so the command works from a repository checkout only. Size: about 1.9 MB
+  (shared rows 224 KB; `R4-widen` 360 KB for its two 251-option buckets).
+- **Scripts are inputs.** A change to the demo scripts or scenario data changes the fixtures, and
+  `test_fixtures_are_up_to_date` catches it. Per §10.2, regenerate only together with a spec version bump.
+
+## Documentation and final merge (`README.md`, `docs/ARCHITECTURE.md`, merge fixes)
+
+- The two sections above were merged from `docs/decisions/{examples,polish}.md`, and that directory was removed.
+  Source docstrings that pointed at `docs/decisions/polish.md` now point here.
+- `pyproject.toml`:
+  - The `fast` marker is registered with the other markers, and `tests/examples/conftest.py` was removed.
+  - `tomli>=1.1; python_version < '3.11'` is now a conditional dependency. On Python 3.10 every TOML read failed
+    without it: `Policy.from_toml`, `jevtools serve --config`, `lint --sources *.toml` and the output check of
+    `tune`. It adds nothing on 3.11+, where `tomllib` is used. This supersedes the "not a hard dependency" part of
+    the Foundation §9 bullet.
+  - ruff excludes the root `README.md` (`./README.md`) as it excludes `docs/`. ruff 0.16 formats Markdown code
+    blocks and would stretch the compact snippets by about 60 lines. The other READMEs are still checked.
+  - `license = "MIT"` was removed. No license has been chosen, the field was added by an implementation commit, not
+    by the author, and there is no `LICENSE` file. README says so.
+- §7.5 lint: source entries now get the same defaults as the sources they describe. `type` counts like `kind`, and
+  a file index without `provides` provides `path`/`file`, as `FileIndex` does. Before, `jevtools lint --sources
+  examples/proxy/jevtools.toml` reported `read_file.path` as a WEAK generic span, although the proxy binds it to
+  the `files` index. There is a test in `tests/unit/test_cli.py`.
+- README snippets run offline against the current API:
+  - simulator, scripted and demo-world variants;
+  - the OpenAI SDK against `wrap` and a live `jevtools serve`, in a scratch venv;
+  - LangChain, Pydantic AI, and MCP 2.x through an in-memory `mcp.client.Client`.
+
+  The core snippets were also run on Python 3.10. The R `ellmer` snippet is quoted from §7.3 and was not run (no R
+  in the build environment).
+- `jt.verify(trace, catalog=…, context=…)` needs the decision's conversation in the context
+  (`router.context_for(messages)`). Otherwise `ballot_rebuild` fails. The README shows that form.
+- Open gap (not changed; it would change the `R3-TOCTOU-changed` golden bytes, which §10.2 ties to a spec version
+  bump): clarify-menu options are the bottleneck slot's top values and are not filtered by cross-slot
+  `constraints`. After the TOCTOU re-plan in R3, the from-account menu still offers `250.00 CHF: Savings → Checking`
+  although Savings now holds 100.00. Clicking it cannot execute, because the constrained MAP flags it and the
+  router clarifies again, but the menu shows an infeasible call. Filtering infeasible complete-call options in
+  `router._menu_choices` is the likely fix.
+- Open cleanups: `tests/loop/support.py` duplicates the R6 pieces that now live in `jevtools.demo`. The noun
+  inference gap for question-shaped `@jev.fn` descriptions (Core polish) is still open.

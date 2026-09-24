@@ -1,0 +1,68 @@
+{
+  "case": "R3-TOCTOU-changed",
+  "spec": "jevtools/0.1",
+  "summary": "Confirmed, but the Savings balance dropped to 100.00: TOCTOU re-plans.",
+  "evidence": "Scripted answers: the spec §13.3 illustrative numbers [I]. The fixtures pin bytes, plumbing and policy branches; they are never evidence about Jev's accuracy.",
+  "model": "~typesafe/jev-latest",
+  "backend": "scripted",
+  "policy": "jevtools-default-0.1",
+  "limits": {},
+  "catalog": "catalog.json",
+  "contexts": [
+    "context.json",
+    "context_2.json"
+  ],
+  "steps": [
+    {
+      "action": "decide",
+      "context": "context.json",
+      "mode": "turn"
+    },
+    {
+      "action": "resume",
+      "context": "context_2.json",
+      "selection": "ok"
+    }
+  ],
+  "verify": {
+    "with_context": true
+  },
+  "ballot": "ballot.json",
+  "ballot_requests": [
+    "request_1.json"
+  ],
+  "exchanges": [
+    {
+      "step": 1,
+      "request": "request_1.json",
+      "response": "response_1.json"
+    },
+    {
+      "step": 2,
+      "request": "request_2.json",
+      "response": "response_2.json"
+    }
+  ],
+  "decisions": [
+    "decision_1.json",
+    "decision.json"
+  ],
+  "traces": [
+    "trace_1.json",
+    "trace.json"
+  ],
+  "expect": {
+    "outcome": "clarify",
+    "rule": "P9.critical.ambiguous",
+    "call": {
+      "name": "transfer_funds",
+      "arguments": {
+        "from_account": "acc_4410",
+        "to_account": "acc_2210",
+        "amount": "250.00",
+        "currency": "CHF"
+      }
+    },
+    "prompt": "Which account the money is taken from did you mean?"
+  }
+}

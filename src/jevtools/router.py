@@ -28,7 +28,7 @@ from jevtools.backends.base import Backend
 from jevtools.backends.errors import BackendError, JevProtocolError, JevValidationError
 from jevtools.ballot import Ballot, BallotQuestion
 from jevtools.budget import TokenEstimator
-from jevtools.candidates import CANCEL, Candidate, Channel, Pool, value_key
+from jevtools.candidates import CANCEL, Candidate, Channel, Pool, display_value, value_key
 from jevtools.canonical import jsonable, sha256_of
 from jevtools.confidence import Composition, IsotonicCalibrator, confidence
 from jevtools.context import Context, Message, Mode, Turn
@@ -40,6 +40,7 @@ from jevtools.decision import (
     DecisionIds,
     DecisionUsage,
     Pending,
+    PendingAction,
     Prompt,
     SlotReport,
     ToolCall,
@@ -85,6 +86,7 @@ from jevtools.prompts import (
     Binding,
     clarify_menu,
     confirm_card,
+    grid_menu,
     open_question,
     parse_short_reply,
     refuse_notice,
@@ -821,6 +823,9 @@ class Router:
             return (yield from self._flow(fresh))
         if action.action == "open":
             return (yield from self._open(s, state, action.slot))
+        pending_tool = live.tool or handle.state.get("tool")
+        if action.action == "bind" and pending_tool and not _decided(state, str(pending_tool), action.slot):
+            return (yield from self._bind_unspeculated(handle, live, str(pending_tool), action, ctx))
         if action.action == "confirm":
             s.confirmed = True
         else:
@@ -833,6 +838,22 @@ class Router:
         inp = self._policy_input(s, state.decoded)
         result = evaluate(inp, self.policy)
         return (yield from self._finish(s, state, result, inp, delayed=True))
+
+    def _bind_unspeculated(
+        self, handle: Pending, live: _Live, tool_name: str, action: PendingAction, ctx: Context
+    ) -> Flow:
+        """A menu pick (a grid value, §4.2.4) for a tool that was not speculated (P6, §5.1): the clicked value is
+        the user's (p = 1, channel ``user``), but no other slot was asked yet, so one round asks the rest of the
+        call with the tool named (no tool question). The click is a binding, not a confirmation."""
+        tool = self.catalog.get(tool_name)
+        slot = tool.slot(str(action.slot))
+        named: ToolChoice = {"type": "function", "function": {"name": tool.name}}
+        fresh = _Session(ctx=ctx, mode=live.session.mode, tool_choice=named, resumed_from=handle.pending_id,
+                         loop=live.session.loop)  # fmt: skip
+        fresh.bindings[slot.name] = (action.value, 1.0, action.label)
+        picked = Candidate(value=action.value, text=f"Chosen by the user from a menu: {display_value(action.value)}.",
+                           channel=Channel.USER, prov={"source": "click"})  # fmt: skip
+        return (yield from self._flow(fresh, extra={(tool.name, slot.path): [picked]}))
 
     def _open(self, s: _Session, state: _State, slot_name: str | None) -> Flow:
         """``change``/``Something else``: ask the open question of the slot (no Jev call)."""
@@ -1025,7 +1046,30 @@ class Router:
                 rebound = [_bindings(bind_value(td, slot.name, c.value, rc)) for c in choices] if rc else None
                 return clarify_menu(td.tool, slot, choices, bindings=_bindings(td), choice_bindings=rebound,
                                     complete_call=td.tool.tier >= Tier.EXTERNAL)  # fmt: skip
+        if ask == "open" and slot is not None and result.reason != "change":
+            grid = self._grid_menu(state, td, slot)
+            if grid is not None:
+                return grid
         return open_question(slot)
+
+    def _grid_menu(self, state: _State | None, td: ToolDecode | None, slot: SlotSpec) -> tuple[Prompt, Actions] | None:
+        """An open clarify becomes a menu when the slot's resolver offers ``clarify_values`` (quantity grids,
+        §4.2.4: a required slot without a default that nothing stated). With the rest of the call decoded, external
+        and critical options show the complete call, as on a clarify menu."""
+        tool = td.tool if td is not None else self._chosen_tool(state)
+        hook = getattr(get_resolver(slot.kind), "clarify_values", None)
+        if tool is None or state is None or not callable(hook):
+            return None
+        rc = replace(state.plan.rc, questions=state.ballot.by_qid)
+        values: list[Candidate] = hook(tool, slot, state.pools.get((tool.name, slot.path)), rc)
+        if not values:
+            return None
+        choices = [Binding.of(c) for c in values]
+        if td is not None and slot.name in td.slots:
+            rebound = [_bindings(bind_value(td, slot.name, c.value, rc)) for c in values]
+            return grid_menu(tool, slot, choices, bindings=_bindings(td), choice_bindings=rebound,
+                             complete_call=tool.tier >= Tier.EXTERNAL)  # fmt: skip
+        return grid_menu(tool, slot, choices)
 
     def _chosen_tool(self, state: _State | None) -> ToolSpec | None:
         chosen = state.decoded.chosen if state is not None and state.decoded is not None else None
@@ -1068,13 +1112,14 @@ class Router:
         ballot_sha = state.ballot.sha256 if state is not None else ""
         responses = [c.response_sha256 for r in s.rounds for c in r.calls if c.response_sha256]
         chosen = self._chosen_tool(state)
-        tool = td.tool.name if td is not None else chosen.name if chosen is not None and prompt.kind == "open" else None
+        opened = prompt.kind == "open" or result.ask == "open"  # an open clarify, possibly shown as a grid menu
+        tool = td.tool.name if td is not None else chosen.name if chosen is not None and opened else None
         return Pending.new(
             pending_id=ids.pending_id, decision_id=ids.decision_id, ballot_sha256=ballot_sha,
             response_sha256s=responses, call=call, options=actions,
             state={"messages": [t.model_dump(mode="json") for t in s.ctx.messages], "tool": tool,
                    "prompt_text": prompt.text, "options": [o.model_dump() for o in prompt.options],
-                   "open_slot": result.bottleneck if prompt.kind == "open" else None, "rule": result.rule,
+                   "open_slot": result.bottleneck if opened else None, "rule": result.rule,
                    **({"loop": True} if s.in_loop else {})},
         )  # fmt: skip
 
@@ -1196,8 +1241,13 @@ def _membership(pool: Pool, value: Any, label: str | None) -> Mapping[str, Any] 
 
 
 def _bindings(td: ToolDecode) -> dict[str, Binding]:
-    return {name: Binding.of_value(r.value, display=r.display, label=r.label, attrs=r.attrs)
-            for name, r in td.slots.items() if not r.is_bottom}  # fmt: skip
+    return {name: Binding.of_result(r) for name, r in td.slots.items() if not r.is_bottom}
+
+
+def _decided(state: _State, tool: str, slot: str | None) -> bool:
+    """Whether the state decoded ``tool`` (it was speculated) with ``slot`` among its results."""
+    td = state.decoded.decision if state.decoded is not None else None
+    return td is not None and td.tool.name == tool and slot is not None and slot in td.slots
 
 
 def _weakest(inp: PolicyInput | None) -> str | None:

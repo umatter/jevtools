@@ -1,0 +1,3502 @@
+[
+  {
+    "name": "Anna Keller",
+    "email": "anna.keller@acme.com",
+    "team": "ACME",
+    "notes": "Account Manager at ACME; last emailed 2 days ago",
+    "last": "2026-09-22"
+  },
+  {
+    "name": "Anna Rossi",
+    "email": "anna.rossi@gmail.com",
+    "notes": "personal contact; last emailed 3 weeks ago",
+    "last": "2026-09-03"
+  },
+  {
+    "name": "Annabel Frey",
+    "email": "annabel.frey@muster.ch",
+    "team": "Finance",
+    "notes": "Finance, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-20"
+  },
+  {
+    "name": "Bob Meier",
+    "email": "bob.meier@muster.ch",
+    "team": "Payments",
+    "notes": "Payments team, the user's own company; 14 shared meetings in the last 90 days",
+    "last": "2026-09-23"
+  },
+  {
+    "name": "Robert Brown",
+    "email": "rbrown@partner.io",
+    "aliases": [
+      "Bob"
+    ],
+    "notes": "Partner Inc.; last met 4 months ago",
+    "last": "2026-05-12"
+  },
+  {
+    "name": "Carol Liu",
+    "email": "carol.liu@muster.ch",
+    "team": "Payments",
+    "notes": "Payments team, the user's own company; 9 shared meetings in the last 90 days",
+    "last": "2026-09-21"
+  },
+  {
+    "name": "Caroline Weber",
+    "email": "caroline.weber@muster.ch",
+    "team": "Legal",
+    "notes": "Legal, the user's own company; no shared meetings",
+    "last": "2025-11-02"
+  },
+  {
+    "name": "Finance Team",
+    "email": "finance@muster.ch",
+    "notes": "group mailbox of the Finance team",
+    "last": "2026-09-01"
+  },
+  {
+    "name": "Liam Ammann",
+    "email": "liam.ammann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-25"
+  },
+  {
+    "name": "Noah Ammann",
+    "email": "noah.ammann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 2 months ago",
+    "last": "2026-07-25"
+  },
+  {
+    "name": "Mia Ammann",
+    "email": "mia.ammann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 3 months ago",
+    "last": "2026-06-24"
+  },
+  {
+    "name": "Emma Ammann",
+    "email": "emma.ammann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-24"
+  },
+  {
+    "name": "Luca Ammann",
+    "email": "luca.ammann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 5 months ago",
+    "last": "2026-04-23"
+  },
+  {
+    "name": "Lea Ammann",
+    "email": "lea.ammann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 6 months ago",
+    "last": "2026-03-23"
+  },
+  {
+    "name": "Elias Ammann",
+    "email": "elias.ammann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-20"
+  },
+  {
+    "name": "Nora Ammann",
+    "email": "nora.ammann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 8 months ago",
+    "last": "2026-01-20"
+  },
+  {
+    "name": "Jonas Ammann",
+    "email": "jonas.ammann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 9 months ago",
+    "last": "2025-12-20"
+  },
+  {
+    "name": "Sara Ammann",
+    "email": "sara.ammann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-19"
+  },
+  {
+    "name": "David Ammann",
+    "email": "david.ammann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 11 months ago",
+    "last": "2025-10-19"
+  },
+  {
+    "name": "Julia Ammann",
+    "email": "julia.ammann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 1 months ago",
+    "last": "2026-08-14"
+  },
+  {
+    "name": "Felix Ammann",
+    "email": "felix.ammann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-14"
+  },
+  {
+    "name": "Laura Ammann",
+    "email": "laura.ammann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 3 months ago",
+    "last": "2026-06-13"
+  },
+  {
+    "name": "Simon Ammann",
+    "email": "simon.ammann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 4 months ago",
+    "last": "2026-05-13"
+  },
+  {
+    "name": "Lena Ammann",
+    "email": "lena.ammann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-12"
+  },
+  {
+    "name": "Marco Ammann",
+    "email": "marco.ammann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 6 months ago",
+    "last": "2026-03-12"
+  },
+  {
+    "name": "Elena Ammann",
+    "email": "elena.ammann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 7 months ago",
+    "last": "2026-02-26"
+  },
+  {
+    "name": "Tim Ammann",
+    "email": "tim.ammann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-26"
+  },
+  {
+    "name": "Eva Ammann",
+    "email": "eva.ammann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 9 months ago",
+    "last": "2025-12-26"
+  },
+  {
+    "name": "Levin Ammann",
+    "email": "levin.ammann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 10 months ago",
+    "last": "2025-11-25"
+  },
+  {
+    "name": "Fabio Ammann",
+    "email": "fabio.ammann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-25"
+  },
+  {
+    "name": "Nico Ammann",
+    "email": "nico.ammann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 1 months ago",
+    "last": "2026-08-20"
+  },
+  {
+    "name": "Chiara Ammann",
+    "email": "chiara.ammann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 2 months ago",
+    "last": "2026-07-20"
+  },
+  {
+    "name": "Dario Ammann",
+    "email": "dario.ammann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-19"
+  },
+  {
+    "name": "Yannick Ammann",
+    "email": "yannick.ammann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 4 months ago",
+    "last": "2026-05-19"
+  },
+  {
+    "name": "Leonie Ammann",
+    "email": "leonie.ammann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 5 months ago",
+    "last": "2026-04-18"
+  },
+  {
+    "name": "Samuel Ammann",
+    "email": "samuel.ammann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-18"
+  },
+  {
+    "name": "Livia Ammann",
+    "email": "livia.ammann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 7 months ago",
+    "last": "2026-02-15"
+  },
+  {
+    "name": "Remo Ammann",
+    "email": "remo.ammann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 8 months ago",
+    "last": "2026-01-15"
+  },
+  {
+    "name": "Urs Ammann",
+    "email": "urs.ammann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-15"
+  },
+  {
+    "name": "Heidi Ammann",
+    "email": "heidi.ammann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 10 months ago",
+    "last": "2025-11-14"
+  },
+  {
+    "name": "Beat Ammann",
+    "email": "beat.ammann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 11 months ago",
+    "last": "2025-10-14"
+  },
+  {
+    "name": "Ursula Ammann",
+    "email": "ursula.ammann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-09"
+  },
+  {
+    "name": "Hugo Ammann",
+    "email": "hugo.ammann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 2 months ago",
+    "last": "2026-07-26"
+  },
+  {
+    "name": "Ida Ammann",
+    "email": "ida.ammann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 3 months ago",
+    "last": "2026-06-25"
+  },
+  {
+    "name": "Otto Ammann",
+    "email": "otto.ammann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-25"
+  },
+  {
+    "name": "Paula Ammann",
+    "email": "paula.ammann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 5 months ago",
+    "last": "2026-04-24"
+  },
+  {
+    "name": "Quentin Ammann",
+    "email": "quentin.ammann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 6 months ago",
+    "last": "2026-03-24"
+  },
+  {
+    "name": "Rita Ammann",
+    "email": "rita.ammann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-21"
+  },
+  {
+    "name": "Stefan Ammann",
+    "email": "stefan.ammann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 8 months ago",
+    "last": "2026-01-21"
+  },
+  {
+    "name": "Tobias Ammann",
+    "email": "tobias.ammann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 9 months ago",
+    "last": "2025-12-21"
+  },
+  {
+    "name": "Vera Ammann",
+    "email": "vera.ammann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-20"
+  },
+  {
+    "name": "Walter Ammann",
+    "email": "walter.ammann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 11 months ago",
+    "last": "2025-10-20"
+  },
+  {
+    "name": "Xenia Ammann",
+    "email": "xenia.ammann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 1 months ago",
+    "last": "2026-08-15"
+  },
+  {
+    "name": "Yves Ammann",
+    "email": "yves.ammann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-15"
+  },
+  {
+    "name": "Zoe Ammann",
+    "email": "zoe.ammann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 3 months ago",
+    "last": "2026-06-14"
+  },
+  {
+    "name": "Georg Ammann",
+    "email": "georg.ammann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 4 months ago",
+    "last": "2026-05-14"
+  },
+  {
+    "name": "Ivo Ammann",
+    "email": "ivo.ammann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-13"
+  },
+  {
+    "name": "Mirco Ammann",
+    "email": "mirco.ammann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 6 months ago",
+    "last": "2026-03-13"
+  },
+  {
+    "name": "Liam Baumann",
+    "email": "liam.baumann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 7 months ago",
+    "last": "2026-02-10"
+  },
+  {
+    "name": "Noah Baumann",
+    "email": "noah.baumann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-27"
+  },
+  {
+    "name": "Mia Baumann",
+    "email": "mia.baumann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 9 months ago",
+    "last": "2025-12-27"
+  },
+  {
+    "name": "Emma Baumann",
+    "email": "emma.baumann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 10 months ago",
+    "last": "2025-11-26"
+  },
+  {
+    "name": "Luca Baumann",
+    "email": "luca.baumann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-26"
+  },
+  {
+    "name": "Lea Baumann",
+    "email": "lea.baumann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 1 months ago",
+    "last": "2026-08-21"
+  },
+  {
+    "name": "Elias Baumann",
+    "email": "elias.baumann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 2 months ago",
+    "last": "2026-07-21"
+  },
+  {
+    "name": "Nora Baumann",
+    "email": "nora.baumann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-20"
+  },
+  {
+    "name": "Jonas Baumann",
+    "email": "jonas.baumann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 4 months ago",
+    "last": "2026-05-20"
+  },
+  {
+    "name": "Sara Baumann",
+    "email": "sara.baumann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 5 months ago",
+    "last": "2026-04-19"
+  },
+  {
+    "name": "David Baumann",
+    "email": "david.baumann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-19"
+  },
+  {
+    "name": "Julia Baumann",
+    "email": "julia.baumann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 7 months ago",
+    "last": "2026-02-16"
+  },
+  {
+    "name": "Felix Baumann",
+    "email": "felix.baumann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 8 months ago",
+    "last": "2026-01-16"
+  },
+  {
+    "name": "Laura Baumann",
+    "email": "laura.baumann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-16"
+  },
+  {
+    "name": "Simon Baumann",
+    "email": "simon.baumann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 10 months ago",
+    "last": "2025-11-15"
+  },
+  {
+    "name": "Lena Baumann",
+    "email": "lena.baumann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 11 months ago",
+    "last": "2025-10-15"
+  },
+  {
+    "name": "Marco Baumann",
+    "email": "marco.baumann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-10"
+  },
+  {
+    "name": "Elena Baumann",
+    "email": "elena.baumann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 2 months ago",
+    "last": "2026-07-10"
+  },
+  {
+    "name": "Tim Baumann",
+    "email": "tim.baumann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 3 months ago",
+    "last": "2026-06-26"
+  },
+  {
+    "name": "Eva Baumann",
+    "email": "eva.baumann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-26"
+  },
+  {
+    "name": "Levin Baumann",
+    "email": "levin.baumann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 5 months ago",
+    "last": "2026-04-25"
+  },
+  {
+    "name": "Fabio Baumann",
+    "email": "fabio.baumann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 6 months ago",
+    "last": "2026-03-25"
+  },
+  {
+    "name": "Nico Baumann",
+    "email": "nico.baumann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-22"
+  },
+  {
+    "name": "Chiara Baumann",
+    "email": "chiara.baumann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 8 months ago",
+    "last": "2026-01-22"
+  },
+  {
+    "name": "Dario Baumann",
+    "email": "dario.baumann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 9 months ago",
+    "last": "2025-12-22"
+  },
+  {
+    "name": "Yannick Baumann",
+    "email": "yannick.baumann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-21"
+  },
+  {
+    "name": "Leonie Baumann",
+    "email": "leonie.baumann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 11 months ago",
+    "last": "2025-10-21"
+  },
+  {
+    "name": "Samuel Baumann",
+    "email": "samuel.baumann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 1 months ago",
+    "last": "2026-08-16"
+  },
+  {
+    "name": "Livia Baumann",
+    "email": "livia.baumann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-16"
+  },
+  {
+    "name": "Remo Baumann",
+    "email": "remo.baumann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 3 months ago",
+    "last": "2026-06-15"
+  },
+  {
+    "name": "Urs Baumann",
+    "email": "urs.baumann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 4 months ago",
+    "last": "2026-05-15"
+  },
+  {
+    "name": "Heidi Baumann",
+    "email": "heidi.baumann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-14"
+  },
+  {
+    "name": "Beat Baumann",
+    "email": "beat.baumann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 6 months ago",
+    "last": "2026-03-14"
+  },
+  {
+    "name": "Ursula Baumann",
+    "email": "ursula.baumann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 7 months ago",
+    "last": "2026-02-11"
+  },
+  {
+    "name": "Hugo Baumann",
+    "email": "hugo.baumann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-11"
+  },
+  {
+    "name": "Ida Baumann",
+    "email": "ida.baumann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 9 months ago",
+    "last": "2025-12-28"
+  },
+  {
+    "name": "Otto Baumann",
+    "email": "otto.baumann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 10 months ago",
+    "last": "2025-11-27"
+  },
+  {
+    "name": "Paula Baumann",
+    "email": "paula.baumann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-27"
+  },
+  {
+    "name": "Quentin Baumann",
+    "email": "quentin.baumann@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 1 months ago",
+    "last": "2026-08-22"
+  },
+  {
+    "name": "Rita Baumann",
+    "email": "rita.baumann@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 2 months ago",
+    "last": "2026-07-22"
+  },
+  {
+    "name": "Stefan Baumann",
+    "email": "stefan.baumann@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-21"
+  },
+  {
+    "name": "Tobias Baumann",
+    "email": "tobias.baumann@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 4 months ago",
+    "last": "2026-05-21"
+  },
+  {
+    "name": "Vera Baumann",
+    "email": "vera.baumann@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 5 months ago",
+    "last": "2026-04-20"
+  },
+  {
+    "name": "Walter Baumann",
+    "email": "walter.baumann@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-20"
+  },
+  {
+    "name": "Xenia Baumann",
+    "email": "xenia.baumann@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 7 months ago",
+    "last": "2026-02-17"
+  },
+  {
+    "name": "Yves Baumann",
+    "email": "yves.baumann@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 8 months ago",
+    "last": "2026-01-17"
+  },
+  {
+    "name": "Zoe Baumann",
+    "email": "zoe.baumann@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-17"
+  },
+  {
+    "name": "Georg Baumann",
+    "email": "georg.baumann@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 10 months ago",
+    "last": "2025-11-16"
+  },
+  {
+    "name": "Ivo Baumann",
+    "email": "ivo.baumann@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 11 months ago",
+    "last": "2025-10-16"
+  },
+  {
+    "name": "Mirco Baumann",
+    "email": "mirco.baumann@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-11"
+  },
+  {
+    "name": "Liam Brunner",
+    "email": "liam.brunner@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 2 months ago",
+    "last": "2026-07-11"
+  },
+  {
+    "name": "Noah Brunner",
+    "email": "noah.brunner@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 3 months ago",
+    "last": "2026-06-10"
+  },
+  {
+    "name": "Mia Brunner",
+    "email": "mia.brunner@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-27"
+  },
+  {
+    "name": "Emma Brunner",
+    "email": "emma.brunner@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 5 months ago",
+    "last": "2026-04-26"
+  },
+  {
+    "name": "Luca Brunner",
+    "email": "luca.brunner@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 6 months ago",
+    "last": "2026-03-26"
+  },
+  {
+    "name": "Lea Brunner",
+    "email": "lea.brunner@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-23"
+  },
+  {
+    "name": "Elias Brunner",
+    "email": "elias.brunner@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 8 months ago",
+    "last": "2026-01-23"
+  },
+  {
+    "name": "Nora Brunner",
+    "email": "nora.brunner@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 9 months ago",
+    "last": "2025-12-23"
+  },
+  {
+    "name": "Jonas Brunner",
+    "email": "jonas.brunner@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-22"
+  },
+  {
+    "name": "Sara Brunner",
+    "email": "sara.brunner@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 11 months ago",
+    "last": "2025-10-22"
+  },
+  {
+    "name": "David Brunner",
+    "email": "david.brunner@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 1 months ago",
+    "last": "2026-08-17"
+  },
+  {
+    "name": "Julia Brunner",
+    "email": "julia.brunner@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-17"
+  },
+  {
+    "name": "Felix Brunner",
+    "email": "felix.brunner@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 3 months ago",
+    "last": "2026-06-16"
+  },
+  {
+    "name": "Laura Brunner",
+    "email": "laura.brunner@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 4 months ago",
+    "last": "2026-05-16"
+  },
+  {
+    "name": "Simon Brunner",
+    "email": "simon.brunner@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-15"
+  },
+  {
+    "name": "Lena Brunner",
+    "email": "lena.brunner@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 6 months ago",
+    "last": "2026-03-15"
+  },
+  {
+    "name": "Marco Brunner",
+    "email": "marco.brunner@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 7 months ago",
+    "last": "2026-02-12"
+  },
+  {
+    "name": "Elena Brunner",
+    "email": "elena.brunner@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-12"
+  },
+  {
+    "name": "Tim Brunner",
+    "email": "tim.brunner@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 9 months ago",
+    "last": "2025-12-12"
+  },
+  {
+    "name": "Eva Brunner",
+    "email": "eva.brunner@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 10 months ago",
+    "last": "2025-11-28"
+  },
+  {
+    "name": "Levin Brunner",
+    "email": "levin.brunner@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-28"
+  },
+  {
+    "name": "Fabio Brunner",
+    "email": "fabio.brunner@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 1 months ago",
+    "last": "2026-08-23"
+  },
+  {
+    "name": "Nico Brunner",
+    "email": "nico.brunner@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 2 months ago",
+    "last": "2026-07-23"
+  },
+  {
+    "name": "Chiara Brunner",
+    "email": "chiara.brunner@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-22"
+  },
+  {
+    "name": "Dario Brunner",
+    "email": "dario.brunner@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 4 months ago",
+    "last": "2026-05-22"
+  },
+  {
+    "name": "Yannick Brunner",
+    "email": "yannick.brunner@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 5 months ago",
+    "last": "2026-04-21"
+  },
+  {
+    "name": "Leonie Brunner",
+    "email": "leonie.brunner@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-21"
+  },
+  {
+    "name": "Samuel Brunner",
+    "email": "samuel.brunner@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 7 months ago",
+    "last": "2026-02-18"
+  },
+  {
+    "name": "Livia Brunner",
+    "email": "livia.brunner@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 8 months ago",
+    "last": "2026-01-18"
+  },
+  {
+    "name": "Remo Brunner",
+    "email": "remo.brunner@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-18"
+  },
+  {
+    "name": "Urs Brunner",
+    "email": "urs.brunner@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 10 months ago",
+    "last": "2025-11-17"
+  },
+  {
+    "name": "Heidi Brunner",
+    "email": "heidi.brunner@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 11 months ago",
+    "last": "2025-10-17"
+  },
+  {
+    "name": "Beat Brunner",
+    "email": "beat.brunner@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-12"
+  },
+  {
+    "name": "Ursula Brunner",
+    "email": "ursula.brunner@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 2 months ago",
+    "last": "2026-07-12"
+  },
+  {
+    "name": "Hugo Brunner",
+    "email": "hugo.brunner@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 3 months ago",
+    "last": "2026-06-11"
+  },
+  {
+    "name": "Ida Brunner",
+    "email": "ida.brunner@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-11"
+  },
+  {
+    "name": "Otto Brunner",
+    "email": "otto.brunner@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 5 months ago",
+    "last": "2026-04-27"
+  },
+  {
+    "name": "Paula Brunner",
+    "email": "paula.brunner@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 6 months ago",
+    "last": "2026-03-27"
+  },
+  {
+    "name": "Quentin Brunner",
+    "email": "quentin.brunner@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-24"
+  },
+  {
+    "name": "Rita Brunner",
+    "email": "rita.brunner@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 8 months ago",
+    "last": "2026-01-24"
+  },
+  {
+    "name": "Stefan Brunner",
+    "email": "stefan.brunner@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 9 months ago",
+    "last": "2025-12-24"
+  },
+  {
+    "name": "Tobias Brunner",
+    "email": "tobias.brunner@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-23"
+  },
+  {
+    "name": "Vera Brunner",
+    "email": "vera.brunner@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 11 months ago",
+    "last": "2025-10-23"
+  },
+  {
+    "name": "Walter Brunner",
+    "email": "walter.brunner@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 1 months ago",
+    "last": "2026-08-18"
+  },
+  {
+    "name": "Xenia Brunner",
+    "email": "xenia.brunner@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-18"
+  },
+  {
+    "name": "Yves Brunner",
+    "email": "yves.brunner@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 3 months ago",
+    "last": "2026-06-17"
+  },
+  {
+    "name": "Zoe Brunner",
+    "email": "zoe.brunner@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 4 months ago",
+    "last": "2026-05-17"
+  },
+  {
+    "name": "Georg Brunner",
+    "email": "georg.brunner@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-16"
+  },
+  {
+    "name": "Ivo Brunner",
+    "email": "ivo.brunner@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 6 months ago",
+    "last": "2026-03-16"
+  },
+  {
+    "name": "Mirco Brunner",
+    "email": "mirco.brunner@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 7 months ago",
+    "last": "2026-02-13"
+  },
+  {
+    "name": "Liam Egli",
+    "email": "liam.egli@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-13"
+  },
+  {
+    "name": "Noah Egli",
+    "email": "noah.egli@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 9 months ago",
+    "last": "2025-12-13"
+  },
+  {
+    "name": "Mia Egli",
+    "email": "mia.egli@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 10 months ago",
+    "last": "2025-11-12"
+  },
+  {
+    "name": "Emma Egli",
+    "email": "emma.egli@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-29"
+  },
+  {
+    "name": "Luca Egli",
+    "email": "luca.egli@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 1 months ago",
+    "last": "2026-08-24"
+  },
+  {
+    "name": "Lea Egli",
+    "email": "lea.egli@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 2 months ago",
+    "last": "2026-07-24"
+  },
+  {
+    "name": "Elias Egli",
+    "email": "elias.egli@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-23"
+  },
+  {
+    "name": "Nora Egli",
+    "email": "nora.egli@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 4 months ago",
+    "last": "2026-05-23"
+  },
+  {
+    "name": "Jonas Egli",
+    "email": "jonas.egli@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 5 months ago",
+    "last": "2026-04-22"
+  },
+  {
+    "name": "Sara Egli",
+    "email": "sara.egli@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-22"
+  },
+  {
+    "name": "David Egli",
+    "email": "david.egli@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 7 months ago",
+    "last": "2026-02-19"
+  },
+  {
+    "name": "Julia Egli",
+    "email": "julia.egli@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 8 months ago",
+    "last": "2026-01-19"
+  },
+  {
+    "name": "Felix Egli",
+    "email": "felix.egli@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-19"
+  },
+  {
+    "name": "Laura Egli",
+    "email": "laura.egli@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 10 months ago",
+    "last": "2025-11-18"
+  },
+  {
+    "name": "Simon Egli",
+    "email": "simon.egli@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 11 months ago",
+    "last": "2025-10-18"
+  },
+  {
+    "name": "Lena Egli",
+    "email": "lena.egli@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-13"
+  },
+  {
+    "name": "Marco Egli",
+    "email": "marco.egli@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 2 months ago",
+    "last": "2026-07-13"
+  },
+  {
+    "name": "Elena Egli",
+    "email": "elena.egli@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 3 months ago",
+    "last": "2026-06-12"
+  },
+  {
+    "name": "Tim Egli",
+    "email": "tim.egli@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-12"
+  },
+  {
+    "name": "Eva Egli",
+    "email": "eva.egli@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 5 months ago",
+    "last": "2026-04-11"
+  },
+  {
+    "name": "Levin Egli",
+    "email": "levin.egli@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 6 months ago",
+    "last": "2026-03-28"
+  },
+  {
+    "name": "Fabio Egli",
+    "email": "fabio.egli@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-25"
+  },
+  {
+    "name": "Nico Egli",
+    "email": "nico.egli@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 8 months ago",
+    "last": "2026-01-25"
+  },
+  {
+    "name": "Chiara Egli",
+    "email": "chiara.egli@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 9 months ago",
+    "last": "2025-12-25"
+  },
+  {
+    "name": "Dario Egli",
+    "email": "dario.egli@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-24"
+  },
+  {
+    "name": "Yannick Egli",
+    "email": "yannick.egli@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 11 months ago",
+    "last": "2025-10-24"
+  },
+  {
+    "name": "Leonie Egli",
+    "email": "leonie.egli@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 1 months ago",
+    "last": "2026-08-19"
+  },
+  {
+    "name": "Samuel Egli",
+    "email": "samuel.egli@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-19"
+  },
+  {
+    "name": "Livia Egli",
+    "email": "livia.egli@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 3 months ago",
+    "last": "2026-06-18"
+  },
+  {
+    "name": "Remo Egli",
+    "email": "remo.egli@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 4 months ago",
+    "last": "2026-05-18"
+  },
+  {
+    "name": "Urs Egli",
+    "email": "urs.egli@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-17"
+  },
+  {
+    "name": "Heidi Egli",
+    "email": "heidi.egli@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 6 months ago",
+    "last": "2026-03-17"
+  },
+  {
+    "name": "Beat Egli",
+    "email": "beat.egli@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 7 months ago",
+    "last": "2026-02-14"
+  },
+  {
+    "name": "Ursula Egli",
+    "email": "ursula.egli@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-14"
+  },
+  {
+    "name": "Hugo Egli",
+    "email": "hugo.egli@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 9 months ago",
+    "last": "2025-12-14"
+  },
+  {
+    "name": "Ida Egli",
+    "email": "ida.egli@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 10 months ago",
+    "last": "2025-11-13"
+  },
+  {
+    "name": "Otto Egli",
+    "email": "otto.egli@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-13"
+  },
+  {
+    "name": "Paula Egli",
+    "email": "paula.egli@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 1 months ago",
+    "last": "2026-08-25"
+  },
+  {
+    "name": "Quentin Egli",
+    "email": "quentin.egli@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 2 months ago",
+    "last": "2026-07-25"
+  },
+  {
+    "name": "Rita Egli",
+    "email": "rita.egli@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-24"
+  },
+  {
+    "name": "Stefan Egli",
+    "email": "stefan.egli@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 4 months ago",
+    "last": "2026-05-24"
+  },
+  {
+    "name": "Tobias Egli",
+    "email": "tobias.egli@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 5 months ago",
+    "last": "2026-04-23"
+  },
+  {
+    "name": "Vera Egli",
+    "email": "vera.egli@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-23"
+  },
+  {
+    "name": "Walter Egli",
+    "email": "walter.egli@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 7 months ago",
+    "last": "2026-02-20"
+  },
+  {
+    "name": "Xenia Egli",
+    "email": "xenia.egli@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 8 months ago",
+    "last": "2026-01-20"
+  },
+  {
+    "name": "Yves Egli",
+    "email": "yves.egli@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-20"
+  },
+  {
+    "name": "Zoe Egli",
+    "email": "zoe.egli@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 10 months ago",
+    "last": "2025-11-19"
+  },
+  {
+    "name": "Georg Egli",
+    "email": "georg.egli@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 11 months ago",
+    "last": "2025-10-19"
+  },
+  {
+    "name": "Ivo Egli",
+    "email": "ivo.egli@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-14"
+  },
+  {
+    "name": "Mirco Egli",
+    "email": "mirco.egli@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 2 months ago",
+    "last": "2026-07-14"
+  },
+  {
+    "name": "Liam Fischer",
+    "email": "liam.fischer@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 3 months ago",
+    "last": "2026-06-13"
+  },
+  {
+    "name": "Noah Fischer",
+    "email": "noah.fischer@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-13"
+  },
+  {
+    "name": "Mia Fischer",
+    "email": "mia.fischer@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 5 months ago",
+    "last": "2026-04-12"
+  },
+  {
+    "name": "Emma Fischer",
+    "email": "emma.fischer@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 6 months ago",
+    "last": "2026-03-12"
+  },
+  {
+    "name": "Luca Fischer",
+    "email": "luca.fischer@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-26"
+  },
+  {
+    "name": "Lea Fischer",
+    "email": "lea.fischer@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 8 months ago",
+    "last": "2026-01-26"
+  },
+  {
+    "name": "Elias Fischer",
+    "email": "elias.fischer@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 9 months ago",
+    "last": "2025-12-26"
+  },
+  {
+    "name": "Nora Fischer",
+    "email": "nora.fischer@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-25"
+  },
+  {
+    "name": "Jonas Fischer",
+    "email": "jonas.fischer@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 11 months ago",
+    "last": "2025-10-25"
+  },
+  {
+    "name": "Sara Fischer",
+    "email": "sara.fischer@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 1 months ago",
+    "last": "2026-08-20"
+  },
+  {
+    "name": "David Fischer",
+    "email": "david.fischer@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-20"
+  },
+  {
+    "name": "Julia Fischer",
+    "email": "julia.fischer@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 3 months ago",
+    "last": "2026-06-19"
+  },
+  {
+    "name": "Felix Fischer",
+    "email": "felix.fischer@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 4 months ago",
+    "last": "2026-05-19"
+  },
+  {
+    "name": "Laura Fischer",
+    "email": "laura.fischer@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-18"
+  },
+  {
+    "name": "Simon Fischer",
+    "email": "simon.fischer@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 6 months ago",
+    "last": "2026-03-18"
+  },
+  {
+    "name": "Lena Fischer",
+    "email": "lena.fischer@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 7 months ago",
+    "last": "2026-02-15"
+  },
+  {
+    "name": "Marco Fischer",
+    "email": "marco.fischer@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-15"
+  },
+  {
+    "name": "Elena Fischer",
+    "email": "elena.fischer@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 9 months ago",
+    "last": "2025-12-15"
+  },
+  {
+    "name": "Tim Fischer",
+    "email": "tim.fischer@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 10 months ago",
+    "last": "2025-11-14"
+  },
+  {
+    "name": "Eva Fischer",
+    "email": "eva.fischer@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-14"
+  },
+  {
+    "name": "Levin Fischer",
+    "email": "levin.fischer@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 1 months ago",
+    "last": "2026-08-09"
+  },
+  {
+    "name": "Fabio Fischer",
+    "email": "fabio.fischer@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 2 months ago",
+    "last": "2026-07-26"
+  },
+  {
+    "name": "Nico Fischer",
+    "email": "nico.fischer@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-25"
+  },
+  {
+    "name": "Chiara Fischer",
+    "email": "chiara.fischer@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 4 months ago",
+    "last": "2026-05-25"
+  },
+  {
+    "name": "Dario Fischer",
+    "email": "dario.fischer@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 5 months ago",
+    "last": "2026-04-24"
+  },
+  {
+    "name": "Yannick Fischer",
+    "email": "yannick.fischer@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-24"
+  },
+  {
+    "name": "Leonie Fischer",
+    "email": "leonie.fischer@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 7 months ago",
+    "last": "2026-02-21"
+  },
+  {
+    "name": "Samuel Fischer",
+    "email": "samuel.fischer@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 8 months ago",
+    "last": "2026-01-21"
+  },
+  {
+    "name": "Livia Fischer",
+    "email": "livia.fischer@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-21"
+  },
+  {
+    "name": "Remo Fischer",
+    "email": "remo.fischer@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 10 months ago",
+    "last": "2025-11-20"
+  },
+  {
+    "name": "Urs Fischer",
+    "email": "urs.fischer@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 11 months ago",
+    "last": "2025-10-20"
+  },
+  {
+    "name": "Heidi Fischer",
+    "email": "heidi.fischer@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-15"
+  },
+  {
+    "name": "Beat Fischer",
+    "email": "beat.fischer@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 2 months ago",
+    "last": "2026-07-15"
+  },
+  {
+    "name": "Ursula Fischer",
+    "email": "ursula.fischer@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 3 months ago",
+    "last": "2026-06-14"
+  },
+  {
+    "name": "Hugo Fischer",
+    "email": "hugo.fischer@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-14"
+  },
+  {
+    "name": "Ida Fischer",
+    "email": "ida.fischer@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 5 months ago",
+    "last": "2026-04-13"
+  },
+  {
+    "name": "Otto Fischer",
+    "email": "otto.fischer@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 6 months ago",
+    "last": "2026-03-13"
+  },
+  {
+    "name": "Paula Fischer",
+    "email": "paula.fischer@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-10"
+  },
+  {
+    "name": "Quentin Fischer",
+    "email": "quentin.fischer@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 8 months ago",
+    "last": "2026-01-27"
+  },
+  {
+    "name": "Rita Fischer",
+    "email": "rita.fischer@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 9 months ago",
+    "last": "2025-12-27"
+  },
+  {
+    "name": "Stefan Fischer",
+    "email": "stefan.fischer@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-26"
+  },
+  {
+    "name": "Tobias Fischer",
+    "email": "tobias.fischer@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 11 months ago",
+    "last": "2025-10-26"
+  },
+  {
+    "name": "Vera Fischer",
+    "email": "vera.fischer@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 1 months ago",
+    "last": "2026-08-21"
+  },
+  {
+    "name": "Walter Fischer",
+    "email": "walter.fischer@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-21"
+  },
+  {
+    "name": "Xenia Fischer",
+    "email": "xenia.fischer@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 3 months ago",
+    "last": "2026-06-20"
+  },
+  {
+    "name": "Yves Fischer",
+    "email": "yves.fischer@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 4 months ago",
+    "last": "2026-05-20"
+  },
+  {
+    "name": "Zoe Fischer",
+    "email": "zoe.fischer@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-19"
+  },
+  {
+    "name": "Georg Fischer",
+    "email": "georg.fischer@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 6 months ago",
+    "last": "2026-03-19"
+  },
+  {
+    "name": "Ivo Fischer",
+    "email": "ivo.fischer@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 7 months ago",
+    "last": "2026-02-16"
+  },
+  {
+    "name": "Mirco Fischer",
+    "email": "mirco.fischer@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-16"
+  },
+  {
+    "name": "Liam Gerber",
+    "email": "liam.gerber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 9 months ago",
+    "last": "2025-12-16"
+  },
+  {
+    "name": "Noah Gerber",
+    "email": "noah.gerber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 10 months ago",
+    "last": "2025-11-15"
+  },
+  {
+    "name": "Mia Gerber",
+    "email": "mia.gerber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-15"
+  },
+  {
+    "name": "Emma Gerber",
+    "email": "emma.gerber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 1 months ago",
+    "last": "2026-08-10"
+  },
+  {
+    "name": "Luca Gerber",
+    "email": "luca.gerber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 2 months ago",
+    "last": "2026-07-10"
+  },
+  {
+    "name": "Lea Gerber",
+    "email": "lea.gerber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-26"
+  },
+  {
+    "name": "Elias Gerber",
+    "email": "elias.gerber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 4 months ago",
+    "last": "2026-05-26"
+  },
+  {
+    "name": "Nora Gerber",
+    "email": "nora.gerber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 5 months ago",
+    "last": "2026-04-25"
+  },
+  {
+    "name": "Jonas Gerber",
+    "email": "jonas.gerber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-25"
+  },
+  {
+    "name": "Sara Gerber",
+    "email": "sara.gerber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 7 months ago",
+    "last": "2026-02-22"
+  },
+  {
+    "name": "David Gerber",
+    "email": "david.gerber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 8 months ago",
+    "last": "2026-01-22"
+  },
+  {
+    "name": "Julia Gerber",
+    "email": "julia.gerber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-22"
+  },
+  {
+    "name": "Felix Gerber",
+    "email": "felix.gerber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 10 months ago",
+    "last": "2025-11-21"
+  },
+  {
+    "name": "Laura Gerber",
+    "email": "laura.gerber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 11 months ago",
+    "last": "2025-10-21"
+  },
+  {
+    "name": "Simon Gerber",
+    "email": "simon.gerber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-16"
+  },
+  {
+    "name": "Lena Gerber",
+    "email": "lena.gerber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 2 months ago",
+    "last": "2026-07-16"
+  },
+  {
+    "name": "Marco Gerber",
+    "email": "marco.gerber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 3 months ago",
+    "last": "2026-06-15"
+  },
+  {
+    "name": "Elena Gerber",
+    "email": "elena.gerber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-15"
+  },
+  {
+    "name": "Tim Gerber",
+    "email": "tim.gerber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 5 months ago",
+    "last": "2026-04-14"
+  },
+  {
+    "name": "Eva Gerber",
+    "email": "eva.gerber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 6 months ago",
+    "last": "2026-03-14"
+  },
+  {
+    "name": "Levin Gerber",
+    "email": "levin.gerber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-11"
+  },
+  {
+    "name": "Fabio Gerber",
+    "email": "fabio.gerber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 8 months ago",
+    "last": "2026-01-11"
+  },
+  {
+    "name": "Nico Gerber",
+    "email": "nico.gerber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 9 months ago",
+    "last": "2025-12-28"
+  },
+  {
+    "name": "Chiara Gerber",
+    "email": "chiara.gerber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-27"
+  },
+  {
+    "name": "Dario Gerber",
+    "email": "dario.gerber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 11 months ago",
+    "last": "2025-10-27"
+  },
+  {
+    "name": "Yannick Gerber",
+    "email": "yannick.gerber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 1 months ago",
+    "last": "2026-08-22"
+  },
+  {
+    "name": "Leonie Gerber",
+    "email": "leonie.gerber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-22"
+  },
+  {
+    "name": "Samuel Gerber",
+    "email": "samuel.gerber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 3 months ago",
+    "last": "2026-06-21"
+  },
+  {
+    "name": "Livia Gerber",
+    "email": "livia.gerber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 4 months ago",
+    "last": "2026-05-21"
+  },
+  {
+    "name": "Remo Gerber",
+    "email": "remo.gerber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-20"
+  },
+  {
+    "name": "Urs Gerber",
+    "email": "urs.gerber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 6 months ago",
+    "last": "2026-03-20"
+  },
+  {
+    "name": "Heidi Gerber",
+    "email": "heidi.gerber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 7 months ago",
+    "last": "2026-02-17"
+  },
+  {
+    "name": "Beat Gerber",
+    "email": "beat.gerber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-17"
+  },
+  {
+    "name": "Ursula Gerber",
+    "email": "ursula.gerber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 9 months ago",
+    "last": "2025-12-17"
+  },
+  {
+    "name": "Hugo Gerber",
+    "email": "hugo.gerber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 10 months ago",
+    "last": "2025-11-16"
+  },
+  {
+    "name": "Ida Gerber",
+    "email": "ida.gerber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-16"
+  },
+  {
+    "name": "Otto Gerber",
+    "email": "otto.gerber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 1 months ago",
+    "last": "2026-08-11"
+  },
+  {
+    "name": "Paula Gerber",
+    "email": "paula.gerber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 2 months ago",
+    "last": "2026-07-11"
+  },
+  {
+    "name": "Quentin Gerber",
+    "email": "quentin.gerber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-10"
+  },
+  {
+    "name": "Rita Gerber",
+    "email": "rita.gerber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 4 months ago",
+    "last": "2026-05-27"
+  },
+  {
+    "name": "Stefan Gerber",
+    "email": "stefan.gerber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 5 months ago",
+    "last": "2026-04-26"
+  },
+  {
+    "name": "Tobias Gerber",
+    "email": "tobias.gerber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-26"
+  },
+  {
+    "name": "Vera Gerber",
+    "email": "vera.gerber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 7 months ago",
+    "last": "2026-02-23"
+  },
+  {
+    "name": "Walter Gerber",
+    "email": "walter.gerber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 8 months ago",
+    "last": "2026-01-23"
+  },
+  {
+    "name": "Xenia Gerber",
+    "email": "xenia.gerber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-23"
+  },
+  {
+    "name": "Yves Gerber",
+    "email": "yves.gerber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 10 months ago",
+    "last": "2025-11-22"
+  },
+  {
+    "name": "Zoe Gerber",
+    "email": "zoe.gerber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 11 months ago",
+    "last": "2025-10-22"
+  },
+  {
+    "name": "Georg Gerber",
+    "email": "georg.gerber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-17"
+  },
+  {
+    "name": "Ivo Gerber",
+    "email": "ivo.gerber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 2 months ago",
+    "last": "2026-07-17"
+  },
+  {
+    "name": "Mirco Gerber",
+    "email": "mirco.gerber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 3 months ago",
+    "last": "2026-06-16"
+  },
+  {
+    "name": "Liam Graf",
+    "email": "liam.graf@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-16"
+  },
+  {
+    "name": "Noah Graf",
+    "email": "noah.graf@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 5 months ago",
+    "last": "2026-04-15"
+  },
+  {
+    "name": "Mia Graf",
+    "email": "mia.graf@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 6 months ago",
+    "last": "2026-03-15"
+  },
+  {
+    "name": "Emma Graf",
+    "email": "emma.graf@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-12"
+  },
+  {
+    "name": "Luca Graf",
+    "email": "luca.graf@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 8 months ago",
+    "last": "2026-01-12"
+  },
+  {
+    "name": "Lea Graf",
+    "email": "lea.graf@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 9 months ago",
+    "last": "2025-12-12"
+  },
+  {
+    "name": "Elias Graf",
+    "email": "elias.graf@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-28"
+  },
+  {
+    "name": "Nora Graf",
+    "email": "nora.graf@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 11 months ago",
+    "last": "2025-10-28"
+  },
+  {
+    "name": "Jonas Graf",
+    "email": "jonas.graf@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 1 months ago",
+    "last": "2026-08-23"
+  },
+  {
+    "name": "Sara Graf",
+    "email": "sara.graf@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-23"
+  },
+  {
+    "name": "David Graf",
+    "email": "david.graf@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 3 months ago",
+    "last": "2026-06-22"
+  },
+  {
+    "name": "Julia Graf",
+    "email": "julia.graf@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 4 months ago",
+    "last": "2026-05-22"
+  },
+  {
+    "name": "Felix Graf",
+    "email": "felix.graf@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-21"
+  },
+  {
+    "name": "Laura Graf",
+    "email": "laura.graf@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 6 months ago",
+    "last": "2026-03-21"
+  },
+  {
+    "name": "Simon Graf",
+    "email": "simon.graf@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 7 months ago",
+    "last": "2026-02-18"
+  },
+  {
+    "name": "Lena Graf",
+    "email": "lena.graf@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-18"
+  },
+  {
+    "name": "Marco Graf",
+    "email": "marco.graf@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 9 months ago",
+    "last": "2025-12-18"
+  },
+  {
+    "name": "Elena Graf",
+    "email": "elena.graf@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 10 months ago",
+    "last": "2025-11-17"
+  },
+  {
+    "name": "Tim Graf",
+    "email": "tim.graf@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-17"
+  },
+  {
+    "name": "Eva Graf",
+    "email": "eva.graf@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 1 months ago",
+    "last": "2026-08-12"
+  },
+  {
+    "name": "Levin Graf",
+    "email": "levin.graf@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 2 months ago",
+    "last": "2026-07-12"
+  },
+  {
+    "name": "Fabio Graf",
+    "email": "fabio.graf@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-11"
+  },
+  {
+    "name": "Nico Graf",
+    "email": "nico.graf@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 4 months ago",
+    "last": "2026-05-11"
+  },
+  {
+    "name": "Chiara Graf",
+    "email": "chiara.graf@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 5 months ago",
+    "last": "2026-04-27"
+  },
+  {
+    "name": "Dario Graf",
+    "email": "dario.graf@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-27"
+  },
+  {
+    "name": "Yannick Graf",
+    "email": "yannick.graf@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 7 months ago",
+    "last": "2026-02-24"
+  },
+  {
+    "name": "Leonie Graf",
+    "email": "leonie.graf@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 8 months ago",
+    "last": "2026-01-24"
+  },
+  {
+    "name": "Samuel Graf",
+    "email": "samuel.graf@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-24"
+  },
+  {
+    "name": "Livia Graf",
+    "email": "livia.graf@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 10 months ago",
+    "last": "2025-11-23"
+  },
+  {
+    "name": "Remo Graf",
+    "email": "remo.graf@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 11 months ago",
+    "last": "2025-10-23"
+  },
+  {
+    "name": "Urs Graf",
+    "email": "urs.graf@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-18"
+  },
+  {
+    "name": "Heidi Graf",
+    "email": "heidi.graf@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 2 months ago",
+    "last": "2026-07-18"
+  },
+  {
+    "name": "Beat Graf",
+    "email": "beat.graf@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 3 months ago",
+    "last": "2026-06-17"
+  },
+  {
+    "name": "Ursula Graf",
+    "email": "ursula.graf@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-17"
+  },
+  {
+    "name": "Hugo Graf",
+    "email": "hugo.graf@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 5 months ago",
+    "last": "2026-04-16"
+  },
+  {
+    "name": "Ida Graf",
+    "email": "ida.graf@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 6 months ago",
+    "last": "2026-03-16"
+  },
+  {
+    "name": "Otto Graf",
+    "email": "otto.graf@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-13"
+  },
+  {
+    "name": "Paula Graf",
+    "email": "paula.graf@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 8 months ago",
+    "last": "2026-01-13"
+  },
+  {
+    "name": "Quentin Graf",
+    "email": "quentin.graf@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 9 months ago",
+    "last": "2025-12-13"
+  },
+  {
+    "name": "Rita Graf",
+    "email": "rita.graf@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-12"
+  },
+  {
+    "name": "Stefan Graf",
+    "email": "stefan.graf@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 11 months ago",
+    "last": "2025-10-29"
+  },
+  {
+    "name": "Tobias Graf",
+    "email": "tobias.graf@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 1 months ago",
+    "last": "2026-08-24"
+  },
+  {
+    "name": "Vera Graf",
+    "email": "vera.graf@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-24"
+  },
+  {
+    "name": "Walter Graf",
+    "email": "walter.graf@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 3 months ago",
+    "last": "2026-06-23"
+  },
+  {
+    "name": "Xenia Graf",
+    "email": "xenia.graf@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 4 months ago",
+    "last": "2026-05-23"
+  },
+  {
+    "name": "Yves Graf",
+    "email": "yves.graf@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-22"
+  },
+  {
+    "name": "Zoe Graf",
+    "email": "zoe.graf@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 6 months ago",
+    "last": "2026-03-22"
+  },
+  {
+    "name": "Georg Graf",
+    "email": "georg.graf@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 7 months ago",
+    "last": "2026-02-19"
+  },
+  {
+    "name": "Ivo Graf",
+    "email": "ivo.graf@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-19"
+  },
+  {
+    "name": "Mirco Graf",
+    "email": "mirco.graf@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 9 months ago",
+    "last": "2025-12-19"
+  },
+  {
+    "name": "Liam Huber",
+    "email": "liam.huber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 10 months ago",
+    "last": "2025-11-18"
+  },
+  {
+    "name": "Noah Huber",
+    "email": "noah.huber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-18"
+  },
+  {
+    "name": "Mia Huber",
+    "email": "mia.huber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 1 months ago",
+    "last": "2026-08-13"
+  },
+  {
+    "name": "Emma Huber",
+    "email": "emma.huber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 2 months ago",
+    "last": "2026-07-13"
+  },
+  {
+    "name": "Luca Huber",
+    "email": "luca.huber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-12"
+  },
+  {
+    "name": "Lea Huber",
+    "email": "lea.huber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 4 months ago",
+    "last": "2026-05-12"
+  },
+  {
+    "name": "Elias Huber",
+    "email": "elias.huber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 5 months ago",
+    "last": "2026-04-11"
+  },
+  {
+    "name": "Nora Huber",
+    "email": "nora.huber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-28"
+  },
+  {
+    "name": "Jonas Huber",
+    "email": "jonas.huber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 7 months ago",
+    "last": "2026-02-25"
+  },
+  {
+    "name": "Sara Huber",
+    "email": "sara.huber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 8 months ago",
+    "last": "2026-01-25"
+  },
+  {
+    "name": "David Huber",
+    "email": "david.huber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-25"
+  },
+  {
+    "name": "Julia Huber",
+    "email": "julia.huber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 10 months ago",
+    "last": "2025-11-24"
+  },
+  {
+    "name": "Felix Huber",
+    "email": "felix.huber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 11 months ago",
+    "last": "2025-10-24"
+  },
+  {
+    "name": "Laura Huber",
+    "email": "laura.huber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-19"
+  },
+  {
+    "name": "Simon Huber",
+    "email": "simon.huber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 2 months ago",
+    "last": "2026-07-19"
+  },
+  {
+    "name": "Lena Huber",
+    "email": "lena.huber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 3 months ago",
+    "last": "2026-06-18"
+  },
+  {
+    "name": "Marco Huber",
+    "email": "marco.huber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-18"
+  },
+  {
+    "name": "Elena Huber",
+    "email": "elena.huber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 5 months ago",
+    "last": "2026-04-17"
+  },
+  {
+    "name": "Tim Huber",
+    "email": "tim.huber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 6 months ago",
+    "last": "2026-03-17"
+  },
+  {
+    "name": "Eva Huber",
+    "email": "eva.huber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-14"
+  },
+  {
+    "name": "Levin Huber",
+    "email": "levin.huber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 8 months ago",
+    "last": "2026-01-14"
+  },
+  {
+    "name": "Fabio Huber",
+    "email": "fabio.huber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 9 months ago",
+    "last": "2025-12-14"
+  },
+  {
+    "name": "Nico Huber",
+    "email": "nico.huber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-13"
+  },
+  {
+    "name": "Chiara Huber",
+    "email": "chiara.huber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 11 months ago",
+    "last": "2025-10-13"
+  },
+  {
+    "name": "Dario Huber",
+    "email": "dario.huber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 1 months ago",
+    "last": "2026-08-25"
+  },
+  {
+    "name": "Yannick Huber",
+    "email": "yannick.huber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-25"
+  },
+  {
+    "name": "Leonie Huber",
+    "email": "leonie.huber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 3 months ago",
+    "last": "2026-06-24"
+  },
+  {
+    "name": "Samuel Huber",
+    "email": "samuel.huber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 4 months ago",
+    "last": "2026-05-24"
+  },
+  {
+    "name": "Livia Huber",
+    "email": "livia.huber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-23"
+  },
+  {
+    "name": "Remo Huber",
+    "email": "remo.huber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 6 months ago",
+    "last": "2026-03-23"
+  },
+  {
+    "name": "Urs Huber",
+    "email": "urs.huber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 7 months ago",
+    "last": "2026-02-20"
+  },
+  {
+    "name": "Heidi Huber",
+    "email": "heidi.huber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-20"
+  },
+  {
+    "name": "Beat Huber",
+    "email": "beat.huber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 9 months ago",
+    "last": "2025-12-20"
+  },
+  {
+    "name": "Ursula Huber",
+    "email": "ursula.huber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 10 months ago",
+    "last": "2025-11-19"
+  },
+  {
+    "name": "Hugo Huber",
+    "email": "hugo.huber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-19"
+  },
+  {
+    "name": "Ida Huber",
+    "email": "ida.huber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 1 months ago",
+    "last": "2026-08-14"
+  },
+  {
+    "name": "Otto Huber",
+    "email": "otto.huber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 2 months ago",
+    "last": "2026-07-14"
+  },
+  {
+    "name": "Paula Huber",
+    "email": "paula.huber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-13"
+  },
+  {
+    "name": "Quentin Huber",
+    "email": "quentin.huber@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 4 months ago",
+    "last": "2026-05-13"
+  },
+  {
+    "name": "Rita Huber",
+    "email": "rita.huber@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 5 months ago",
+    "last": "2026-04-12"
+  },
+  {
+    "name": "Stefan Huber",
+    "email": "stefan.huber@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-12"
+  },
+  {
+    "name": "Tobias Huber",
+    "email": "tobias.huber@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 7 months ago",
+    "last": "2026-02-26"
+  },
+  {
+    "name": "Vera Huber",
+    "email": "vera.huber@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 8 months ago",
+    "last": "2026-01-26"
+  },
+  {
+    "name": "Walter Huber",
+    "email": "walter.huber@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-26"
+  },
+  {
+    "name": "Xenia Huber",
+    "email": "xenia.huber@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 10 months ago",
+    "last": "2025-11-25"
+  },
+  {
+    "name": "Yves Huber",
+    "email": "yves.huber@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 11 months ago",
+    "last": "2025-10-25"
+  },
+  {
+    "name": "Zoe Huber",
+    "email": "zoe.huber@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-20"
+  },
+  {
+    "name": "Georg Huber",
+    "email": "georg.huber@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 2 months ago",
+    "last": "2026-07-20"
+  },
+  {
+    "name": "Ivo Huber",
+    "email": "ivo.huber@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 3 months ago",
+    "last": "2026-06-19"
+  },
+  {
+    "name": "Mirco Huber",
+    "email": "mirco.huber@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-19"
+  },
+  {
+    "name": "Liam Iten",
+    "email": "liam.iten@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 5 months ago",
+    "last": "2026-04-18"
+  },
+  {
+    "name": "Noah Iten",
+    "email": "noah.iten@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 6 months ago",
+    "last": "2026-03-18"
+  },
+  {
+    "name": "Mia Iten",
+    "email": "mia.iten@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-15"
+  },
+  {
+    "name": "Emma Iten",
+    "email": "emma.iten@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 8 months ago",
+    "last": "2026-01-15"
+  },
+  {
+    "name": "Luca Iten",
+    "email": "luca.iten@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 9 months ago",
+    "last": "2025-12-15"
+  },
+  {
+    "name": "Lea Iten",
+    "email": "lea.iten@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-14"
+  },
+  {
+    "name": "Elias Iten",
+    "email": "elias.iten@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 11 months ago",
+    "last": "2025-10-14"
+  },
+  {
+    "name": "Nora Iten",
+    "email": "nora.iten@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 1 months ago",
+    "last": "2026-08-09"
+  },
+  {
+    "name": "Jonas Iten",
+    "email": "jonas.iten@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-26"
+  },
+  {
+    "name": "Sara Iten",
+    "email": "sara.iten@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 3 months ago",
+    "last": "2026-06-25"
+  },
+  {
+    "name": "David Iten",
+    "email": "david.iten@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 4 months ago",
+    "last": "2026-05-25"
+  },
+  {
+    "name": "Julia Iten",
+    "email": "julia.iten@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-24"
+  },
+  {
+    "name": "Felix Iten",
+    "email": "felix.iten@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 6 months ago",
+    "last": "2026-03-24"
+  },
+  {
+    "name": "Laura Iten",
+    "email": "laura.iten@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 7 months ago",
+    "last": "2026-02-21"
+  },
+  {
+    "name": "Simon Iten",
+    "email": "simon.iten@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-21"
+  },
+  {
+    "name": "Lena Iten",
+    "email": "lena.iten@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 9 months ago",
+    "last": "2025-12-21"
+  },
+  {
+    "name": "Marco Iten",
+    "email": "marco.iten@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 10 months ago",
+    "last": "2025-11-20"
+  },
+  {
+    "name": "Elena Iten",
+    "email": "elena.iten@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-20"
+  },
+  {
+    "name": "Tim Iten",
+    "email": "tim.iten@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 1 months ago",
+    "last": "2026-08-15"
+  },
+  {
+    "name": "Eva Iten",
+    "email": "eva.iten@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 2 months ago",
+    "last": "2026-07-15"
+  },
+  {
+    "name": "Levin Iten",
+    "email": "levin.iten@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-14"
+  },
+  {
+    "name": "Fabio Iten",
+    "email": "fabio.iten@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 4 months ago",
+    "last": "2026-05-14"
+  },
+  {
+    "name": "Nico Iten",
+    "email": "nico.iten@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 5 months ago",
+    "last": "2026-04-13"
+  },
+  {
+    "name": "Chiara Iten",
+    "email": "chiara.iten@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-13"
+  },
+  {
+    "name": "Dario Iten",
+    "email": "dario.iten@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 7 months ago",
+    "last": "2026-02-10"
+  },
+  {
+    "name": "Yannick Iten",
+    "email": "yannick.iten@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 8 months ago",
+    "last": "2026-01-27"
+  },
+  {
+    "name": "Leonie Iten",
+    "email": "leonie.iten@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-27"
+  },
+  {
+    "name": "Samuel Iten",
+    "email": "samuel.iten@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 10 months ago",
+    "last": "2025-11-26"
+  },
+  {
+    "name": "Livia Iten",
+    "email": "livia.iten@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 11 months ago",
+    "last": "2025-10-26"
+  },
+  {
+    "name": "Remo Iten",
+    "email": "remo.iten@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-21"
+  },
+  {
+    "name": "Urs Iten",
+    "email": "urs.iten@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 2 months ago",
+    "last": "2026-07-21"
+  },
+  {
+    "name": "Heidi Iten",
+    "email": "heidi.iten@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 3 months ago",
+    "last": "2026-06-20"
+  },
+  {
+    "name": "Beat Iten",
+    "email": "beat.iten@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-20"
+  },
+  {
+    "name": "Ursula Iten",
+    "email": "ursula.iten@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 5 months ago",
+    "last": "2026-04-19"
+  },
+  {
+    "name": "Hugo Iten",
+    "email": "hugo.iten@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 6 months ago",
+    "last": "2026-03-19"
+  },
+  {
+    "name": "Ida Iten",
+    "email": "ida.iten@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-16"
+  },
+  {
+    "name": "Otto Iten",
+    "email": "otto.iten@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 8 months ago",
+    "last": "2026-01-16"
+  },
+  {
+    "name": "Paula Iten",
+    "email": "paula.iten@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 9 months ago",
+    "last": "2025-12-16"
+  },
+  {
+    "name": "Quentin Iten",
+    "email": "quentin.iten@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-15"
+  },
+  {
+    "name": "Rita Iten",
+    "email": "rita.iten@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 11 months ago",
+    "last": "2025-10-15"
+  },
+  {
+    "name": "Stefan Iten",
+    "email": "stefan.iten@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 1 months ago",
+    "last": "2026-08-10"
+  },
+  {
+    "name": "Tobias Iten",
+    "email": "tobias.iten@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-10"
+  },
+  {
+    "name": "Vera Iten",
+    "email": "vera.iten@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 3 months ago",
+    "last": "2026-06-26"
+  },
+  {
+    "name": "Walter Iten",
+    "email": "walter.iten@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 4 months ago",
+    "last": "2026-05-26"
+  },
+  {
+    "name": "Xenia Iten",
+    "email": "xenia.iten@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-25"
+  },
+  {
+    "name": "Yves Iten",
+    "email": "yves.iten@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 6 months ago",
+    "last": "2026-03-25"
+  },
+  {
+    "name": "Zoe Iten",
+    "email": "zoe.iten@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 7 months ago",
+    "last": "2026-02-22"
+  },
+  {
+    "name": "Georg Iten",
+    "email": "georg.iten@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-22"
+  },
+  {
+    "name": "Ivo Iten",
+    "email": "ivo.iten@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 9 months ago",
+    "last": "2025-12-22"
+  },
+  {
+    "name": "Mirco Iten",
+    "email": "mirco.iten@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 10 months ago",
+    "last": "2025-11-21"
+  },
+  {
+    "name": "Liam Jost",
+    "email": "liam.jost@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-21"
+  },
+  {
+    "name": "Noah Jost",
+    "email": "noah.jost@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 1 months ago",
+    "last": "2026-08-16"
+  },
+  {
+    "name": "Mia Jost",
+    "email": "mia.jost@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 2 months ago",
+    "last": "2026-07-16"
+  },
+  {
+    "name": "Emma Jost",
+    "email": "emma.jost@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-15"
+  },
+  {
+    "name": "Luca Jost",
+    "email": "luca.jost@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 4 months ago",
+    "last": "2026-05-15"
+  },
+  {
+    "name": "Lea Jost",
+    "email": "lea.jost@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 5 months ago",
+    "last": "2026-04-14"
+  },
+  {
+    "name": "Elias Jost",
+    "email": "elias.jost@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-14"
+  },
+  {
+    "name": "Nora Jost",
+    "email": "nora.jost@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 7 months ago",
+    "last": "2026-02-11"
+  },
+  {
+    "name": "Jonas Jost",
+    "email": "jonas.jost@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 8 months ago",
+    "last": "2026-01-11"
+  },
+  {
+    "name": "Sara Jost",
+    "email": "sara.jost@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 9 months ago",
+    "last": "2025-12-28"
+  },
+  {
+    "name": "David Jost",
+    "email": "david.jost@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 10 months ago",
+    "last": "2025-11-27"
+  },
+  {
+    "name": "Julia Jost",
+    "email": "julia.jost@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 11 months ago",
+    "last": "2025-10-27"
+  },
+  {
+    "name": "Felix Jost",
+    "email": "felix.jost@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 1 months ago",
+    "last": "2026-08-22"
+  },
+  {
+    "name": "Laura Jost",
+    "email": "laura.jost@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 2 months ago",
+    "last": "2026-07-22"
+  },
+  {
+    "name": "Simon Jost",
+    "email": "simon.jost@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 3 months ago",
+    "last": "2026-06-21"
+  },
+  {
+    "name": "Lena Jost",
+    "email": "lena.jost@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 4 months ago",
+    "last": "2026-05-21"
+  },
+  {
+    "name": "Marco Jost",
+    "email": "marco.jost@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 5 months ago",
+    "last": "2026-04-20"
+  },
+  {
+    "name": "Elena Jost",
+    "email": "elena.jost@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 6 months ago",
+    "last": "2026-03-20"
+  },
+  {
+    "name": "Tim Jost",
+    "email": "tim.jost@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 7 months ago",
+    "last": "2026-02-17"
+  },
+  {
+    "name": "Eva Jost",
+    "email": "eva.jost@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 8 months ago",
+    "last": "2026-01-17"
+  },
+  {
+    "name": "Levin Jost",
+    "email": "levin.jost@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 9 months ago",
+    "last": "2025-12-17"
+  },
+  {
+    "name": "Fabio Jost",
+    "email": "fabio.jost@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 10 months ago",
+    "last": "2025-11-16"
+  },
+  {
+    "name": "Nico Jost",
+    "email": "nico.jost@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 11 months ago",
+    "last": "2025-10-16"
+  },
+  {
+    "name": "Chiara Jost",
+    "email": "chiara.jost@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 1 months ago",
+    "last": "2026-08-11"
+  },
+  {
+    "name": "Dario Jost",
+    "email": "dario.jost@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 2 months ago",
+    "last": "2026-07-11"
+  },
+  {
+    "name": "Yannick Jost",
+    "email": "yannick.jost@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 3 months ago",
+    "last": "2026-06-10"
+  },
+  {
+    "name": "Leonie Jost",
+    "email": "leonie.jost@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 4 months ago",
+    "last": "2026-05-27"
+  },
+  {
+    "name": "Samuel Jost",
+    "email": "samuel.jost@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 5 months ago",
+    "last": "2026-04-26"
+  },
+  {
+    "name": "Livia Jost",
+    "email": "livia.jost@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 6 months ago",
+    "last": "2026-03-26"
+  },
+  {
+    "name": "Remo Jost",
+    "email": "remo.jost@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 7 months ago",
+    "last": "2026-02-23"
+  },
+  {
+    "name": "Urs Jost",
+    "email": "urs.jost@muster.ch",
+    "team": "Engineering",
+    "notes": "Engineering, the user's own company; last emailed 8 months ago",
+    "last": "2026-01-23"
+  },
+  {
+    "name": "Heidi Jost",
+    "email": "heidi.jost@example.com",
+    "team": "Sales",
+    "notes": "Sales; last emailed 9 months ago",
+    "last": "2025-12-23"
+  },
+  {
+    "name": "Beat Jost",
+    "email": "beat.jost@example.net",
+    "team": "Marketing",
+    "notes": "Marketing; last emailed 10 months ago",
+    "last": "2025-11-22"
+  },
+  {
+    "name": "Ursula Jost",
+    "email": "ursula.jost@muster.ch",
+    "team": "Support",
+    "notes": "Support, the user's own company; last emailed 11 months ago",
+    "last": "2025-10-22"
+  },
+  {
+    "name": "Hugo Jost",
+    "email": "hugo.jost@example.com",
+    "team": "Operations",
+    "notes": "Operations; last emailed 1 months ago",
+    "last": "2026-08-17"
+  },
+  {
+    "name": "Ida Jost",
+    "email": "ida.jost@example.net",
+    "team": "Research",
+    "notes": "Research; last emailed 2 months ago",
+    "last": "2026-07-17"
+  },
+  {
+    "name": "Otto Jost",
+    "email": "otto.jost@muster.ch",
+    "team": "Design",
+    "notes": "Design, the user's own company; last emailed 3 months ago",
+    "last": "2026-06-16"
+  },
+  {
+    "name": "Paula Jost",
+    "email": "paula.jost@example.com",
+    "team": "Logistics",
+    "notes": "Logistics; last emailed 4 months ago",
+    "last": "2026-05-16"
+  },
+  {
+    "name": "Quentin Jost",
+    "email": "quentin.jost@example.net",
+    "team": "Procurement",
+    "notes": "Procurement; last emailed 5 months ago",
+    "last": "2026-04-15"
+  },
+  {
+    "name": "Rita Jost",
+    "email": "rita.jost@muster.ch",
+    "team": "Security",
+    "notes": "Security, the user's own company; last emailed 6 months ago",
+    "last": "2026-03-15"
+  },
+  {
+    "name": "Stefan Jost",
+    "email": "stefan.jost@example.com",
+    "team": "Facilities",
+    "notes": "Facilities; last emailed 7 months ago",
+    "last": "2026-02-12"
+  },
+  {
+    "name": "Tobias Jost",
+    "email": "tobias.jost@example.net",
+    "team": "Training",
+    "notes": "Training; last emailed 8 months ago",
+    "last": "2026-01-12"
+  }
+]

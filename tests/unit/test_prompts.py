@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jevtools.decision import PromptOption
 from jevtools.prompts import (
     AltChoice,
@@ -10,13 +12,20 @@ from jevtools.prompts import (
     confirm_card,
     confirm_text,
     fill_template,
+    grid_menu,
+    join_and,
+    natural_call,
     noun_short,
     ok_text,
     open_question,
     parse_short_reply,
+    preview,
     refuse_notice,
     render_call,
+    short_intent,
+    slot_term,
     tool_menu,
+    value_text,
     yes_no_menu,
 )
 from jevtools.spec.catalog import Catalog
@@ -39,7 +48,7 @@ def test_render_and_confirm_template(scenario_catalog: Catalog) -> None:
     assert render_call(transfer, partial) == "250.00 CHF: Savings → …"
     weather = scenario_catalog["get_weather"]
     bindings = {"city": Binding.of_value("Zurich"), "unit": Binding.of_value("fahrenheit")}
-    assert render_call(weather, bindings) == "get the current weather for a city: city=Zurich, unit=fahrenheit"
+    assert render_call(weather, bindings) == "get the current weather — city name Zurich, temperature unit fahrenheit"
     assert confirm_text(weather, bindings).startswith("Get the current weather") and confirm_text(
         weather, bindings).endswith("?")  # fmt: skip
     assert fill_template("{Intent} {missing} {city.nope}", weather, bindings) == (
@@ -103,3 +112,141 @@ def test_parse_short_reply() -> None:
     assert parse_short_reply("7", options) is None
     assert parse_short_reply("actually send it to Bob", options) is None
     assert parse_short_reply("yes", [{"id": "pick:to:0", "text": "A"}]) is None
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# Default rendering (no x-jev.render): natural, compact, deterministic
+# --------------------------------------------------------------------------------------------------------------------
+
+BODY = "Hi Anna,\n\nI'll be 10 minutes late.\n\nBest,\nSam"
+R2 = {
+    "to": Binding.of_value("anna.keller@acme.com", label="Anna Keller <anna.keller@acme.com>"),
+    "subject": Binding.of_value("Running 10 minutes late"),
+    "body": Binding.of_value(BODY),
+}
+
+
+def test_short_intent_drops_the_phrases_a_slot_restates(scenario_catalog: Catalog) -> None:
+    shorts = {tool.name: short_intent(tool) for tool in scenario_catalog}
+    assert shorts == {
+        "get_weather": "get the current weather",  # "for a city": the city slot
+        "send_email": "send an email",  # "from the user" (generic), "to one recipient": the to slot's noun
+        "create_event": "create a calendar event",  # "and invite attendees": the attendees slot
+        "transfer_funds": "move money",  # "between two of the user's own bank accounts": the account slots
+        "read_file": "open a file",  # "in the user's workspace": the workspace-relative path
+        "search_web": "search the public web",
+    }
+    post = Catalog.from_openai(
+        [
+            {
+                "type": "function",
+                "function": {
+                    "name": "post_message",
+                    "description": "Post a message to the #general channel.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string", "description": "The text"}},
+                    },
+                },
+            }
+        ]
+    )
+    assert short_intent(post["post_message"]) == "post a message to the #general channel"  # no slot restates it
+
+
+def test_slot_terms_prefer_short_nouns(scenario_catalog: Catalog) -> None:
+    terms = {f"{t.name}.{s.name}": slot_term(s) for t in scenario_catalog for s in t.slots}
+    assert terms["send_email.subject"] == "subject line" and terms["create_event.attendees"] == "invitees"
+    assert terms["send_email.body"] == "body"  # "the body text of the email" is long: the parameter name
+    assert terms["create_event.duration_minutes"] == "duration"  # the unit suffix is dropped (rendered with value)
+    assert terms["read_file.path"] == "path" and terms["get_weather.city"] == "city name"
+
+
+def test_preview_and_join() -> None:
+    assert preview(BODY) == "Hi Anna, I'll be 10 minutes late. Best, Sam"  # one line
+    long = "Please find attached the quarterly report, including the revised forecast and the appendix."
+    assert preview(long) == "Please find attached the quarterly report, including the…"
+    assert len(preview(long)) <= 60 and preview("x" * 80) == "x" * 59 + "…"
+    assert (join_and([]), join_and(["a"]), join_and(["a", "b"]), join_and(["a", "b", "c"])) == (
+        "", "a", "a and b", "a, b and c")  # fmt: skip
+
+
+def test_default_confirm_card_reads_naturally(scenario_catalog: Catalog) -> None:
+    email = scenario_catalog["send_email"]
+    assert confirm_text(email, R2) == (
+        'Send an email to Anna Keller <anna.keller@acme.com> — subject line "Running 10 minutes late", '
+        'body "Hi Anna, I\'ll be 10 minutes late. Best, Sam"?'
+    )
+    event = scenario_catalog["create_event"]
+    r5 = {
+        "title": Binding.of_value("Sync with Bob and Carol"),
+        "start": Binding.of_value("2026-09-29T15:00:00+02:00", label="Tue 2026-09-29 15:00 (Europe/Zurich)"),
+        "duration_minutes": Binding.of_value(45),
+        "attendees": Binding.of_value(["bob.meier@muster.ch", "carol.liu@muster.ch"],
+                                      items=["Bob Meier <bob.meier@muster.ch>", "Carol Liu <carol.liu@muster.ch>"]),
+    }  # fmt: skip
+    assert confirm_text(event, r5) == (
+        'Create a calendar event — event title "Sync with Bob and Carol", start Tue 2026-09-29 15:00 '
+        "(Europe/Zurich), duration 45 minutes, invitees Bob Meier <bob.meier@muster.ch> and Carol Liu "
+        "<carol.liu@muster.ch>?"
+    )
+    # menus have a tighter budget: the cosmetic title goes first, the menu's own slot never does
+    assert "event title" not in render_call(event, r5, focus="attendees")
+    assert "event title" in render_call(event, r5, focus="title")
+    one = {**r5, "duration_minutes": Binding.of_value(1), "attendees": Binding.of_value([])}
+    assert natural_call(event, one).endswith("duration 1 minute")  # singular unit; the empty list is omitted
+
+
+def test_value_text_by_kind(scenario_catalog: Catalog) -> None:
+    unit = scenario_catalog["get_weather"].slot("unit")
+    assert value_text(unit, Binding.of_value("fahrenheit")) == "fahrenheit"
+    body = scenario_catalog["send_email"].slot("body")
+    assert value_text(body, Binding.of_value("")) is None  # empty values are omitted
+    flag = _slot({"type": "boolean", "description": "Notify the attendees"})
+    assert value_text(flag, Binding.of_value(True)) == "yes" and value_text(flag, Binding.of_value(False)) == "no"
+    secret = _slot({"type": "string", "description": "The API key", "x-jev": {"kind": "secret"}})
+    assert value_text(secret, Binding.of_value("sk-123", display="[secret]")) is None  # secrets never render
+
+
+def test_lead_phrases_attach_to_the_head() -> None:
+    catalog = Catalog.from_openai([{"type": "function", "function": {
+        "name": "copy_file", "description": "Copy a file between two folders.",
+        "parameters": {"type": "object", "required": ["from_folder", "to_folder", "name"], "properties": {
+            "from_folder": {"type": "string", "description": "The folder to copy from"},
+            "to_folder": {"type": "string", "description": "The folder to copy to"},
+            "name": {"type": "string", "description": "The file name"}}}}}])  # fmt: skip
+    tool = catalog["copy_file"]
+    bindings = {"from_folder": Binding.of_value("inbox"), "to_folder": Binding.of_value("archive"),
+                "name": Binding.of_value("q3.pdf")}  # fmt: skip
+    assert render_call(tool, bindings) == 'copy a file from inbox to archive — file name "q3.pdf"'
+
+
+def test_grid_menu_asks_the_open_question_with_values(scenario_catalog: Catalog) -> None:
+    event = scenario_catalog["create_event"]
+    duration = event.slot("duration_minutes")
+    grid = [Binding.of_value(v, display=str(v)) for v in (15, 30, 45, 60)]
+    prompt, actions = grid_menu(event, duration, grid)
+    assert prompt.kind == "menu" and prompt.text == "What should the length of the event in minutes be?"
+    assert [o.text for o in prompt.options] == ["15 minutes", "30 minutes", "45 minutes", "60 minutes",
+                                                "Something else"]  # fmt: skip
+    assert [o.id for o in prompt.options][:2] == ["pick:duration_minutes:0", "pick:duration_minutes:1"]
+    assert actions["pick:duration_minutes:2"].value == 45 and actions["other"].action == "open"
+    base = {"title": Binding.of_value("Standup")}
+    full, _ = grid_menu(event, duration, grid, bindings=base, complete_call=True)
+    assert full.options[0].text == 'Create a calendar event — event title "Standup", duration 15 minutes'
+
+
+def _slot(schema: dict[str, Any]) -> Any:
+    catalog = Catalog.from_openai(
+        [
+            {
+                "type": "function",
+                "function": {
+                    "name": "t",
+                    "description": "Do it.",
+                    "parameters": {"type": "object", "properties": {"p": schema}},
+                },
+            }
+        ]
+    )
+    return catalog["t"].slot("p")

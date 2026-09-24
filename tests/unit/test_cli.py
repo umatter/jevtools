@@ -77,6 +77,17 @@ def _tool(name: str, description: str, properties: dict[str, Any], **extra: Any)
     return {"type": "function", "function": function}
 
 
+def test_lint_applies_the_runtime_source_defaults(tmp_path: Path) -> None:
+    """``type = "files"`` (the proxy spelling) without ``provides`` lints like the built FileIndex: path and file."""
+    sources = tmp_path / "sources.toml"
+    sources.write_text('[[sources]]\nname = "contacts"\ntype = "registry"\nprovides = ["email"]\n\n'
+                       '[[sources]]\nname = "files"\ntype = "files"\n', encoding="utf-8")  # fmt: skip
+    code, out, _ = run("lint", str(CATALOG), "--sources", str(sources))
+    assert code == 0
+    assert "ref(files) bm25 k=40, hierarchy=dirname" in _line(out, "read_file.path")
+    assert "ref(contacts)" in _line(out, "send_email.to")
+
+
 def test_lint_checks(tmp_path: Path) -> None:
     tools = [
         _tool("frobnicate", "Frobnicates the widget.", {"widget": {"type": "string", "description": "The widget"}}),
