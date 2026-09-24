@@ -249,7 +249,12 @@ def test_bad_tools_and_bad_requests() -> None:
     malformed = c.post("/v1/chat/completions", json={"messages": [{"role": "user", "content": "hi"}],
                                                      "tools": [{"type": "function"}]})  # fmt: skip
     assert malformed.status_code == 400 and error_of(malformed)["code"] == "jevtools_bad_tool"
-    assert c.post("/v1/chat/completions", content=b"{nope").json()["error"]["code"] == "invalid_json"
+    json_header = {"content-type": "application/json"}
+    assert (
+        c.post("/v1/chat/completions", content=b"{nope", headers=json_header).json()["error"]["code"] == "invalid_json"
+    )
+    plain = c.post("/v1/chat/completions", content=b'{"messages": []}', headers={"content-type": "text/plain"})
+    assert (plain.status_code, plain.json()["error"]["code"]) == (415, "unsupported_media_type")
     assert c.post("/v1/chat/completions", json={"messages": []}).json()["error"]["code"] == "missing_messages"
     bad_ctx = chat(c, scenario_messages(scripts.R1_REQUEST), jevtools={"context": {"sources": []}})
     assert bad_ctx.status_code == 400 and error_of(bad_ctx)["code"] == "jevtools_bad_context"

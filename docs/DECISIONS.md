@@ -1588,10 +1588,6 @@ Extends "Documentation and final merge":
   error observation; this predates the review and is a simulator limitation (a lexical double), not a regression.
   The proxy example ran under `jevtools serve` on the simulator with the real OpenAI SDK client.
 - Still open after the review, collected from the entries above:
-  - trust: `BallotOption.from_candidate` copies `channel` rather than `effective_channel` (ballot.py), and
-    `candidates.admits` treats `origin is None` as trusted; `kinds/text.py::_profile_inputs` does not exclude secret
-    profile fields; the router-level check that a resumed live session belongs to the same context scope;
-  - the proxy could reject POST bodies that are not `application/json` (blocks cross-origin browser requests);
   - `adapters/pending.py` could forget a handle when resuming it raises (engine #12 backstop);
   - sources: `toolsource._await_now`/`_wrap`, `sources.mcp._run`/`_wrap` and `Provider.candidates` still carry
     their own sync bridge (should use `_compat.run_sync`), and `toolsource.py` checks `isError` inline;
@@ -1601,3 +1597,25 @@ Extends "Documentation and final merge":
     `Pool.by_label`; `demo/scripts.py`'s own `R6_REQUEST`; the optional `accepts_keyword` guard in
     `adapters.mcp.call_decision`; README (Tuning) and SPEC §11.1 on source paths inside a context file;
   - `jt.verify` does not re-run normalizers.
+
+### Closing the trust follow-ups
+
+- §3.4.2 unknown history origins: a `history` candidate whose origin is unknown (`None`, or `history` itself: an
+  untraced assistant-turn or entity-store value) inherits the trust of `tool_output`
+  (`candidates.history_origin_of`). `Candidate.effective_channel` and `admits()` both use it, so such a value never
+  reaches a slot that bars tool output (external identity slots: "history, trusted origin only"), and where it is
+  admitted (content) it counts as untrusted. `kinds.common.trace_history` seeds its untrusted set from *known*
+  untrusted provenance only, so untraced copies are still traced (user, registry) before this default applies.
+- §3.5.7 option channels: `BallotOption.from_candidate` records the candidate's effective channel, the trust the value
+  carries, and keeps the channel it arrived through in `prov["via"]` (only when they differ). The policy's
+  `tool_output`/`generated` caps and the I2 check therefore see a repeated tool-output value for what it is. No
+  golden case has such a candidate, so no fixture changed.
+- §14 secrets in templates: `kinds/text.py::_profile_inputs` excludes `plan.secret_user_fields`, like the state does.
+- §3.8.5 resume scope: `Router.resume(..., context=...)` raises `PendingScopeError` when the given context's
+  requester identity (`Context.requester_sha256`: user profile, `shareable`, `include_system`, source names; not the
+  clock, messages, time zone or source contents, so the TOCTOU re-check after a registry change still resumes)
+  differs from the live decision's. Without a context, a live handle now resumes in the context of the decision that
+  raised it rather than the router default.
+- §7.2.4 proxy: `POST /v1/chat/completions` requires `Content-Type: application/json` (415 `unsupported_media_type`
+  otherwise), so a cross-origin "simple" browser POST cannot trigger Jev calls on a local proxy.
+- Regression tests: `tests/unit/test_trust_followups.py`, `tests/serve/test_app.py`.

@@ -115,6 +115,8 @@ def test_proxy_refuses_code_and_file_specs(tmp_path: Path) -> None:
             "jevtools": {"sources": {"x": {"type": "source", "function": "tests.unit.test_source_specs:record_call",
                                            "options": {"args": ["touch"]}}}}}  # fmt: skip
     r = c.post("/v1/chat/completions", content=json.dumps(body), headers={"Content-Type": "text/plain"})
+    assert r.status_code == 415 and r.json()["error"]["code"] == "unsupported_media_type"  # a browser's simple POST
+    r = c.post("/v1/chat/completions", json=body)
     assert r.status_code == 400 and r.json()["error"]["code"] == "jevtools_bad_sources"
     assert MARKER_CALLS == []
     tools = [{"type": "function", "function": {"name": "read_file", "description": "Read a file.", "parameters": {

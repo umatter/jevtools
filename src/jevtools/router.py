@@ -59,6 +59,7 @@ from jevtools.decode import (
     with_decision,
     with_tool,
 )
+from jevtools.errors import PendingScopeError
 from jevtools.fallback import Escalator, FillCandidate, Filler, FillRequest, ObservationPreview, ProposedCall, TextLLM
 from jevtools.kinds.base import ResolveContext, get_resolver
 from jevtools.plan import (
@@ -796,10 +797,16 @@ class Router:
     ) -> Flow:
         handle = self._pending(pending)
         messages = [Turn.model_validate(m) for m in handle.state.get("messages", [])]
-        ctx = (context or self.context).with_messages(messages)
+        live = self._live.get(handle.pending_id)
+        if context is not None and live is not None and context.requester_sha256 != live.session.ctx.requester_sha256:
+            raise PendingScopeError(f"{handle.pending_id} was raised for a different requester (user profile or "
+                                    "sources); resume it with that requester's context")  # fmt: skip
+        # Without an explicit context, a live handle resumes in the context of the decision that raised it (never
+        # the router default, which may belong to someone else).
+        base = context if context is not None else live.session.ctx if live is not None else self.context
+        ctx = base.with_messages(messages)
         if selection is None and reply is not None:
             selection = parse_short_reply(reply, handle.state.get("options", []))
-        live = self._live.get(handle.pending_id)
         loop = bool(handle.state.get("loop"))
         tool = handle.state.get("tool")
         unknown = bool(tool) and str(tool) not in self.catalog  # resumed on a router serving another tool list

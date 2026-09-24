@@ -184,9 +184,10 @@ class Candidate(BaseModel):
 
     @property
     def effective_channel(self) -> Channel:
-        """The channel whose trust applies: a history entity inherits its origin's (less) trust."""
-        if self.channel is Channel.HISTORY and self.origin is not None:
-            return least_trusted(self.channel, self.origin)
+        """The channel whose trust applies: a history entity inherits its origin's (less) trust, and a history value
+        whose origin is unknown is untrusted (``tool_output``): an assistant turn may repeat what a tool planted."""
+        if self.channel is Channel.HISTORY:
+            return least_trusted(self.channel, history_origin_of(self))
         return self.channel
 
     @property
@@ -272,13 +273,24 @@ def default_allow_list(tier: Tier | str, stakes: str, *, quantity: bool = False)
 def admits(allow: Iterable[Channel | str], candidate: Candidate) -> bool:
     """Whether a slot with allow-list ``allow`` admits ``candidate`` (I2).
 
-    A ``history`` candidate additionally needs its origin channel admitted (trust is inherited from the origin).
+    A ``history`` candidate additionally needs its origin channel admitted (trust is inherited from the origin); an
+    unknown origin counts as ``tool_output`` (:func:`history_origin_of`), so it never reaches a slot that bars tool
+    output, such as an external identity slot ("history, trusted origin only", §3.4.2).
     """
     allowed = {Channel(ch) for ch in allow}
     if candidate.channel not in allowed:
         return False
+    if candidate.channel is not Channel.HISTORY:
+        return True
+    origin = history_origin_of(candidate)
+    return origin in allowed or origin in TRUSTED_CHANNELS
+
+
+def history_origin_of(candidate: Candidate) -> Channel:
+    """The origin a ``history`` candidate inherits its trust from: its recorded ``origin``, or ``tool_output`` when
+    that is unknown (``None``, or ``history`` itself: an untraced assistant-turn value)."""
     origin = candidate.origin
-    return candidate.channel is not Channel.HISTORY or origin is None or origin in allowed or origin in TRUSTED_CHANNELS
+    return Channel.TOOL_OUTPUT if origin is None or origin is Channel.HISTORY else origin
 
 
 def apply_allow_list(
@@ -486,6 +498,7 @@ __all__ = [
     "Pool",
     "admits",
     "apply_allow_list",
+    "history_origin_of",
     "assign_labels",
     "canonical_order",
     "default_allow_list",

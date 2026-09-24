@@ -159,7 +159,9 @@ def trace_history(candidates: Sequence[Candidate], rc: ResolveContext) -> list[C
     origin) is traced with :func:`history_origin`; a history copy of a value that is also in the pool from an
     untrusted channel (or an untrusted entity) takes that least-trusted provenance, so an assistant turn that
     echoes a tool output never launders it into a trusted ``history`` value."""
-    untrusted = {value_key(c.value) for c in candidates if c.effective_channel in UNTRUSTED_ORIGINS}
+    # Seed with *known* untrusted provenance only: an untraced history copy (origin unknown) is what gets traced here.
+    untrusted = {value_key(c.value) for c in candidates
+                 if (c.origin if c.channel is Channel.HISTORY else c.channel) in UNTRUSTED_ORIGINS}  # fmt: skip
     untrusted |= {value_key(e.value) for e in iter_entities(rc.ctx.entities) if e.origin in UNTRUSTED_ORIGINS}
     out: list[Candidate] = []
     for c in candidates:

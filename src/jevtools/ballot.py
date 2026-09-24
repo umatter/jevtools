@@ -59,13 +59,20 @@ class BallotOption(BaseModel):
 
     @classmethod
     def from_candidate(cls, candidate: Candidate) -> BallotOption:
-        """The option of a labelled candidate (attributes such as balances stay behind: never sent to Jev)."""
+        """The option of a labelled candidate (attributes such as balances stay behind: never sent to Jev).
+
+        ``channel`` is the candidate's *effective* channel, the trust its value carries (a ``history`` value inherits
+        its origin's), so the policy's caps and channel checks see a tool-output value that an assistant turn
+        repeated as ``tool_output`` (§3.4.2). The channel it arrived through is kept in ``prov["via"]``.
+        """
+        channel = candidate.effective_channel
+        prov = candidate.prov if channel is candidate.channel else {**candidate.prov, "via": candidate.channel.value}
         return cls(
             label=candidate.label,
             value=candidate.value,
             text=candidate.text,
-            channel=candidate.channel,
-            prov=candidate.prov,
+            channel=channel,
+            prov=prov,
             late=candidate.late,
         )
 

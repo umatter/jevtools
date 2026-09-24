@@ -30,4 +30,9 @@ class BallotError(JevtoolsError):
         super().__init__(f"{where}: {rule}" + (f": {message}" if message else ""))
 
 
-__all__ = ["BallotError", "CatalogError", "ConstraintError", "JevtoolsError"]
+class PendingScopeError(JevtoolsError, PermissionError):
+    """A pending prompt was resumed with the context of a different requester (another user profile or source set
+    than the decision that raised it). The handle stays pending for its own requester."""
+
+
+__all__ = ["BallotError", "CatalogError", "ConstraintError", "JevtoolsError", "PendingScopeError"]

@@ -381,6 +381,15 @@ class Context(BaseModel):
         """``context_sha256``: digest of :meth:`to_doc`."""
         return sha256_of(self.to_doc())
 
+    @property
+    def requester_sha256(self) -> str:
+        """Who a decision is for: the user profile, what of it is shareable, ``include_system`` and the names of the
+        registered sources. The clock, the messages, time zone and source *contents* are left out, so a resume after
+        a registry change (the TOCTOU case, §3.8.5) still belongs to the same requester."""
+        return sha256_of({"user": jsonable(self.user), "include_system": self.include_system,
+                          "shareable": list(self.shareable) if self.shareable is not None else None,
+                          "sources": sorted(self.sources)})  # fmt: skip
+
 
 def _tool_calls_by_id(turns: Sequence[Turn]) -> dict[str, tuple[str, dict[str, Any]]]:
     calls: dict[str, tuple[str, dict[str, Any]]] = {}

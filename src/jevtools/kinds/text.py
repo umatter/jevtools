@@ -189,8 +189,11 @@ def _request_inputs(inputs: TemplateInputs, tool: ToolSpec, rc: ResolveContext, 
 
 
 def _profile_inputs(inputs: TemplateInputs, rc: ResolveContext) -> None:
-    """``{user.<field>}`` from the shareable profile, plus ``{user.first_name}`` derived from ``name``."""
-    profile = rc.ctx.user_state()
+    """``{user.<field>}`` from the shareable profile, plus ``{user.first_name}`` derived from ``name``. Secret fields
+    are left out, as in the state (§14: secrets are never sent), because template text becomes accept-Noul text."""
+    from jevtools.plan import secret_user_fields  # local: plan imports the resolvers
+
+    profile = rc.ctx.user_state(exclude=secret_user_fields(rc.catalog, rc.ctx))
     for key, value in profile.items():
         if isinstance(value, str) and value:
             inputs.early[f"user.{key}"] = (value, Channel.REGISTRY)

@@ -524,12 +524,12 @@ class _Builder:
         return questions
 
 
-def secret_user_fields(catalog: Catalog, ctx: Context) -> frozenset[str]:
+def secret_user_fields(catalog: Catalog | None, ctx: Context) -> frozenset[str]:
     """Profile fields never sent to Jev (§3.5.1, §14 "secrets are never sent"), shareable or not: every top-level
     ``user`` field a ``secret`` slot reads through ``default_from: user.<field>…``, and every field whose name is a
     secret name (``password``, ``token``, ``api_key``…, the §3.3.1 row-1 names)."""
     fields = {key for key in ctx.user if key.lower() in SECRET_NAMES}
-    for tool in catalog:
+    for tool in catalog or ():
         for top in tool.slots:
             for slot in top.walk():
                 head, _, rest = (slot.default_from or "").partition(".")

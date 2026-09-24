@@ -39,7 +39,7 @@ from jevtools.decision import (
     SlotReport,
     ToolCall,
 )
-from jevtools.errors import BallotError, CatalogError, ConstraintError, JevtoolsError
+from jevtools.errors import BallotError, CatalogError, ConstraintError, JevtoolsError, PendingScopeError
 from jevtools.extract import Mention, Mentions, run_extractors
 from jevtools.fallback import (
     Escalator,
@@ -151,6 +151,7 @@ __all__ = [
     "OpenAICompatibleTextLLM",
     "Outcome",
     "Pending",
+    "PendingScopeError",
     "PendingAction",
     "Policy",
     "PolicyInput",

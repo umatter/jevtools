@@ -264,6 +264,12 @@ def _state(request: Request) -> ServeState:
 async def chat_completions(request: Request) -> Response:
     """``POST /v1/chat/completions``."""
     state = _state(request)
+    media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if media != "application/json":
+        # A browser page can send a cross-origin "simple" POST (text/plain, form data) without a CORS preflight; only
+        # JSON bodies are served, so such a request can never trigger Jev calls on a local proxy.
+        return _error_json(api_error(415, "invalid_request_error", "unsupported_media_type",
+                                     "the request body must be application/json"))  # fmt: skip
     try:
         body = await request.json()
     except ValueError:
