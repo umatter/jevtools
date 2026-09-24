@@ -179,3 +179,46 @@ def test_confirm_node_without_langgraph_says_so(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setitem(sys.modules, "langgraph.types", None)
     with pytest.raises(ImportError, match="needs LangGraph"):
         confirm_node({"messages": [card]})
+
+
+# -- review-edges regressions -----------------------------------------------------------------------------------------
+
+
+def test_with_structured_output_elects_the_schema_at_the_read_tier() -> None:
+    """``with_structured_output`` binds the schema as an output tool: side-effect free (``risk: read``), so no
+    ``authorized`` gate and no confirm band; it returns the model instead of ``None`` (#9)."""
+    from pydantic import BaseModel, Field
+
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+    from jevtools.wire import DecisionRequest
+    from tests.adapters.support import weather_context
+
+    class Triage(BaseModel):
+        """Triage the request."""
+
+        kind: Literal["weather", "news", "other"]
+        urgent: bool
+
+    sent: list[DecisionRequest] = []
+
+    def script(request: DecisionRequest) -> dict[str, Any]:
+        sent.append(request)
+        name = next(iter(request.questions["tool"].criteria))  # type: ignore[union-attr, arg-type]
+        return {"tool": {name: 0.95, "UNSUPPORTED": 0.05}, "*authorized*": 0.9, "*.urgent": 0.1,
+                "*.kind": {"weather": 0.9, "news": 0.05, "other": 0.03, "NOT_STATED": 0.01,
+                           "NONE_OF_THESE": 0.01}}  # fmt: skip
+
+    llm = JevChatModel(router=Router([], backend=ScriptedBackend(script), context=weather_context()))
+    assert llm.with_structured_output(Triage).invoke(WEATHER_REQUEST) == Triage(kind="weather", urgent=False)
+    assert not any(q.endswith(".authorized") for q in sent[0].questions)
+
+    class Risky(BaseModel):
+        """Record the triage."""
+
+        model_config = {"json_schema_extra": {"x-jev": {"risk": "external"}}}
+        kind: Literal["weather", "news", "other"] = Field(description="The kind")
+
+    sent.clear()
+    llm.with_structured_output(Risky).invoke(WEATHER_REQUEST)
+    assert any(q.endswith(".authorized") for q in sent[0].questions)  # an explicit risk is kept

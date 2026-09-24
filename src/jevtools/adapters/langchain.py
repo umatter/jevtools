@@ -46,7 +46,7 @@ try:
 except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
     raise ImportError("jevtools.adapters.langchain needs langchain-core: pip install 'jevtools[langchain]'") from exc
 
-from jevtools.adapters._router import merge_context, router_for
+from jevtools.adapters._router import as_output_tool, merge_context, router_for
 from jevtools.adapters.pending import InMemoryPendingStore, PendingStore, adecide_turn, decide_turn
 from jevtools.context import Context
 from jevtools.decision import Decision
@@ -180,8 +180,17 @@ class JevChatModel(BaseChatModel):
         tool_choice: str | None = None,
         **kwargs: Any,
     ) -> Runnable[LanguageModelInput, AIMessage]:
-        """``self.bind(tools=[convert_to_openai_tool(t) for t in tools], tool_choice=tool_choice, **kwargs)``."""
-        return self.bind(tools=[convert_to_openai_tool(t) for t in tools], tool_choice=tool_choice, **kwargs)
+        """``self.bind(tools=[convert_to_openai_tool(t) for t in tools], tool_choice=tool_choice, **kwargs)``.
+
+        ``with_structured_output`` binds its schema here with ``ls_structured_output_format``: that schema is an
+        output tool (returning the result has no side effect), declared ``risk: read`` like Pydantic AI's output
+        tools unless it declares a risk itself; otherwise its name falls to the fail-safe external tier, whose
+        ``authorized`` gate and confirm band turn a confident extraction into a prompt and the parser's ``None``.
+        """
+        converted = [convert_to_openai_tool(t) for t in tools]
+        if kwargs.get("ls_structured_output_format") is not None:
+            converted = [as_output_tool(t) for t in converted]
+        return self.bind(tools=converted, tool_choice=tool_choice, **kwargs)
 
     # -- config → context ---------------------------------------------------------------------------------------
 

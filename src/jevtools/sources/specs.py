@@ -224,15 +224,45 @@ def source_specs(data: Any) -> list[dict[str, Any]]:
     return [dict(spec) for spec in data]
 
 
+REQUEST_SPEC_FIELDS = frozenset({
+    "type", "kind", "rows", "paths", "key", "label", "describe", "match", "provides", "attrs", "synonyms",
+    "list_fields", "list_sep", "item", "retriever", "send_whole_if_under", "k", "recency", "hierarchy", "groups",
+})  # fmt: skip
+"""Fields a per-request source spec may carry: data only. Code loading (``function``, ``options``), host files
+(``path``, ``rows_file``, ``paths_file``) and the trust ``channel`` belong to the operator's configuration."""
+
+REQUEST_SPEC_TYPES = ("registry", "files")
+"""Source types a per-request spec may build (rows only; never a ``module:function`` provider or factory)."""
+
+
+def request_spec(name: str, value: Mapping[str, Any]) -> SourceConfig:
+    """Validate one per-request full spec as untrusted data: only :data:`REQUEST_SPEC_FIELDS`, a ``registry`` or
+    ``files`` type and inline rows; anything else raises :class:`ValueError` (the proxy's 400
+    ``jevtools_bad_sources``)."""
+    extra = sorted(str(k) for k in value if k not in REQUEST_SPEC_FIELDS)
+    if extra:
+        raise ValueError(f"jevtools.sources.{name}: per-request specs are data only; not allowed: {', '.join(extra)} "
+                         "(code, files and channels belong in the server configuration)")  # fmt: skip
+    cfg = SourceConfig.model_validate({**dict(value), "name": name})
+    if cfg.type not in REQUEST_SPEC_TYPES:
+        raise ValueError(f"jevtools.sources.{name}: per-request specs may only be of type "
+                         f"{' or '.join(REQUEST_SPEC_TYPES)}, got {cfg.type!r}")  # fmt: skip
+    if cfg.rows is None:
+        raise ValueError(f"jevtools.sources.{name}: a per-request spec needs inline `rows`")
+    return cfg
+
+
 def request_sources(doc: Mapping[str, Any], templates: Sequence[SourceConfig] = ()) -> list[Any]:
-    """Sources of one request (``extra_body.jevtools.sources``): ``{"contacts": [...rows]}`` reuses the configured
-    source of that name with the request's rows; a full spec ``{"contacts": {"rows": [...], "key": …}}`` is built
-    as given; rows of an unknown source get a registry keyed by the first of :data:`KEY_GUESSES`."""
+    """Sources of one request (``extra_body.jevtools.sources``), which is untrusted input: ``{"contacts":
+    [...rows]}`` reuses the configured source of that name with the request's rows; a full spec ``{"contacts":
+    {"rows": [...], "key": …}}`` is data only (:func:`request_spec`: inline rows of a ``registry`` or ``files``
+    source, never a ``function``, ``path`` or ``channel``); rows of an unknown source get a registry keyed by the
+    first of :data:`KEY_GUESSES`."""
     by_name = {t.name: t for t in templates}
     out = []
     for name, value in doc.items():
         if isinstance(value, Mapping):
-            out.append(build_source({**dict(value), "name": name}))
+            out.append(build_source(request_spec(str(name), value)))
             continue
         if not isinstance(value, list):
             raise ValueError(f"jevtools.sources.{name}: expected a list of rows or a source spec")
@@ -247,6 +277,8 @@ def request_sources(doc: Mapping[str, Any], templates: Sequence[SourceConfig] = 
 
 __all__ = [
     "KEY_GUESSES",
+    "REQUEST_SPEC_FIELDS",
+    "REQUEST_SPEC_TYPES",
     "SourceConfig",
     "SourceType",
     "build_source",
@@ -254,5 +286,6 @@ __all__ = [
     "guess_key",
     "load_object",
     "request_sources",
+    "request_spec",
     "source_specs",
 ]

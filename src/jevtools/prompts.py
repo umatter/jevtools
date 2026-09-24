@@ -469,15 +469,20 @@ def _norm(text: str) -> str:
 
 
 def parse_short_reply(text: str, options: Sequence[PromptOption | Mapping[str, str]]) -> str | None:
-    """Match a short free-text reply to an option id (§3.8.5 click): an option number (1-based), an option text or
-    id, ``yes``/``ok``/``send`` (→ ``ok``) or ``cancel``. ``None`` when the reply is not a click."""
+    """Match a short free-text reply to an option id (§3.8.5 click): an option text or id, an option number
+    (1-based), ``yes``/``ok``/``send`` (→ ``ok``) or ``cancel``. ``None`` when the reply is not a click.
+
+    Texts win over numbers: in a menu whose option texts are themselves numbers (quantities, grids), ``"2"`` is the
+    option that reads ``2``; there (any option text starting with a digit) a number matching no text is ambiguous —
+    option number or value? — so it is not a click and goes through the free-text path."""
     entries = [(o.id, o.text) if isinstance(o, PromptOption) else (o["id"], o["text"]) for o in options]
     reply = _norm(text)
-    if reply.isdigit() and 1 <= int(reply) <= len(entries):
-        return entries[int(reply) - 1][0]
     for oid, label in entries:
         if reply in (_norm(label), oid.casefold()):
             return oid
+    numeric_menu = any(_norm(label)[:1].isdigit() for _, label in entries)
+    if reply.isdigit() and not numeric_menu and 1 <= int(reply) <= len(entries):
+        return entries[int(reply) - 1][0]
     ids = {oid for oid, _ in entries}
     if reply in SHORT_CONFIRM and "ok" in ids:
         return "ok"

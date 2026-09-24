@@ -137,3 +137,121 @@ def test_invalid_ipv4_and_regex_extractor() -> None:
     assert not [m for m in patterns.extract(source("999.1.1.1")) if m.kind == "ipv4"]
     found = patterns.extract(source("ticket PROJ-123 and PROJ-7"), [r"PROJ-\d+", r"(unclosed"])
     assert [m.value for m in found if m.kind == "regex"] == ["PROJ-123", "PROJ-7"]
+
+
+# -- review regressions ------------------------------------------------------------------------------------------------
+
+
+def test_decimal_str_big_numbers_are_exact() -> None:
+    """A 29+ digit number (a wei amount, a long id) raised InvalidOperation under the 28-digit context."""
+    assert decimal_str(Decimal("1" * 29)) == "1" * 29
+    assert decimal_str(Decimal("1" * 60)) == "1" * 60
+    assert decimal_str(Decimal("1E+3")) == "1000" and decimal_str(Decimal("-0.50")) == "-0.5"
+    found = {m.value for m in extract("order 123456789012345678901234567890 shipped") if m.kind == "number"}
+    assert found == {"123456789012345678901234567890"}
+
+
+def test_big_numbers_never_crash_decide() -> None:
+    import jevtools as jt
+    from jevtools.context import Observation
+
+    @jt.tool
+    def get_weather(city: str) -> dict[str, str]:
+        """Get the current weather for a city."""
+        return {"city": city}
+
+    router = jt.Router([get_weather], backend=jt.backends.LexicalSimulator())
+    decision = router.decide([{"role": "user", "content": "Weather in Zurich, order 12345678901234567890123456789"}])
+    assert decision.outcome == "execute"
+    obs = Observation(step=1, tool="lookup", arguments={}, content={"station_id": 10**30, "wei": "1" * 31})
+    ctx = jt.Context(messages="Weather in Zurich", observations=[obs])
+    assert router.decide("Weather in Zurich", context=ctx).outcome in ("execute", "confirm", "clarify")
+
+
+@pytest.mark.parametrize(
+    ("text", "value", "number_text"),
+    [
+        ("Set the offset to -3", "-3", "-3"),
+        ("Set the offset to −3", "-3", "−3"),
+        ("It is -12.5 outside", "-12.5", "-12.5"),
+        ("Set the freezer to -18", "-18", "-18"),
+    ],
+)
+def test_negative_numbers_keep_their_sign(text: str, value: str, number_text: str) -> None:
+    [number] = [m for m in extract(text) if m.kind == "number"]
+    assert (number.value, number.text) == (value, number_text)
+
+
+def test_hyphens_between_digits_are_not_signs() -> None:
+    assert [m.value for m in extract("pick 5-10 items") if m.kind == "number"] == ["5", "10"]
+    assert [m.value for m in extract("ticket A-3") if m.kind == "number"] == ["3"]
+    assert [m.value for m in extract("on 2026-09-24") if m.kind == "number"] == ["2026", "9", "24"]
+
+
+@pytest.mark.parametrize(
+    ("text", "amount", "currency"),
+    [
+        ("Refund CHF -50 to Anna", "-50", "CHF"),
+        ("Refund -50 CHF", "-50", "CHF"),
+        ("Refund -CHF 50", "-50", "CHF"),
+        ("Pay CHF 10 000 to Anna", "10000", "CHF"),
+        ("Pay 10 000 CHF", "10000", "CHF"),
+        ("Pay CHF1'250.50", "1250.5", "CHF"),
+        ("Transfer $2k", "2000", "USD"),
+        ("Transfer $2M", "2000000", "USD"),
+        ("Pay Anna 1.5 million CHF", "1500000", "CHF"),
+        ("Pay Anna CHF 3 Mio.", "3000000", "CHF"),
+        ("Pay two thousand five hundred francs", "2500", "CHF"),
+        ("Send one hundred twenty dollars", "120", "USD"),
+        ("Move one thousand two hundred francs", "1200", "CHF"),
+        ("Send one hundred and twenty dollars", "120", "USD"),
+        ("Show the TOP 10.00 price", "10", "TOP"),
+        ("Transfer CAD 500 to Anna", "500", "CAD"),  # a major currency, not a word code
+        ("Pay CHF 250 five times", "250", "CHF"),
+    ],
+)
+def test_money_amounts_are_whole_and_signed(text: str, amount: str, currency: str) -> None:
+    found = [m for m in extract(text) if m.kind == "money"]
+    assert [(m.value["amount"], m.value["currency"]) for m in found] == [(amount, currency)]
+
+
+def test_zwei_millionen_franken() -> None:
+    found = [m for m in extract("Zahle zwei Millionen Franken", "de") if m.kind == "money"]
+    assert [m.value["amount"] for m in found] == ["2000000"]
+
+
+def test_space_grouping_never_joins_phone_numbers() -> None:
+    assert [m.value for m in extract("call 079 123 45 67") if m.kind == "number"] == ["79", "123", "45", "67"]
+    assert not [m for m in extract("10 0000 CHF") if m.kind == "money"]  # a fragment is never an amount
+
+
+@pytest.mark.parametrize(
+    "text", ["Upgrade to PHP 8.2", "Show the TOP 10 customers", "Try ALL 5 variants", "Pay 10 TOP"]
+)
+def test_word_like_currency_codes_do_not_claim_numbers(text: str) -> None:
+    mentions = extract(text)
+    assert not [m for m in mentions if m.kind == "money"]
+    assert all(m.free for m in mentions if m.kind == "number")
+
+
+@pytest.mark.parametrize(
+    ("text", "value", "unit"),
+    [
+        ("an hour and a half", "1.5", "hour"),
+        ("1 hour 30 minutes", "90", "minute"),
+        ("2 hours and 15 minutes", "135", "minute"),
+        ("1h 30m", "90", "minute"),
+        ("1h30", "90", "minute"),
+        ("1:30 hours", "90", "minute"),
+        ("an hour and 20 minutes", "80", "minute"),
+    ],
+)
+def test_compound_durations_are_summed(text: str, value: str, unit: str) -> None:
+    quantities = [m for m in extract(text) if m.kind == "quantity"]
+    assert [(q.value, q.attrs["unit"]) for q in quantities] == [(value, unit)]
+    assert all(not m.free for m in extract(text) if m.kind == "number")
+
+
+def test_durations_of_different_scales_stay_separate() -> None:
+    quantities = [(m.value, m.attrs["unit"]) for m in extract("3 days and 2 hours") if m.kind == "quantity"]
+    assert quantities == [("3", "day"), ("2", "hour")]

@@ -213,7 +213,9 @@ class EvalCase(BaseModel):
     def build_context(self, base: Context | None = None) -> Context:
         """A :class:`Context` for this case: ``base`` (or an empty context) updated with the context document's
         ``now``/``tz``/``locale``/``user``/``shareable``/``include_system`` and its ``sources`` (source specs, see
-        :func:`jevtools.sources.specs.build_source`), with the case's messages."""
+        :func:`jevtools.sources.specs.build_source`), with the case's messages. Relative source paths resolve
+        against the context file's directory (as ``jevtools verify --context`` does), or against the dataset
+        directory for an inline context document."""
         doc = self.context_doc() or {}
         fields = {k: doc[k] for k in SETTING_FIELDS if k in doc}
         ctx = base or Context()
@@ -222,7 +224,8 @@ class EvalCase(BaseModel):
             ctx = ctx.model_copy(update={k: getattr(parsed, k) for k in fields})
         specs = doc.get("sources")
         if specs:
-            built = build_sources(specs, base_dir=self._base_dir)
+            base_dir = self.resolve(self.context).parent if isinstance(self.context, str) else self._base_dir
+            built = build_sources(specs, base_dir=base_dir)
             ctx = ctx.model_copy(update={"sources": {**ctx.sources, **{s.name: s for s in built}}})
         return ctx.with_messages(self.messages)
 
@@ -238,7 +241,8 @@ def parse_case(doc: Mapping[str, Any], *, base_dir: str | os.PathLike[str] | Non
 
 def load(path: str | os.PathLike[str]) -> list[EvalCase]:
     """Read a JSONL dataset (blank lines skipped). Relative ``context``/``catalog`` paths resolve against the file's
-    directory. Errors name the line."""
+    directory; source paths inside a context file resolve against that context file's directory. Errors name the
+    line."""
     file = Path(path)
     cases: list[EvalCase] = []
     seen: set[str] = set()

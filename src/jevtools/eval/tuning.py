@@ -40,8 +40,9 @@ from jevtools.confidence import IsotonicCalibrator, prior_of
 from jevtools.eval.metrics import hysteresis_width
 from jevtools.eval.report import EvalRecord, EvalReport, records_of
 from jevtools.eval.stats import clopper_pearson_upper
-from jevtools.policy import CRITICAL_CERTIFICATION_CASES, Policy, Tier
+from jevtools.policy import _EPS, CRITICAL_CERTIFICATION_CASES, Policy, Tier
 from jevtools.policy import Composition as CompositionRule
+from jevtools.policy import _clears as clears
 
 Method = Literal["cp", "crc"]
 TierStatus = Literal["tuned", "never", "confirm_only", "no_data"]
@@ -50,7 +51,6 @@ DEFAULT_ALPHAS: dict[str, float] = {"read": 0.05, "write": 0.02, "external": 0.0
 DEFAULT_CONFIRM_ALPHA = 0.5
 """A confirm card is worth showing when its proposed call is right more often than not (95% bound)."""
 COMPOSITIONS: tuple[CompositionRule, ...] = ("W", "PI", "L", "J", "MIN_L_J")
-_EPS = 1e-9
 
 __all__ = [
     "COMPOSITIONS",
@@ -83,11 +83,6 @@ __all__ = [
 def _ceil4(x: float) -> float:
     """Round up to 4 decimals (a threshold never admits more than the evaluated set)."""
     return math.ceil(x * 10_000 - 1e-7) / 10_000
-
-
-def _clears(score: float, tau: float, h: float) -> bool:
-    """The policy's hysteresis test (``jevtools.policy``): ``C − τ ≥ h`` clears."""
-    return score - tau >= h - _EPS
 
 
 def _tier_records(records: Sequence[EvalRecord], tier: str) -> list[EvalRecord]:
@@ -192,7 +187,7 @@ class _Kept:
         lo, hi = 0, len(self.scores)
         while lo < hi:  # first index whose score does not clear
             mid = (lo + hi) // 2
-            if _clears(self.scores[mid], tau, self.h):
+            if clears(self.scores[mid], tau, self.h):  # the runtime policy's own hysteresis test
                 lo = mid + 1
             else:
                 hi = mid

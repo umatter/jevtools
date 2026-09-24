@@ -150,8 +150,12 @@ src/jevtools/
 
 ## Tests and fixtures
 
-- `tests/unit`, `tests/backends`, `tests/policy`, `tests/scenario`, `tests/loop`, `tests/adapters`, `tests/serve`
-  and `tests/eval` hold the offline tests. They never use the network. Tests marked `live` need a key.
+- `tests/unit`, `tests/backends`, `tests/policy`, `tests/scenario`, `tests/loop`, `tests/adapters`, `tests/serve`,
+  `tests/eval` and `tests/docs` hold the offline tests. They never use the network. `tests/docs` checks README and
+  docs claims against the code (install commands, the probe's request count, the confidence headline).
+- `tests/live` holds the live smoke suite of §10.7, marked `live` and skipped without a key: per HTTP backend whose
+  key is set, the conformance probe, R1–R7 in turn mode, R6 as a loop and a cassette record/replay round trip. It
+  asserts invariants only. Run it with `python -m pytest -m live`.
 - `tests/examples` runs every example in scripted and simulator mode. These tests are marked `fast`.
 - `tests/golden/<case>/` holds the conformance fixtures of §10.2. `jevtools fixtures [--update]` checks or
   regenerates them, and a port must reproduce their bytes. See `tests/golden/README.md`.

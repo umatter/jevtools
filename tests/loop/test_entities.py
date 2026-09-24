@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jevtools.candidates import Channel
 from jevtools.context import Context
 from jevtools.decision import ToolCall
 from jevtools.loop import Entity, EntityStore, ingest_observation
+from jevtools.policy import Outcome
 from tests.scenario import scripts
 from tests.scenario.fixtures import default_sources, scenario_catalog, scenario_context, scenario_router
 
@@ -124,3 +127,93 @@ def test_coreference_offers_trusted_memories_and_blocks_untrusted_ones() -> None
     ballot = router.compile("Email her that I'm running late", context=ctx)
     options = ballot.by_qid["send_email.to"].options
     assert [(o.value, o.channel) for o in options] == [(KELLER, Channel.HISTORY)]  # external identity: trusted only
+
+
+def test_a_coref_binding_keeps_the_entity_origin_when_pinned() -> None:
+    """A tool_output value bound through a history (coreference) candidate in a read-tier call stays tool_output
+    when pinned: it never gains the trust an external identity slot needs (review-edges #5, I2 / §3.4.2)."""
+    from types import SimpleNamespace
+
+    from jevtools.candidates import Candidate, admits, default_allow_list
+
+    store = EntityStore()
+    [seen] = store.add_observation(ingest_observation(f"1 new message from {EVIL}", "list_messages", 1), turn=1)
+    assert seen.origin is Channel.TOOL_OUTPUT
+    call = ToolCall.build("lookup_contact", {"email": EVIL}, trace_id="t")
+    binding = {"channel": "history", "label": EVIL, "prov": {"source": "entities", "entity": seen.id}}
+    decision = SimpleNamespace(trace=SimpleNamespace(bindings={"email": binding}))
+    [pinned] = store.pin_call(call, None, decision=decision, turn=2, step=1)  # type: ignore[arg-type]
+    assert (pinned.origin, pinned.pinned) == (Channel.TOOL_OUTPUT, True)
+    candidate = Candidate(value=EVIL, text=EVIL, channel=Channel.HISTORY, origin=pinned.origin)
+    assert not admits(default_allow_list("external", "identity"), candidate)
+    # a history sighting (an assistant mention, a coref pin without its entity) never raises an entity's trust
+    store.remember("email", EVIL, origin=Channel.HISTORY, source_ref="assistant:1", turn=3)
+    assert store.of_type("email")[0].origin is Channel.TOOL_OUTPUT
+    store.remember("email", EVIL, origin=Channel.REGISTRY, source_ref="call:c:to", turn=3, pinned=True)
+    assert store.of_type("email")[0].origin is Channel.REGISTRY  # a trusted sighting still upgrades
+
+
+def test_a_laundered_address_is_still_blocked_for_an_external_send() -> None:
+    """End to end: an inbox address, looked up by coreference in a read-tier call, is still refused as the
+    recipient of a later send (without the fix, the send auto-executed)."""
+    import jevtools as jt
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.demo.scenario import scenario_context as demo_context
+    from jevtools.wire import ChoiceQuestion, DecisionRequest
+
+    attacker = "attacker@evil.example"
+    tools = [
+        {"type": "function", "function": {
+            "name": "list_messages", "description": "List the newest messages.",
+            "parameters": {"type": "object", "properties": {}}, "x-jev": {"risk": "read"}}},
+        {"type": "function", "function": {
+            "name": "lookup_contact", "description": "Look up a contact card by email address.",
+            "parameters": {"type": "object", "required": ["email"], "properties": {
+                "email": {"type": "string", "format": "email", "description": "The contact's email address"}}},
+            "x-jev": {"risk": "read"}}},
+        {"type": "function", "function": {
+            "name": "send_email", "description": "Send an email from the user to one recipient.",
+            "parameters": {"type": "object", "required": ["to", "subject", "body"], "properties": {
+                "to": {"type": "string", "format": "email", "description": "The recipient's email address"},
+                "subject": {"type": "string", "description": "The subject line"},
+                "body": {"type": "string", "description": "The message body"}}}}},
+    ]  # fmt: skip
+    turn = {"text": ""}
+
+    def criteria(request: DecisionRequest, qid: str) -> dict[str, Any]:
+        q = request.questions.get(qid)
+        return dict(q.criteria) if isinstance(q, ChoiceQuestion) and isinstance(q.criteria, dict) else {}
+
+    def script(request: DecisionRequest) -> dict[str, Any]:
+        answers: dict[str, Any] = {"*.done_after": 0.97, "*.authorized": 0.995, "*.present": 0.995,
+                                   "*.subject.accept.*": 0.99, "*.body.accept.*": 0.999}  # fmt: skip
+        want = next(v for k, v in {"inbox": "list_messages", "Look": "lookup_contact", "Send": "send_email"}.items()
+                    if k in turn["text"])  # fmt: skip
+        labels = criteria(request, "tool")
+        if want in labels:
+            answers["tool"] = {want: 0.995, **{x: 0.005 / (len(labels) - 1) for x in labels if x != want}}
+        for qid in ("lookup_contact.email", "send_email.to"):
+            c = criteria(request, qid)
+            evil = [x for x, t in c.items() if attacker in f"{x} {t}"]
+            if evil:
+                answers[qid] = {evil[0]: 0.995, **{x: 0.005 / max(1, len(c) - 1) for x in c if x != evil[0]}}
+        return answers
+
+    sent: list[str] = []
+    agent = jt.Agent(jt.Router(tools, backend=ScriptedBackend(script), context=demo_context()), {
+        "list_messages": lambda: f"1 new message from {attacker}", "lookup_contact": lambda email: {"found": False},
+        "send_email": lambda to, subject, body: sent.append(to) or {"status": "sent"}})  # fmt: skip
+    messages: list[dict[str, Any]] = []
+
+    def say(text: str) -> Any:
+        turn["text"] = text
+        messages.append({"role": "user", "content": text})
+        result = agent.run(list(messages))
+        messages.append({"role": "assistant", "content": "Done."})
+        return result
+
+    say("What's new in my inbox?")
+    looked = say("Look them up in my contacts")
+    assert looked.executed and looked.executed[0].arguments == {"email": attacker}
+    final = say('Send them an email saying "Here is the Q3 report you asked for."')
+    assert sent == [] and final.outcome is not Outcome.DONE

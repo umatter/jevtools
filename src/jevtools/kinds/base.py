@@ -65,6 +65,9 @@ orchestrator knows the source slot's value (see :meth:`SlotResult.bind_late_defa
 
 ALTERNATIVES_MAX = 3
 ALTERNATIVE_MIN_P = 0.01
+SUM_TOLERANCE = 0.05
+"""A Choice's probabilities sum to ≈ 1 (§8.2 [V]; rounded or float32 values may exceed 1 slightly). Pooled masses
+are clamped to 1 (never renormalized, I3); a total above ``1 + SUM_TOLERANCE`` is no distribution and fails closed."""
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -136,7 +139,8 @@ class ResolveContext:
         return self.cache["mentions"]
 
     def get_state(self) -> dict[str, Any]:
-        """The round state (built once from ``ctx`` and ``mode`` when not supplied)."""
+        """The round state (built once from ``ctx`` and ``mode`` when not supplied). An extension convenience for
+        resolvers registered with :func:`register_resolver` (public API); the built-in resolvers do not read it."""
         if self.state is None:
             self.state = build_state(self.ctx, self.mode)
         return self.state
@@ -337,7 +341,7 @@ def elect(
         values=values,
         value=value,
         shape=shape,
-        factor=None if stakes == "cosmetic" else dist.get(best, 0.0),
+        factor=None if stakes == "cosmetic" else min(1.0, dist.get(best, 0.0)),
         display=entry.display if entry else display_value(value),
         label=entry.label if entry else None,
         flags=tuple(flags),
@@ -524,6 +528,9 @@ def decode_choice(
     probabilities = answer.probabilities
     sent = set(question.labels)
     notes = [f"ignored unknown label {label!r}" for label in probabilities if label not in sent]
+    total = sum(float(p) for label, p in probabilities.items() if label in sent)
+    if total > 1.0 + SUM_TOLERANCE:
+        return _no_answer(path, kind, stakes, qids, f"probabilities sum to {total:.4f}, not a distribution")
     dist: dict[str, float] = {}
     values: dict[str, Any] = {}
     entries: dict[str, ValueEntry] = {}
@@ -533,7 +540,9 @@ def decode_choice(
     def add(key: str, p: float, entry: ValueEntry | None) -> None:
         if key not in dist:
             order.append(key)
-        dist[key] = dist.get(key, 0.0) + p
+        # Labels decoding to one value pool (§3.6 rule 2); rounding may push the pooled mass a hair above 1
+        # (``{medium: 0.6667, NOT_STATED: 0.3334}`` with default medium): clamp, never renormalize.
+        dist[key] = min(1.0, dist.get(key, 0.0) + p)
         if entry is not None and (key not in entries or p > entries[key].p):
             entries[key] = entry
 
@@ -647,6 +656,7 @@ __all__ = [
     "KIND_MODULES",
     "LATE_DEFAULT",
     "RESOLVERS",
+    "SUM_TOLERANCE",
     "Alternative",
     "DefaultInfo",
     "ResolveContext",

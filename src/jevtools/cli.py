@@ -130,7 +130,10 @@ def load_context(path: str | Path) -> Any:
     ``user``, ``shareable``, ``include_system``, ``observations`` and ``sources`` (entries as in sources files)."""
     from jevtools.context import Context
 
-    data = dict(_load_data(path))
+    loaded = _load_data(path)
+    if not isinstance(loaded, Mapping):
+        raise JevtoolsError(f"{path}: expected a context object, got {type(loaded).__name__}")
+    data = dict(loaded)
     raw = data.pop("sources", None)
     specs = [_resolve_path(spec, Path(path).parent) for spec in source_specs(raw)] if raw else []
     data.pop("entities", None)
@@ -146,6 +149,8 @@ def load_trace(path: str | Path) -> Any:
     data = _load_data(path)
     if isinstance(data, Mapping) and "trace" in data and "trace_id" not in data:
         data = data["trace"]
+    if not isinstance(data, Mapping):
+        raise JevtoolsError(f"{path}: expected a trace object, got {type(data).__name__}")
     return Trace.from_doc(data)
 
 

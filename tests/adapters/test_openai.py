@@ -5,7 +5,9 @@ Answers are scripted: nothing here is evidence about Jev's accuracy."""
 
 from __future__ import annotations
 
+import functools
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -13,7 +15,7 @@ import pytest
 
 from jevtools.adapters import openai as jo
 from jevtools.adapters._router import router_for
-from jevtools.adapters.pending import InMemoryPendingStore, prefix_key
+from jevtools.adapters.pending import InMemoryPendingStore, pending_scope, prefix_key
 from jevtools.backends.errors import (
     BackendConfigError,
     BackendError,
@@ -97,8 +99,9 @@ def test_confirm_carries_the_prompt_options_and_pending_id() -> None:
     assert x["outcome"] == "confirm" and x["pending_id"].startswith("pnd_")
     assert [o["id"] for o in x["options"]] == ["ok", "change", "cancel"]
     assert isinstance(message["content"], str) and message["content"]
-    # stored under the pending id and under the prefix hash of the conversation plus the card
-    assert x["pending_id"] in store and prefix_key([*messages, message]) in store
+    # stored under the pending id and under the prefix hash of the requester's scope, the conversation and the card
+    assert x["pending_id"] in store and prefix_key([*messages, message], pending_scope(router)) in store
+    assert prefix_key([*messages, message]) not in store
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -157,6 +160,59 @@ def test_expired_pending_compiles_a_fresh_turn() -> None:
     state = backend.requests[1].state
     assert isinstance(state, dict) and state["request"] == "ok"
     assert [t["text"] for t in state["history"]][-1] == card["content"]
+
+
+def test_a_pending_is_only_resumed_by_its_own_requester() -> None:
+    router, backend = scenario_router(scripts.R2)
+    store = InMemoryPendingStore()
+    messages = scenario_messages(scripts.R2_REQUEST, history=True)
+    card = jo.complete(messages, router=router, store=store, context={"user": {"name": "Sam Muster"}})
+    message = card["choices"][0]["message"]
+    reply = [*messages, {**_echo(message), "x_jev": message["x_jev"]}, {"role": "user", "content": "yes"}]
+    other = jo.complete(reply, router=router, store=store, context={"user": {"name": "Bob"}})
+    assert len(backend.requests) == 2 and other["choices"][0]["message"]["x_jev"].get("trace_id")
+    assert message["x_jev"]["pending_id"] in store  # the other requester's miss keeps the handle
+    own = jo.complete(reply, router=router, store=store, context={"user": {"name": "Sam Muster"}})
+    assert own["choices"][0]["finish_reason"] == "tool_calls" and len(backend.requests) == 2
+
+
+async def test_the_pending_scope_never_fetches_a_lazy_source() -> None:
+    """The scope hashes given rows only: a ToolSource is named, not fetched (an async caller cannot run here)."""
+    from jevtools.context import Context
+    from jevtools.sources import Registry
+    from jevtools.sources.toolsource import ToolSource
+
+    fetched: list[str] = []
+
+    async def caller(tool: str, args: dict[str, Any]) -> list[dict[str, str]]:
+        fetched.append(tool)
+        return [{"id": "a"}]
+
+    router, _ = weather_router()
+    lazy = ToolSource("list_things", key="id", name="things", call=caller)
+    ctx = Context(sources=[lazy, Registry("teams", [{"id": "x"}], key="id")])
+    scope = pending_scope(router, ctx)
+    assert fetched == [] and lazy.stale and scope == pending_scope(router, ctx)
+    other = Context(sources=[lazy, Registry("teams", [{"id": "y"}], key="id")])
+    assert pending_scope(router, other) != scope  # given rows are part of the requester's identity
+
+
+@pytest.mark.parametrize("tool_choice", ["none", {"type": "function", "function": {"name": "get_weather"}}])
+def test_tool_choice_is_honoured_on_a_resumed_turn(tool_choice: Any) -> None:
+    router, backend = scenario_router(scripts.R2)
+    store = InMemoryPendingStore()
+    messages = scenario_messages(scripts.R2_REQUEST, history=True)
+    card = jo.complete(messages, router=router, store=store)["choices"][0]["message"]
+    reply = [*messages, _echo(card), {"role": "user", "content": "yes"}]
+    doc = jo.complete(reply, router=router, store=store, tool_choice=tool_choice)
+    calls = doc["choices"][0]["message"].get("tool_calls") or []
+    assert all(c["function"]["name"] != "send_email" for c in calls)  # never the pending call
+    if tool_choice == "none":
+        assert doc["choices"][0]["finish_reason"] == "stop" and len(backend.requests) == 1  # no Jev call
+    assert card["x_jev"]["pending_id"] in store  # not consumed: an `auto` request can still resume it
+    named = {"type": "function", "function": {"name": "send_email"}}
+    done = jo.complete(reply, router=router, store=store, tool_choice=named)
+    assert done["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "send_email"
 
 
 def test_a_non_reply_conversation_never_matches() -> None:
@@ -295,16 +351,34 @@ def test_wrap_passes_other_models_through() -> None:
     assert client.models == "models-endpoint"  # other attributes pass through too
 
 
-def test_wrap_intercepts_its_model() -> None:
+@pytest.fixture(params=["attrdict", "sdk"])
+def response_shape(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Both shapes ``wrap`` returns (docs/DECISIONS.md, OpenAI adapter): ``attrdict`` hides the SDK (the fallback
+    :class:`~jevtools.adapters.openai.AttrDict`); ``sdk`` needs it (``openai.types.chat.ChatCompletion``, the shape
+    users of ``wrap(OpenAI(), …)`` get; installed by the ``dev`` extra)."""
+    if request.param == "attrdict":
+        monkeypatch.setitem(sys.modules, "openai.types.chat", None)  # import_module raises ImportError
+    else:
+        pytest.importorskip("openai.types.chat")
+    return str(request.param)
+
+
+def _shape_of(response: Any) -> str:
+    return "attrdict" if isinstance(response, jo.AttrDict) else "sdk"
+
+
+def test_wrap_intercepts_its_model(response_shape: str) -> None:
     router, _ = weather_router()
     inner = _FakeCompletions()
     client = jo.wrap(_FakeClient(inner), router)
     resp = client.chat.completions.create(model="jevtools", messages=[{"role": "user", "content": WEATHER_REQUEST}],
                                           tools=[WEATHER_TOOL, SEARCH_TOOL], temperature=0)  # fmt: skip
-    assert inner.calls == []
+    assert inner.calls == [] and _shape_of(resp) == response_shape
     assert resp.choices[0].finish_reason == "tool_calls"
     assert resp.choices[0].message.tool_calls[0].function.name == "get_weather"
-    assert resp["usage"]["x_jev"]["jev_calls"] == 1 and resp.model_dump()["model"] == "jevtools"
+    # attribute access and model_dump() read both shapes; subscripting works on the AttrDict fallback only
+    assert resp.usage.x_jev["jev_calls"] == 1 and resp.model_dump()["usage"]["x_jev"]["jev_calls"] == 1
+    assert resp.model_dump()["model"] == "jevtools"
 
 
 def test_wrap_reads_the_context_from_extra_body() -> None:
@@ -316,14 +390,15 @@ def test_wrap_reads_the_context_from_extra_body() -> None:
     assert isinstance(state, dict) and state["user"] == {"name": "Ada"}
 
 
-def test_wrap_streams_two_chunks() -> None:
+def test_wrap_streams_two_chunks(response_shape: str) -> None:
     router, _ = weather_router()
     client = jo.wrap(_FakeClient(_FakeCompletions()), router)
     chunks = list(client.chat.completions.create(model="jevtools", stream=True,
                                                  messages=[{"role": "user", "content": WEATHER_REQUEST}]))  # fmt: skip
     assert [c.object for c in chunks] == ["chat.completion.chunk", "chat.completion.chunk"]
+    assert [_shape_of(c) for c in chunks] == [response_shape, response_shape]
     assert chunks[0].choices[0].delta.tool_calls[0].index == 0
-    assert chunks[1].choices[0].finish_reason == "tool_calls" and chunks[1].usage["x_jev"]["jev_calls"] == 1
+    assert chunks[1].choices[0].finish_reason == "tool_calls" and chunks[1].usage.x_jev["jev_calls"] == 1
 
 
 async def test_wrap_async_client() -> None:
@@ -337,6 +412,46 @@ async def test_wrap_async_client() -> None:
     stream = await client.chat.completions.create(model="jevtools", stream=True,
                                                   messages=[{"role": "user", "content": WEATHER_REQUEST}])  # fmt: skip
     assert len([c async for c in stream]) == 2
+
+
+def _required_args(func: Any) -> Any:
+    """Like openai's ``@required_args(...)``: a plain sync ``functools.wraps`` wrapper, also around async ``create``."""
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+class _DecoratedAsyncCompletions(_FakeAsyncCompletions):
+    """``AsyncCompletions`` as the openai SDK defines it: ``create`` is async under a sync decorator."""
+
+    @_required_args
+    async def create(self, **kwargs: Any) -> str:
+        self.calls.append(kwargs)
+        return "from-the-real-model"
+
+
+async def test_wrap_detects_a_decorated_async_create() -> None:
+    router, _ = weather_router()
+    client = jo.wrap(_FakeClient(_DecoratedAsyncCompletions()), router)
+    assert client.chat.completions._async
+    resp = await client.chat.completions.create(model="jevtools",
+                                                messages=[{"role": "user", "content": WEATHER_REQUEST}])  # fmt: skip
+    assert resp.choices[0].message.x_jev["outcome"] == "execute"
+    stream = await client.chat.completions.create(model="jevtools", stream=True,
+                                                  messages=[{"role": "user", "content": WEATHER_REQUEST}])  # fmt: skip
+    assert len([c async for c in stream]) == 2
+    assert not jo.wrap(_FakeClient(_FakeCompletions()), router).chat.completions._async
+
+
+def test_wrap_detects_the_sdk_clients() -> None:
+    openai = pytest.importorskip("openai")
+    router, _ = weather_router()
+    kw = {"api_key": "sk-unused", "base_url": "http://127.0.0.1:9/v1"}
+    assert jo.wrap(openai.AsyncOpenAI(**kw), router).chat.completions._async
+    assert not jo.wrap(openai.OpenAI(**kw), router).chat.completions._async
 
 
 async def test_acomplete_matches_pending_prompts() -> None:

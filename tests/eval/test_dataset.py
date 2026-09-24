@@ -143,3 +143,23 @@ def test_run_dataset_end_to_end(tmp_path: Path) -> None:
     [rec] = report.records
     assert rec.correct and rec.outcome == "confirm" and rec.locale == "en-CH" and rec.trace is None
     assert report.meta["dataset"] == str(path) and report.meta["backend"] == "scripted"
+
+
+def test_source_paths_in_a_context_file_resolve_against_that_file(tmp_path: Path) -> None:
+    """A context document's relative source paths (``rows_file``, ``paths_file``, ``path``) are relative to the
+    context file, as for ``jevtools verify --context``: a golden context loads from a dataset elsewhere (#14)."""
+    golden = Path(__file__).resolve().parents[1] / "golden" / "R1" / "context.json"
+    line = {"id": "r1", "messages": [{"role": "user", "content": "What's the weather like in Zurich?"}],
+            "context": str(golden), "gold": {"outcomes_ok": ["execute"]}}  # fmt: skip
+    data = tmp_path / "deep" / "cases.jsonl"
+    data.parent.mkdir()
+    data.write_text(json.dumps(line) + "\n", encoding="utf-8")
+    [case] = load(data)
+    ctx = case.build_context()
+    assert {"contacts", "files"} <= set(ctx.sources) and len(ctx.sources["contacts"]) > 0
+    # an inline context document keeps resolving against the dataset directory
+    (tmp_path / "deep" / "rows.json").write_text(json.dumps(SCENARIO_CONTACTS), encoding="utf-8")
+    inline = {**line, "context": {"sources": [{"name": "contacts", "type": "registry", "rows_file": "rows.json",
+                                               "key": "email", "match": ["name"]}]}}  # fmt: skip
+    [case2] = loads(json.dumps(inline), base_dir=data.parent)
+    assert len(case2.build_context().sources["contacts"]) == len(SCENARIO_CONTACTS)

@@ -134,3 +134,59 @@ def test_message_conversion_keeps_the_pending_id() -> None:
     converted = to_openai_messages(first.all_messages())
     assert [m["role"] for m in converted] == ["user", "assistant"]
     assert converted[1]["x_jev"]["pending_id"].startswith("pnd_") and converted[1]["content"] == first.output
+
+
+# -- review-edges regressions -----------------------------------------------------------------------------------------
+
+
+def test_a_prompt_under_structured_output_raises_with_the_card_and_resumes() -> None:
+    """With ``output_type=Model`` a text prompt would be rejected and re-decided (a wasted Jev round, then
+    UnexpectedModelBehavior); the prompt surfaces as JevPromptRequired and resumes from its messages (#4)."""
+    from jevtools.adapters.pydantic_ai import JevPromptRequired
+
+    def script(request: DecisionRequest) -> Mapping[str, Any]:
+        if "DONE" in tool_options(request):
+            return {"tool": {"final_result": 0.95, "DONE": 0.03, "UNSUPPORTED": 0.02},
+                    "final_result.kind": {"weather": 0.9, "news": 0.05, "other": 0.03, "NOT_STATED": 0.01,
+                                          "NONE_OF_THESE": 0.01}, "final_result.urgent": 0.1}  # fmt: skip
+        return {"tool": {"get_weather": 0.95, "final_result": 0.04, "UNSUPPORTED": 0.01},
+                "get_weather.city": {"Zurich": 0.5, "Bern": 0.46, "NOT_STATED": 0.02, "NONE_OF_THESE": 0.02},
+                "get_weather.unit": {"fahrenheit": 0.97, "celsius": 0.01, "NOT_STATED": 0.01, "NONE_OF_THESE": 0.01},
+                "final_result.kind": {"weather": 0.9, "news": 0.05, "other": 0.03, "NOT_STATED": 0.01,
+                                      "NONE_OF_THESE": 0.01}, "final_result.urgent": 0.1}  # fmt: skip
+
+    calls.clear()
+    backend = ScriptedBackend(script)
+    agent = _agent(JevModel(Router([], backend=backend, context=weather_context())), output_type=Triage)
+    with pytest.raises(JevPromptRequired) as info:
+        agent.run_sync("What's the weather in Zurich or Bern in Fahrenheit?")
+    exc = info.value
+    assert exc.decision.outcome.value == "clarify" and exc.pending_id and exc.text.startswith("Which")
+    assert len(backend.requests) == 1  # no second (re-decided) round
+    result = agent.run_sync("1", message_history=exc.messages)  # the user's answer resumes the prompt
+    assert calls == [{"city": "Zurich", "unit": "fahrenheit"}]
+    assert result.output == Triage(kind="weather", urgent=False)
+
+
+def test_an_abstain_under_structured_output_raises_once() -> None:
+    from jevtools.adapters.pydantic_ai import JevPromptRequired
+
+    backend = ScriptedBackend({"tool": {"UNSUPPORTED": 0.9, "final_result": 0.1}})
+    agent = Agent(JevModel(Router([], backend=backend, context=weather_context())), output_type=Triage)
+    with pytest.raises(JevPromptRequired) as info:
+        agent.run_sync("Book me a flight")
+    assert info.value.decision.outcome.value in ("abstain", "escalate") and len(backend.requests) == 1
+    # a text-capable output type still answers the prompt as text
+    text_agent = Agent(JevModel(Router([], backend=ScriptedBackend({"tool": {"UNSUPPORTED": 0.9, "final_result": 0.1}}),
+                                       context=weather_context())), output_type=[Triage, str])  # fmt: skip
+    assert isinstance(text_agent.run_sync("Book me a flight").output, str)
+
+
+async def test_run_stream_replays_the_decision() -> None:
+    """``agent.run_stream`` works: the decision is replayed as one streamed response (#13)."""
+    calls.clear()
+    router, _ = weather_router(loop_script)
+    agent = _agent(JevModel(router))
+    async with agent.run_stream(WEATHER_REQUEST) as streamed:
+        output = await streamed.get_output()
+    assert output == "61 degrees fahrenheit in Zurich" and calls == [{"city": "Zurich", "unit": "fahrenheit"}]

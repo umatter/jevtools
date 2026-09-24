@@ -227,3 +227,67 @@ def test_resolve_default_variants(scenario_catalog: Catalog, ctx_default: Contex
         sources=SCENARIO_SOURCES)  # fmt: skip
     null_default = resolve_default(catalog["get_x"], catalog["get_x"].slot("q"), ctx_default)
     assert null_default is not None and null_default.omit
+
+
+# -- review regression: the enum resolver is a ChoiceResolver (no drifted copy of questions/decode) --------------------
+
+
+def test_unasked_catalog_enum_records_its_normalizer() -> None:
+    from jevtools.kinds import ResolveContext, get_resolver
+    from jevtools.kinds.common import ChoiceResolver
+    from jevtools.spec.catalog import Catalog
+
+    tools = [{"type": "function", "function": {"name": "convert", "description": "Convert an amount of money.",
+              "parameters": {"type": "object", "required": ["unit"], "properties": {
+                  "unit": {"type": "string", "enum": ["metric", "imperial"]},
+                  "currency": {"type": "string", "x-jev": {"kind": "enum", "values": "iso4217"}},
+                  "tz": {"type": "string", "x-jev": {"kind": "enum", "values": "iana_tz"}}}}}}]  # fmt: skip
+    catalog = Catalog.from_openai(tools)
+    tool = catalog["convert"]
+    rc = ResolveContext(ctx=Context(messages="Convert using metric units please"), catalog=catalog)
+    resolver = get_resolver("enum")
+    assert isinstance(resolver, ChoiceResolver)
+    for name in ("currency", "tz"):
+        slot = tool.slot(name)
+        pool = resolver.pool(tool, slot, rc)
+        assert resolver.questions(tool, slot, pool, rc) == []
+        assert resolver.decode(tool, slot, pool, {}, rc).normalizer == "enum@1"
+
+
+def test_enum_hierarchy_round_decodes_the_hierarchy_choice() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.candidates import NONE_OF_THESE, NOT_STATED
+    from jevtools.policy import Policy
+    from jevtools.router import Router
+    from jevtools.spec.catalog import Catalog
+
+    tz = {"type": "string", "description": "The time zone.", "x-jev": {"values": "iana_tz"}}
+    tools = [{"type": "function", "function": {"name": "set_timezone", "description": "Set the user's time zone.",
+              "parameters": {"type": "object", "required": ["tz"], "properties": {"tz": tz}}}}]  # fmt: skip
+    request = "set my zone to Europe/Berlin, no wait, the Swiss one"
+
+    def script(req: Any) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for qid, q in req.questions.items():
+            labels = list(q.criteria)
+            if qid == "tool":
+                out[qid] = {"set_timezone": 0.99}
+            elif qid.endswith(".authorized"):
+                out[qid] = 0.99
+            elif ".bucket." in qid:
+                out[qid] = {NONE_OF_THESE: 1.0}
+            elif qid.endswith(".group"):
+                out[qid] = {"Europe": 0.97, NONE_OF_THESE: 0.03}
+            elif qid == "set_timezone.tz":
+                found = "Europe/Zurich" in labels
+                out[qid] = {"Europe/Zurich": 0.97, NONE_OF_THESE: 0.03} if found else {NONE_OF_THESE: 0.97,
+                                                                                         NOT_STATED: 0.03}  # fmt: skip
+        return out
+
+    policy = Policy().model_copy(update={"widen": Policy().widen.model_copy(update={"page": 50})})
+    router = Router(Catalog.from_openai(tools), backend=ScriptedBackend(script), context=Context(messages=request),
+                    policy=policy)  # fmt: skip
+    decision = router.decide(request)
+    binding = decision.trace.to_doc()["bindings"]["tz"]
+    assert (binding["family"], binding["value"]) == ("slot", "Europe/Zurich")
+    assert decision.call is not None and decision.call.arguments == {"tz": "Europe/Zurich"}

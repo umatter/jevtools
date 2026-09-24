@@ -107,7 +107,7 @@ def test_loop_mode_without_observations_and_previews() -> None:
     state = build_state(ctx, "loop")
     assert state["progress"] == [] and state["observations"] == []
     obs = Observation(step=2, tool="search", content={"hits": ["x" * 2000]}, summary="1 hit")
-    assert obs.preview_text().endswith("…") and len(obs.preview_text()) == 1000
+    assert obs.preview_text().endswith("…") and len(obs.preview_text()) == 1200  # §6.2 (review #14)
     assert obs.progress_line() == "Step 2: search() → ok, 1 hit"
 
 

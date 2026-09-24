@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from jevtools.candidates import NONE_OF_THESE, NOT_STATED, Bottom, Channel
@@ -174,3 +176,57 @@ def test_sources_missing_and_no_widen_strategy() -> None:
     assert get_resolver("ref").widen(tool, tool.slot("user_id"), pool, rc, "bucket") == (pool, [])
     registry = contacts()
     assert registry.attribute_names() >= {"email", "name", "team", "label"}
+
+
+# -- review regression: a tie on the order attribute is not a confident pick -------------------------------------------
+
+
+def _member_items(first: str, second: str) -> list[tuple[Any, float, str]]:
+    from jevtools.candidates import Candidate, Channel
+
+    def cand(v: str) -> Candidate:
+        return Candidate(value=v, channel=Channel.REGISTRY)
+
+    order = {"2291": "2026-09-15", "2292": "2026-09-15"}
+    items = [(cand(f"acme/2026-09-15_INV-{n}.pdf"), 0.96, order[n]) for n in (first, second)]
+    return [*items, (cand("acme/2026-08-14_INV-2204.pdf"), 0.94, "2026-08-14"),
+            (cand("quotes/2026-09-20_Q-118.pdf"), 0.06, "2026-09-20")]  # fmt: skip
+
+
+def test_superlative_tie_is_deterministic_and_not_confident() -> None:
+    from jevtools.kinds.ref import member_result
+    from jevtools.spec.models import SlotSpec
+
+    slot = SlotSpec(path=("path",), name="path", qpath="path", json_schema={"type": "string"},
+                    kind="ref", kind_reason="probe", stakes="identity", noun="file")  # fmt: skip
+    a = member_result(slot, _member_items("2291", "2292"), "max", (), "ref@1")
+    b = member_result(slot, _member_items("2292", "2291"), "max", (), "ref@1")
+    assert a.value == b.value  # never the retrieval order
+    assert a.factor is not None and a.factor < 0.1  # the tied rival counts: q · (1 − q_tied) · …
+    assert "tie" in a.flags and sum(a.dist.values()) <= 1.0 + 1e-9
+    unique = member_result(slot, _member_items("2292", "2291")[1:], "max", (), "ref@1")
+    assert unique.factor is not None and unique.factor > 0.9 and not unique.flags
+
+
+def test_r6_latest_invoice_tie_does_not_execute() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.context import Context
+    from jevtools.demo import scenario as demo
+    from jevtools.demo.scripts import R6_MEMBERS, R6_REQUEST, r6_step1
+
+    tie = "finance/invoices/acme/2026-09-15_ACME_INV-2292.pdf"
+    contacts, accounts, _ = demo.default_sources()
+    files = demo.files([tie, *demo.workspace_paths()])
+    base = demo.scenario_context(R6_REQUEST)
+    ctx = Context(
+        messages=base.messages, now=demo.SCENARIO_NOW, locale=demo.LOCALE, sources=[contacts, accounts, files]
+    )
+    members = dict(R6_MEMBERS)
+    try:
+        R6_MEMBERS["2026-09-15_ACME_INV-2292"] = 0.96  # equally an ACME invoice of the same day as INV-2291
+        router = demo.demo_router(ScriptedBackend(r6_step1, model=demo.SCENARIO_MODEL), context=ctx)
+        decision = router.decide(ctx.messages)
+    finally:
+        R6_MEMBERS.clear()
+        R6_MEMBERS.update(members)
+    assert decision.outcome != "execute"

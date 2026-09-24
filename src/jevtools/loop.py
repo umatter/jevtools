@@ -27,30 +27,41 @@ from __future__ import annotations
 import asyncio
 import inspect
 import re
+import threading
 from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
+from functools import cache
 from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from jevtools._compat import run_sync
 from jevtools.candidates import Channel, value_key
 from jevtools.canonical import canonical_str, jsonable, sha256_hex, sha256_of
 from jevtools.context import Context, Message, Observation, Turn, parse_messages
 from jevtools.decision import Decision, Pending, ToolCall
-from jevtools.extract.patterns import EMAIL_RE, IPV4_RE, URL_RE, UUID_RE, normalize_email
-from jevtools.extract.tokens import fold, words
+from jevtools.extract.base import SourceText
+from jevtools.extract.catalogs import currencies
+from jevtools.extract.money import SYMBOLS as MONEY_SYMBOLS
+from jevtools.extract.money import WORD_CODES
+from jevtools.extract.patterns import extract as extract_patterns
+from jevtools.extract.tokens import fold
 from jevtools.kinds.text import handle_text
 from jevtools.policy import Outcome, Policy, Tier, loop_done
+from jevtools.preview import PREVIEW_CHARS, chunk_text, select_preview
 from jevtools.sources.registry import render_template
-from jevtools.sources.retrieval import BM25
-from jevtools.sources.toolsource import child_path, is_mcp_result, jsonpath_matches, mcp_text, result_data
+from jevtools.sources.toolsource import (
+    child_path,
+    get_any,
+    is_mcp_result,
+    jsonpath_matches,
+    mcp_text,
+    result_data,
+)
 from jevtools.spec.models import ToolSpec
 
-PREVIEW_CHARS = 1_200
-"""Characters of an observation's preview in ``state.observations`` (§6.2: previews, never full contents)."""
-CHUNK_CHARS = 280
-"""Target size of a text chunk (sentences are grouped up to this size)."""
 MAX_ITEMS = 200
 """Items kept per observation (typed items, flattened leaves and text entities together)."""
 LABEL_MAX = 64
@@ -58,6 +69,7 @@ JEV_USD_PER_INPUT_TOKEN = 0.042e-6
 """Jev input price [V]; used only to *estimate* cost for the loop's cost cap when a backend reports none."""
 IDEMPOTENCY_META_KEY = "jevtools/idempotency_key"
 """MCP ``_meta`` key carrying the idempotency key (§6.5)."""
+_ASYNC_EXECUTOR_IN_LOOP = "an async executor cannot run from Agent.run() inside an event loop; use Agent.arun()"
 
 RULE_REPEAT = "loop.repeat"
 RULE_NO_PROGRESS = "loop.no_progress"
@@ -107,19 +119,26 @@ class LoopBudget(BaseModel):
 # Observations (§6.3)
 # ====================================================================================================================
 
-MONEY_RE = re.compile(
-    r"(?<![\w.])(?:(?P<c1>CHF|EUR|USD|GBP|JPY|CAD|AUD|SEK|NOK|DKK|PLN|[$€£¥])\s?(?P<a1>\d{1,3}(?:[,' ’]\d{3})+"
-    r"(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)|(?P<a2>\d{1,3}(?:[,' ’]\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s?"
-    r"(?P<c2>CHF|EUR|USD|GBP|JPY|CAD|AUD|SEK|NOK|DKK|PLN|[$€£¥]))(?![\w])"
-)
+_AMOUNT = r"\d{1,3}(?:[,' ’]\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?"
+
+
+@cache
+def _money_re() -> re.Pattern[str]:
+    """Money in observation text: an amount with an ISO 4217 code (from the currency catalog; codes that are also
+    words, :data:`jevtools.extract.money.WORD_CODES`, are left out) or a currency symbol
+    (:data:`jevtools.extract.money.SYMBOLS`) before or after it."""
+    codes = sorted((c for c in currencies() if c not in WORD_CODES), key=lambda c: (-len(c), c))
+    marker = "|".join([*codes, *(re.escape(sym) for sym in MONEY_SYMBOLS)])
+    before, after = rf"(?P<c1>{marker})\s?(?P<a1>{_AMOUNT})", rf"(?P<a2>{_AMOUNT})\s?(?P<c2>{marker})"
+    return re.compile(rf"(?<![\w.])(?:{before}|{after})(?![\w])")
+
+
 DATE_RE = re.compile(r"(?<!\d)(?:\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4})(?!\d)")
 IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b")
 DOC_ID_RE = re.compile(r"\b[A-Z][A-Z0-9]{0,9}-\d{2,}\b")
 PATH_RE = re.compile(r"(?<![\w/@.:-])(?:[\w.-]+/)+[\w.-]+\.[A-Za-z0-9]{1,6}\b")
-_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}
 ENTITY_TYPES: tuple[str, ...] = ("email", "url", "uuid", "ipv4", "iban", "money", "date", "id", "path")
 """Entity types found in observation text by regex (``x-jev.emits.types`` narrows them)."""
-_SENTENCE_RE = re.compile(r"[^.!?\n]+(?:[.!?]+|\n+|$)")
 
 
 class ObservationItem(BaseModel):
@@ -170,87 +189,48 @@ def _money_value(amount: str, currency: str) -> str:
         number = Decimal(digits)
     except InvalidOperation:
         return f"{amount} {currency}"
-    return f"{number.quantize(Decimal('0.01'))} {_SYMBOLS.get(currency, currency)}"
+    return f"{number.quantize(Decimal('0.01'))} {MONEY_SYMBOLS.get(currency, currency)}"
 
 
 def text_entities(text: str, types: Iterable[str] | None = None) -> list[tuple[str, Any, str, tuple[int, int]]]:
     """Regex entities in ``text``: ``(type, normalized value, matched text, span)`` in text order.
 
     Types: ``email`` (domain lowercased), ``url``, ``uuid``, ``ipv4``, ``iban`` (spaces removed), ``money``
-    (``"4820.00 CHF"``), ``date`` (as written), ``id`` (document ids such as ``INV-2291``) and ``path``.
+    (``"4820.00 CHF"``), ``date`` (as written), ``id`` (document ids such as ``INV-2291``) and ``path``. Emails,
+    URLs, UUIDs and IPv4 addresses come from the request-side pattern extractor
+    (:func:`jevtools.extract.patterns.extract`: valid IPv4 only, URL trailing punctuation cut from text and span).
     """
     wanted = set(types) if types is not None else set(ENTITY_TYPES)
     found: list[tuple[str, Any, str, tuple[int, int]]] = []
     taken: list[tuple[int, int]] = []
 
-    def add(kind: str, value: Any, match: re.Match[str], text_: str | None = None) -> None:
-        span = match.span()
+    def add(kind: str, value: Any, matched: str, span: tuple[int, int]) -> None:
         if kind not in wanted or any(s < span[1] and span[0] < e for s, e in taken):
             return
         taken.append(span)
-        found.append((kind, value, text_ if text_ is not None else match.group(), span))
+        found.append((kind, value, matched, span))
 
-    for match in EMAIL_RE.finditer(text):
-        add("email", normalize_email(match.group()), match)
-    for match in URL_RE.finditer(text):
-        url = match.group().rstrip(".,;:!?)]}")
-        add("url", url, match, url)
-    for match in UUID_RE.finditer(text):
-        add("uuid", match.group().lower(), match)
+    patterns = extract_patterns(SourceText("$", text, Channel.TOOL_OUTPUT, ()))
+    for kind in ("email", "url", "uuid"):  # priority order; ipv4 comes last
+        for m in patterns:
+            if m.kind == kind:
+                add(kind, str(m.value).lower() if kind == "uuid" else m.value, m.text, m.span)
     for match in IBAN_RE.finditer(text):
-        add("iban", match.group().replace(" ", ""), match)
-    for match in MONEY_RE.finditer(text):
+        add("iban", match.group().replace(" ", ""), match.group(), match.span())
+    for match in _money_re().finditer(text):
         amount, currency = match.group("a1") or match.group("a2"), match.group("c1") or match.group("c2")
-        add("money", _money_value(amount, currency), match)
+        add("money", _money_value(amount, currency), match.group(), match.span())
     for match in DATE_RE.finditer(text):
-        add("date", match.group(), match)
+        add("date", match.group(), match.group(), match.span())
     for match in PATH_RE.finditer(text):
-        add("path", match.group(), match)
+        add("path", match.group(), match.group(), match.span())
     for match in DOC_ID_RE.finditer(text):
-        add("id", match.group(), match)
-    for match in IPV4_RE.finditer(text):
-        add("ipv4", match.group(), match)
+        add("id", match.group(), match.group(), match.span())
+    for m in patterns:
+        if m.kind == "ipv4":
+            add("ipv4", m.value, m.text, m.span)
     found.sort(key=lambda entry: entry[3])
     return found
-
-
-def chunk_text(text: str, size: int = CHUNK_CHARS) -> list[str]:
-    """Sentences (and lines) grouped into chunks of about ``size`` characters, in document order."""
-    chunks: list[str] = []
-    current = ""
-    for match in _SENTENCE_RE.finditer(text):
-        sentence = " ".join(match.group().split())
-        if not sentence:
-            continue
-        if current and len(current) + 1 + len(sentence) > size:
-            chunks.append(current)
-            current = sentence
-        else:
-            current = f"{current} {sentence}".strip()
-    if current:
-        chunks.append(current)
-    return chunks
-
-
-def select_preview(chunks: Sequence[str], request: str, limit: int = PREVIEW_CHARS) -> str:
-    """The preview: the whole text when it fits, else the chunks BM25 ranks highest against ``request`` (then the
-    first chunk, then the rest) while they fit, in document order, joined by `` … `` and cut to ``limit``
-    characters. Selection is code only, never Jev (§6.2)."""
-    whole = " ".join(chunks)
-    if len(whole) <= limit:
-        return whole
-    query = words(request)
-    ranked = [i for i, _ in BM25([words(c) for c in chunks]).top(query)] if query else []
-    chosen: list[int] = []
-    used = 0
-    for index in dict.fromkeys([*ranked, 0, *range(len(chunks))]):
-        cost = len(chunks[index]) + (3 if chosen else 0)
-        if used + cost <= limit:
-            chosen.append(index)
-            used += cost
-    if not chosen:
-        return chunks[ranked[0] if ranked else 0][: limit - 1].rstrip() + "…"
-    return " … ".join(chunks[i] for i in sorted(chosen))
 
 
 def _flatten(value: Any, path: str = "$") -> Iterator[tuple[str, Any]]:
@@ -293,14 +273,16 @@ def _normalize_result(result: Any, error: BaseException | None) -> tuple[str, An
     if error is not None:
         text = f"{type(error).__name__}: {error}"
         return "error", text, text
-    if is_mcp_result(result):
-        flags = (result.get("isError"), result.get("is_error")) if isinstance(result, Mapping) else \
-            (getattr(result, "isError", None), getattr(result, "is_error", None))  # fmt: skip
-        failed = any(bool(flag) for flag in flags)
-        if failed:
-            text = mcp_text(result) or "tool error"
-            return "error", text, text
+    if is_mcp_result(result) and mcp_is_error(result):
+        text = mcp_text(result) or "tool error"
+        return "error", text, text
     return "ok", result_data(result), None
+
+
+def mcp_is_error(result: Any) -> bool:
+    """``isError`` (or ``is_error``) of an MCP ``CallToolResult`` (dict or ``mcp`` object): the one error test of
+    the Agent's observations and :func:`jevtools.adapters.mcp.is_error`."""
+    return bool(get_any(result, "isError", "is_error"))
 
 
 def ingest_observation(
@@ -484,12 +466,17 @@ class EntityStore:
     # -- adding ---------------------------------------------------------------------------------------------------
 
     def add(self, entity: Entity) -> Entity:
-        """Add or merge an entity (merge: newest turn/step and label, most trusted origin, pinned sticks)."""
+        """Add or merge an entity (merge: newest turn/step and label, most trusted origin, pinned sticks). A
+        ``history`` sighting (an assistant mention, a coreference) is memory, not a source: it never raises the
+        trust of a less trusted origin already seen (a ``tool_output`` value stays ``tool_output``, §3.4.2)."""
         old = self._entities.get(entity.id)
         if old is None:
             self._entities[entity.id] = entity
             return entity
-        origin = old.origin if old.origin.trust <= entity.origin.trust else entity.origin
+        if entity.origin is Channel.HISTORY and old.origin.trust > Channel.HISTORY.trust:
+            origin = old.origin
+        else:
+            origin = old.origin if old.origin.trust <= entity.origin.trust else entity.origin
         newer = (entity.turn, entity.step or 0) >= (old.turn, old.step or 0)
         merged = (entity if newer else old).model_copy(update={
             "origin": origin, "pinned": old.pinned or entity.pinned,
@@ -524,7 +511,8 @@ class EntityStore:
         step: int | None = None,
     ) -> list[Entity]:  # fmt: skip
         """Pin the identity values of an executed call (list items one by one); the origin is the bound value's
-        channel from the decision's trace (``user`` when unknown), the label its elected label."""
+        channel from the decision's trace (``user`` when unknown), the label its elected label. A value bound
+        through a ``history`` (coreference) candidate keeps its entity's origin: binding it never launders trust."""
         bindings: Mapping[str, Mapping[str, Any]] = {}
         trace = getattr(decision, "trace", None)
         if trace is not None:
@@ -535,7 +523,7 @@ class EntityStore:
             if slot is not None and (slot.stakes != "identity" or slot.kind in ("text", "secret", "derived")):
                 continue
             binding = bindings.get(name, {})
-            channel = binding.get("channel") or Channel.USER
+            channel = self._bound_origin(binding)
             type_ = _slot_type(slot, name)
             values = value if isinstance(value, list) else [value]
             for item in values:
@@ -546,6 +534,17 @@ class EntityStore:
                                             source_ref=f"call:{call.id}:{name}", pinned=True,
                                             tool=call.name))  # fmt: skip
         return pinned
+
+    def _bound_origin(self, binding: Mapping[str, Any]) -> Channel:
+        """The origin of a bound value: its trace channel, except that a ``history`` value inherits the origin of
+        the entity it came from (``prov.entity``, spec §3.4.2 / §6.4)."""
+        channel = Channel(binding.get("channel") or Channel.USER)
+        prov = binding.get("prov")
+        if channel is Channel.HISTORY and isinstance(prov, Mapping):
+            entity = self._entities.get(str(prov.get("entity")))
+            if entity is not None:
+                return entity.origin
+        return channel
 
     def add_observation(self, observation: Observation, *, turn: int = 0) -> list[Entity]:
         """Remember an observation's typed items and text entities (``origin = tool_output``; leaves are not
@@ -775,7 +774,14 @@ class _Refresh:
     context: Context
 
 
-_Effect = _Decide | _Resume | _Invoke | _Refresh
+@dataclass(frozen=True)
+class _Wait:
+    """Wait until another run releases a claim (a pending being resumed, a key being executed)."""
+
+    claim: Future[None]
+
+
+_Effect = _Decide | _Resume | _Invoke | _Refresh | _Wait
 _Flow = Generator[_Effect, Any, LoopResult]
 _T = TypeVar("_T")
 
@@ -814,7 +820,9 @@ class Agent:
     problems cancel the execution and re-plan in a new step.
 
     Idempotency is per agent (the "session"): a key that was executed is never executed again, and resuming the
-    same pending twice replays the first result.
+    same pending twice replays the first result. This also holds for concurrent calls (``asyncio.gather`` of two
+    ``aresume``, two threads calling ``resume``): a pending or a key is claimed before anything runs, and a second
+    caller waits for the first and then replays its result.
     """
 
     def __init__(
@@ -837,6 +845,9 @@ class Agent:
         """Observations by idempotency key of every call executed in this session."""
         self._paused: dict[str, _Run] = {}
         self._results: dict[str, LoopResult] = {}
+        self._claims: dict[str, Future[None]] = {}
+        """In-flight resumes (``resume:<pending id>``) and executions (``key:<idempotency key>``)."""
+        self._claims_lock = threading.Lock()
 
     # -- public API -----------------------------------------------------------------------------------------------
 
@@ -886,25 +897,59 @@ class Agent:
 
     def _drive(self, flow: Generator[_Effect, Any, _T]) -> _T:
         value: Any = None
-        while True:
-            try:
-                effect = flow.send(value)
-            except StopIteration as stop:
-                result: _T = stop.value
-                return result
-            value = self._perform(effect)
+        try:
+            while True:
+                try:
+                    effect = flow.send(value)
+                except StopIteration as stop:
+                    result: _T = stop.value
+                    return result
+                value = self._perform(effect)
+        finally:
+            flow.close()  # an effect that raised: release the flow's claims now, not at garbage collection
 
     async def _adrive(self, flow: Generator[_Effect, Any, _T]) -> _T:
         value: Any = None
-        while True:
-            try:
-                effect = flow.send(value)
-            except StopIteration as stop:
-                result: _T = stop.value
-                return result
-            value = await self._aperform(effect)
+        try:
+            while True:
+                try:
+                    effect = flow.send(value)
+                except StopIteration as stop:
+                    result: _T = stop.value
+                    return result
+                value = await self._aperform(effect)
+        finally:
+            flow.close()
+
+    def _claim(self, name: str) -> tuple[Future[None], bool]:
+        """Claim ``name`` for this flow: ``(new claim, True)``, or ``(the holder's claim, False)`` when another flow
+        holds it (wait for it, then claim again)."""
+        with self._claims_lock:
+            held = self._claims.get(name)
+            if held is not None:
+                return held, False
+            claim: Future[None] = Future()
+            self._claims[name] = claim
+            return claim, True
+
+    def _release(self, name: str, claim: Future[None]) -> None:
+        with self._claims_lock:
+            if self._claims.get(name) is claim:
+                del self._claims[name]
+        claim.set_result(None)
 
     def _perform(self, effect: _Effect) -> Any:
+        if isinstance(effect, _Wait):
+            if not effect.claim.done():
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    pass
+                else:  # blocking here would stall the loop that holds the claim
+                    raise RuntimeError("this pending or call is being resumed by a coroutine of the running event "
+                                       "loop; use Agent.aresume()/aexecute() inside an event loop")  # fmt: skip
+            effect.claim.result()
+            return None
         if isinstance(effect, _Decide):
             return self.router.decide(effect.messages, context=effect.context, mode="loop")
         if isinstance(effect, _Resume):
@@ -917,11 +962,14 @@ class Agent:
                     refresh()
             return None
         try:
-            return _sync_value(self._invoke(effect.call)), None
+            return run_sync(self._invoke(effect.call), _ASYNC_EXECUTOR_IN_LOOP), None
         except Exception as exc:  # noqa: BLE001 - a tool error becomes an observation
             return None, exc
 
     async def _aperform(self, effect: _Effect) -> Any:
+        if isinstance(effect, _Wait):
+            await asyncio.wrap_future(effect.claim)
+            return None
         if isinstance(effect, _Decide):
             return await self.router.adecide(effect.messages, context=effect.context, mode="loop")
         if isinstance(effect, _Resume):
@@ -998,27 +1046,36 @@ class Agent:
         self, pending: Pending | str, selection: str | None, reply: str | None, context: Context | None
     ) -> _Flow:
         pending_id = pending if isinstance(pending, str) else pending.pending_id
-        if pending_id in self._results:
-            replay = self._results[pending_id]
-            return replay.model_copy(update={"notes": [*replay.notes, f"replayed resume of {pending_id}"]})
-        run = self._paused.pop(pending_id, None)
-        if run is None:  # e.g. a restarted process: rebuild the run from the pending handle
-            handle = pending if isinstance(pending, Pending) else self.router.pendings[pending_id]
-            base = context or self.router.context
-            turns = [Turn.model_validate(m) for m in handle.state.get("messages", [])]
-            run = _Run(base=base, messages=turns, observations=list(base.observations),
-                       turn=sum(1 for t in turns if t.role == "user"))  # fmt: skip
-            run.notes.append(f"resumed {pending_id} without its paused run")
-        elif context is not None:
-            run.base = context
-        self._bind_sources(run.base)
-        ctx = self._context(run)
-        yield _Refresh(ctx)
-        decision: Decision = yield _Resume(pending, selection, reply, ctx)
-        self._account(run, decision)
-        result = yield from self._loop(run, first=decision)
-        self._results[pending_id] = result
-        return result
+        name = f"resume:{pending_id}"
+        while True:  # claimed before the first effect, so a concurrent resume of the same pending waits and replays
+            claim, mine = self._claim(name)
+            if mine:
+                break
+            yield _Wait(claim)
+        try:
+            if pending_id in self._results:
+                replay = self._results[pending_id]
+                return replay.model_copy(update={"notes": [*replay.notes, f"replayed resume of {pending_id}"]})
+            run = self._paused.pop(pending_id, None)
+            if run is None:  # e.g. a restarted process: rebuild the run from the pending handle
+                handle = pending if isinstance(pending, Pending) else self.router.pendings[pending_id]
+                base = context or self.router.context
+                turns = [Turn.model_validate(m) for m in handle.state.get("messages", [])]
+                run = _Run(base=base, messages=turns, observations=list(base.observations),
+                           turn=sum(1 for t in turns if t.role == "user"))  # fmt: skip
+                run.notes.append(f"resumed {pending_id} without its paused run")
+            elif context is not None:
+                run.base = context
+            self._bind_sources(run.base)
+            ctx = self._context(run)
+            yield _Refresh(ctx)
+            decision: Decision = yield _Resume(pending, selection, reply, ctx)
+            self._account(run, decision)
+            result = yield from self._loop(run, first=decision)
+            self._results[pending_id] = result
+            return result
+        finally:
+            self._release(name, claim)
 
     def _account(self, run: _Run, decision: Decision) -> None:
         usage = decision.usage
@@ -1119,21 +1176,30 @@ class Agent:
     ) -> Generator[_Effect, Any, tuple[LoopObservation, int]]:
         """Run a call once (plus automatic retries for read/idempotent tools) and ingest its result; a key that
         already ran returns its observation (0 attempts)."""
-        if call.idempotency_key in self.executed:
-            return self.executed[call.idempotency_key], 0
-        attempts = 0
-        retries = self.budget.max_retries if _auto_retry(tool) else 0
-        while True:
-            attempts += 1
-            result, error = yield _Invoke(call)
-            observation = ingest_observation(
-                result, tool if tool is not None else call.name, step, arguments=call.arguments, call_id=call.id,
-                request=request, error=error, preview_chars=self.preview_chars,
-            )  # fmt: skip
-            if observation.status == "ok" or attempts > retries:
+        name = f"key:{call.idempotency_key}"
+        while True:  # the key is claimed before the executor runs: a concurrent run waits for its observation
+            claim, mine = self._claim(name)
+            if mine:
                 break
-        self.executed[call.idempotency_key] = observation
-        return observation, attempts
+            yield _Wait(claim)
+        try:
+            if call.idempotency_key in self.executed:
+                return self.executed[call.idempotency_key], 0
+            attempts = 0
+            retries = self.budget.max_retries if _auto_retry(tool) else 0
+            while True:
+                attempts += 1
+                result, error = yield _Invoke(call)
+                observation = ingest_observation(
+                    result, tool if tool is not None else call.name, step, arguments=call.arguments,
+                    call_id=call.id, request=request, error=error, preview_chars=self.preview_chars,
+                )  # fmt: skip
+                if observation.status == "ok" or attempts > retries:
+                    break
+            self.executed[call.idempotency_key] = observation
+            return observation, attempts
+        finally:
+            self._release(name, claim)
 
     def _result(
         self,
@@ -1166,23 +1232,6 @@ def _reason(decision: Decision) -> str | None:
     return None
 
 
-def _sync_value(value: Any) -> Any:
-    """Resolve an awaitable executor result in sync mode (a fresh event loop; refused inside a running one)."""
-    if not inspect.isawaitable(value):
-        return value
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(_awaited(value))
-    if inspect.iscoroutine(value):
-        value.close()
-    raise RuntimeError("an async executor cannot run from Agent.run() inside an event loop; use Agent.arun()")
-
-
-async def _awaited(value: Any) -> Any:
-    return await value
-
-
 __all__ = [
     "ENTITY_TYPES",
     "IDEMPOTENCY_META_KEY",
@@ -1211,6 +1260,7 @@ __all__ = [
     "accepts_keyword",
     "chunk_text",
     "ingest_observation",
+    "mcp_is_error",
     "select_preview",
     "text_entities",
 ]

@@ -23,7 +23,8 @@ from jevtools.extract.base import Mention
 from jevtools.extract.catalogs import Place
 from jevtools.kinds.base import ResolveContext, register_resolver
 from jevtools.kinds.common import ChoiceResolver, mention_candidate, pool_mentions
-from jevtools.kinds.normalize import normalize_email_value, normalize_span
+from jevtools.kinds.normalize import NormalizationError, normalize_email_value, normalize_path, normalize_span
+from jevtools.kinds.ref import is_path_slot
 from jevtools.spec.models import SlotSpec, ToolSpec
 
 PATTERN_EXTRACTORS: dict[str, str] = {"email": "email", "url": "url", "uuid": "uuid", "ipv4": "ipv4"}
@@ -125,12 +126,31 @@ class SpanResolver(ChoiceResolver):
     normalizer = "span@1"
 
     def candidates(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
-        return span_candidates(slot, rc) + author_candidates(slot)
+        out = span_candidates(slot, rc) + author_candidates(slot)
+        return path_candidates(out) if is_path_slot(slot) else out
 
     def normalizer_for(self, slot: SlotSpec) -> str:
-        return "email@1" if slot.format == "email" else self.normalizer
+        if slot.format == "email":
+            return "email@1"
+        return "path@1" if is_path_slot(slot) else self.normalizer
+
+
+def path_candidates(candidates: Sequence[Candidate]) -> list[Candidate]:
+    """``path@1`` for a path slot without a file index (§4.3): values are POSIX-normalized and ``..``/absolute/home/
+    drive paths are dropped at pool time, unless the app itself offers them (author examples and values)."""
+    out: list[Candidate] = []
+    for c in candidates:
+        if not isinstance(c.value, str):
+            out.append(c)
+            continue
+        try:
+            value = normalize_path(c.value, known=c.channel in (Channel.AUTHOR, Channel.REGISTRY))
+        except NormalizationError:
+            continue
+        out.append(c if value == c.value else c.model_copy(update={"value": value, "display": value}))
+    return out
 
 
 register_resolver("span", SpanResolver())
 
-__all__ = ["SpanResolver", "author_candidates", "extractors_of", "place_note", "span_candidates"]
+__all__ = ["SpanResolver", "author_candidates", "extractors_of", "path_candidates", "place_note", "span_candidates"]

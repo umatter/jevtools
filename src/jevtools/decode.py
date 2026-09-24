@@ -28,7 +28,7 @@ from typing import Any
 
 from jevtools.backends.errors import JevProtocolError
 from jevtools.ballot import Ballot, BallotQuestion, tool_qid
-from jevtools.candidates import Bottom, Channel, Pool, display_value, label_key, value_key
+from jevtools.candidates import Bottom, Candidate, Channel, Pool, display_value, label_key, value_key
 from jevtools.confidence import CallMap, Composition, Factors, call_map
 from jevtools.kinds import late as late_recipes
 from jevtools.kinds.base import (
@@ -39,9 +39,8 @@ from jevtools.kinds.base import (
     ValueEntry,
     elect,
     get_resolver,
-    resolve_default,
-    unasked_result,
 )
+from jevtools.kinds.text import accept_result
 from jevtools.plan import PoolKey, sibling_source
 from jevtools.policy import PolicyInput, SlotState, Tier
 from jevtools.spec.constraints import Constraint, ConstraintContext
@@ -56,6 +55,7 @@ MAP_MAX_COMBINATIONS = 4096
 _LATE = "\x00late"
 _MARKER = re.compile(r"⟨[^⟩]*⟩")
 _PRIMITIVE = {"choice": ChoiceAnswer, "noul": NoulAnswer, "score": ScoreAnswer}
+_SCORE_EPS = 1e-9
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -137,7 +137,8 @@ def collect_answers(
 ) -> tuple[dict[str, Answer], list[str]]:
     """Answers by qid for every planned call, with the answer-shape guards of §8.2.
 
-    Raises :class:`JevProtocolError` for a missing answer, a type mismatch or a probability outside [0, 1].
+    Raises :class:`JevProtocolError` for a missing answer, a type mismatch, a probability outside [0, 1] (NaN
+    included, for every primitive) or a Score whose expected level is not finite or outside its levels.
     Unknown labels and unsent answers are ignored and reported in the returned notes.
     """
     calls = ballot.call_plan()
@@ -167,6 +168,12 @@ def _checked(question: BallotQuestion, answer: Answer | None, notes: list[str]) 
         if any(not 0.0 <= p <= 1.0 for p in answer.probabilities.values()):
             raise JevProtocolError(f"{question.qid}: probability outside [0, 1]")
         answer = _normalize_echo(question, answer, notes)
+    if isinstance(answer, ScoreAnswer):
+        top = len(question.levels or ()) - 1
+        if any(not 0.0 <= p <= 1.0 for p in answer.probabilities.values()):  # also rejects NaN
+            raise JevProtocolError(f"{question.qid}: probability outside [0, 1]")
+        if not (math.isfinite(answer.score) and -_SCORE_EPS <= answer.score <= top + _SCORE_EPS):
+            raise JevProtocolError(f"{question.qid}: score {answer.score} outside [0, {top}]")
     return answer
 
 
@@ -260,7 +267,8 @@ def decode_answers(
     """Decode already-collected answers against ``ballot`` (its questions are the decode map).
 
     ``pools`` are the round's pools (resolvers read attributes from them); a missing pool is replaced by an empty
-    one, so a stored Ballot decodes on its own. ``dropped`` slots (422 isolation) decode as unasked.
+    one, so a stored Ballot decodes on its own. ``dropped`` slots (422 isolation) decode as failed answers
+    (:func:`dropped_result`).
     """
     catalog = rc.catalog
     if catalog is None:
@@ -295,7 +303,7 @@ def decode_tool(
     for slot in tool.slots:
         key = (tool.name, slot.path)
         if key in dropped:
-            results[slot.name] = unasked_result(slot, resolve_default(tool, slot, rc.ctx), note="invalid (422)")
+            results[slot.name] = dropped_result(slot)
             notes.append(f"{slot.name}: family dropped after a 422")
             continue
         pool = pools.get(key) or Pool(tool=tool.name, path=slot.path, kind=slot.kind)
@@ -316,6 +324,16 @@ def decode_tool(
     return ToolDecode(tool=tool, p=p_tool, slots=results, arguments=arguments, complete=complete, factors=factors,
                       Q=q, authorized=authorized, done_after=noul(answers, tool_qid(tool.id, "done_after")),
                       present=present, joint=joint, flags=_unique(flags), notes=notes)  # fmt: skip
+
+
+def dropped_result(slot: SlotSpec) -> SlotResult:
+    """A slot family dropped by 422 isolation (§5.6): ``empty(reason=invalid)``, a failed answer (I5) — ``⊥missing``
+    with factor 0 whatever the slot's default or ``required``, so it routes to clarify(open) and never decodes as a
+    silent default or omission (§4.5)."""
+    return SlotResult(
+        path=slot.path, kind=slot.kind, stakes=slot.stakes, dist={Bottom.MISSING.value: 0.0}, values={},
+        value=Bottom.MISSING, shape="missing", factor=0.0, flags=("invalid",), notes=("invalid (422)",),
+    )  # fmt: skip
 
 
 def _unique(items: Iterable[str]) -> list[str]:
@@ -376,6 +394,26 @@ def discard_keys(result: SlotResult, keys: Iterable[str], *, out_of_pool: float,
                  entries=entries, out_of_pool=out_of_pool, qids=result.qids, sentinels=result.sentinels,
                  notes=(*result.notes, f"{note} (error mass {lost:.4f})"), flags=result.flags,
                  ).with_(normalizer=result.normalizer)  # fmt: skip
+
+
+def discard_values(slot: SlotSpec, result: SlotResult, keys: Iterable[str], rc: ResolveContext, *,
+                   note: str) -> SlotResult:  # fmt: skip
+    """:func:`discard_keys` under the slot's family rule: a text slot's remaining candidates are re-elected by the
+    accept rule (§3.6 accept row: argmax ``n`` with the 0.02 tie to the lower index; content below ``accept_min`` →
+    ``uncovered_text``; cosmetic below the floor → the next author template, else omitted when optional), never by
+    the generic argmax."""
+    oop = rc.policy.shapes.out_of_pool
+    keys = [k for k in keys if k in result.values]
+    remaining = [k for k in result.dist if k in result.values and k not in keys]
+    entries = [result.entries.get(k) for k in remaining]
+    if result.kind != "text" or not keys or any(e is None or e.channel is None for e in entries):
+        return discard_keys(result, keys, out_of_pool=oop, note=note)
+    lost = sum(result.dist.get(k, 0.0) for k in keys)
+    scored = [(Candidate(value=result.values[k], text=e.display, channel=e.channel, prov=dict(e.prov), late=e.late),
+               result.dist[k])
+              for k, e in zip(remaining, entries, strict=True) if e is not None and e.channel is not None]  # fmt: skip
+    redone = accept_result(slot, scored, rc, result.qids, result.normalizer or "")
+    return redone.with_(notes=(*result.notes, *redone.notes, f"{note} (error mass {lost:.4f})"), flags=result.flags)
 
 
 def rekey(result: SlotResult, key: str, value: Any) -> SlotResult:
@@ -611,8 +649,7 @@ def late_bind(
     tool: ToolSpec, results: dict[str, SlotResult], rc: ResolveContext
 ) -> tuple[dict[str, SlotResult], list[str]]:
     """Compose late-bound values, then check every elected value against its slot schema; a failing value's mass
-    becomes error and the next value is taken (§3.6 rule 5)."""
-    oop = rc.policy.shapes.out_of_pool
+    becomes error and the next value is taken (§3.6 rule 5, under the slot's family rule)."""
     flags: list[str] = []
     snapshot = dict(results)
     for slot in tool.slots:
@@ -624,11 +661,11 @@ def late_bind(
             try:
                 composed = _compose(slot, result.value, recipe, snapshot, rc)
             except LateBindingError as exc:
-                result = discard_keys(result, [key], out_of_pool=oop, note=f"late binding failed: {exc}")
+                result = discard_values(slot, result, [key], rc, note=f"late binding failed: {exc}")
                 flags.append("late_binding_failed")
                 continue
             if validate(composed, slot.json_schema):
-                result = discard_keys(result, [key], out_of_pool=oop, note="schema-invalid value discarded")
+                result = discard_values(slot, result, [key], rc, note="schema-invalid value discarded")
                 continue
             if composed is not result.value and value_key(composed) != key:
                 result = rekey(result, key, composed)
@@ -675,13 +712,24 @@ def assemble(
     return args, not flags, flags
 
 
+def value_origin(result: SlotResult) -> Channel | None:
+    """The channel the elected value came from: for a user binding of an offered value (a click, a reply pick), the
+    channel of the pool candidate the user picked (kept on its entry by :func:`bind_value`); else the result's
+    channel."""
+    if result.is_bottom:
+        return None
+    entry = result.entries.get(value_key(result.value)) if result.channel is Channel.USER else None
+    return entry.channel if entry is not None and entry.channel is not None else result.channel
+
+
 def channel_violations(tool: ToolSpec, results: Mapping[str, SlotResult]) -> list[str]:
-    """I2 assertion: a bound value whose channel is outside its slot's allow-list (→ P3 refuse)."""
+    """I2 assertion: a bound value whose channel is outside its slot's allow-list (→ P3 refuse). A user binding of
+    a value the slot offered is admitted when the offered candidate's channel is (a click on a menu entry)."""
     for slot in tool.slots:
         result = results[slot.name]
         if result.is_bottom or result.channel is None or result.prov.get("default"):
             continue
-        if result.channel not in slot.channels:
+        if result.channel not in slot.channels and value_origin(result) not in slot.channels:
             return ["channel_violation"]
     return []
 
@@ -728,14 +776,20 @@ def bind_value(
     normalizer: str | None = None,
 ) -> ToolDecode:
     """Bind a user-supplied value (a click: ``p = 1``; a reply Choice: ``p = P(reply)``) to a top-level slot and
-    recompute the arguments, constraints and factors; the other slots are reused unchanged."""
+    recompute the arguments, constraints and factors; the other slots are reused unchanged.
+
+    The result's channel is ``channel`` (``user``: the user bound it, §3.8.5). When the value was an offered pool
+    entry, the result's entry keeps that entry's channel as the value's *origin* (:func:`value_origin`): TOCTOU
+    re-resolves a registry value the user picked, and a slot narrowed to ``["registry"]`` still admits a click on a
+    registry value it offered (:func:`channel_violations`)."""
     old = td.slots[name]
     key = value_key(value)
     known = old.entries.get(key)
     display = known.display if known is not None else display_value(value)
     label = label or (known.label if known is not None else None)
     attrs = dict(known.attrs) if known is not None else {}
-    entry = ValueEntry(display=display, label=label, channel=channel, prov=dict(prov or {}), attrs=attrs, p=p)
+    origin = known.channel if known is not None and known.channel is not None else channel
+    entry = ValueEntry(display=display, label=label, channel=origin, prov=dict(prov or {}), attrs=attrs, p=p)
     result = SlotResult(
         path=old.path, kind=old.kind, stakes=old.stakes, dist={key: p}, values={key: value}, value=value,
         shape="ok", factor=None if old.stakes == "cosmetic" else p, display=display, label=label, channel=channel,
@@ -852,6 +906,8 @@ __all__ = [
     "decode_round",
     "decode_tool",
     "discard_keys",
+    "discard_values",
+    "dropped_result",
     "elected_key",
     "feasible",
     "late_bind",
@@ -863,6 +919,7 @@ __all__ = [
     "slot_state",
     "tool_distribution",
     "top_keys",
+    "value_origin",
     "with_decision",
     "with_tool",
 ]

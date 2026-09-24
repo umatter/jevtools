@@ -4,6 +4,7 @@ typed errors."""
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -21,7 +22,14 @@ from jevtools.backends.errors import (
     JevValidationError,
     error_for_status,
 )
-from jevtools.backends.http import HTTPBackend, OpenRouterDecisions, OpenRouterSystemOne, TypeSafe, backoff
+from jevtools.backends.http import (
+    HTTPBackend,
+    OpenRouterDecisions,
+    OpenRouterSystemOne,
+    TypeSafe,
+    backoff,
+    retry_after,
+)
 from jevtools.backends.scripted import ScriptedBackend
 from jevtools.wire import ChoiceQuestion, DecisionRequest, NoulQuestion
 
@@ -199,6 +207,142 @@ async def test_async_decide_reuses_one_client_per_loop() -> None:
     await b.adecide(REQUEST)
     assert b._aclient() is client
     await b.aclose()
+
+
+# -- review-edges regressions -----------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw", ["inf", "1e400", "Infinity", "nan", "-inf"])
+def test_non_finite_retry_hints_fall_back_to_backoff(raw: str) -> None:
+    handler, seen = recording([httpx.Response(429, headers={"retry-after": raw}, json={}),
+                               httpx.Response(200, json=DECISIONS_BODY)])  # fmt: skip
+    b, sleeps = backend(HTTPBackend.typesafe, handler)
+    assert b.decide(REQUEST).model == "jev-1.13.0" and sleeps == [backoff(0)] and len(seen) == 2
+    assert retry_after(httpx.Response(429, headers={"retry-after": raw})) is None
+
+
+@pytest.mark.parametrize("headers", [{"retry-after": "86400"}, {"retry-after-ms": "3600000"}])
+def test_a_retry_hint_above_the_cap_fails_now_and_reports_the_hint(headers: dict[str, str]) -> None:
+    handler, seen = recording([httpx.Response(429, headers=headers, json={"error": "quota"})])
+    b, sleeps = backend(HTTPBackend.typesafe, handler)
+    with pytest.raises(JevRateLimited) as info:
+        b.decide(REQUEST)
+    assert sleeps == [] and len(seen) == 1 and info.value.retry_after in (86400.0, 3600.0)
+    capped, _ = backend(HTTPBackend.typesafe, recording([httpx.Response(429, headers={"retry-after": "3"}, json={}),
+                                                        httpx.Response(200, json=DECISIONS_BODY)])[0],
+                        max_retry_wait=2.0)  # fmt: skip
+    with pytest.raises(JevRateLimited):
+        capped.decide(REQUEST)
+
+
+async def test_async_retry_hints_are_capped_and_finite() -> None:
+    slept: list[float] = []
+
+    async def asleep(delay: float) -> None:
+        slept.append(delay)
+
+    for raw, expect in (("inf", [0.5]), ("86400", [])):
+        handler, _ = recording([httpx.Response(429, headers={"retry-after": raw}, json={}),
+                                httpx.Response(200, json=DECISIONS_BODY)])  # fmt: skip
+        slept.clear()
+        b = HTTPBackend.typesafe("k", async_transport=httpx.MockTransport(handler), asleep=asleep)
+        if expect:
+            assert (await b.adecide(REQUEST)).model == "jev-1.13.0"
+        else:
+            with pytest.raises(JevRateLimited):
+                await b.adecide(REQUEST)
+        assert slept == expect
+        await b.aclose()
+
+
+def test_a_non_finite_hint_fails_closed_through_the_router() -> None:
+    from jevtools import Router
+
+    def ping(x: str) -> str:
+        """Ping."""
+        return x
+
+    sleeps: list[float] = []
+    transport = httpx.MockTransport(lambda r: httpx.Response(429, headers={"retry-after": "inf"}, json={}))
+    b = HTTPBackend.typesafe("k", transport=transport, sleep=sleeps.append)  # time.sleep(inf) raises OverflowError
+    assert Router([ping], backend=b).decide("ping hello").rule == "P0.backend.fail_closed"
+    assert sleeps and all(math.isfinite(s) and s <= 5.0 for s in sleeps)
+
+
+class _KeepAlive:
+    """A local HTTP/1.1 keep-alive server answering every POST with one Noul answer."""
+
+    BODY = json.dumps({"model": "m", "answers": {"q": {"type": "noul", "noul": 0.9}}}).encode()
+
+    def __enter__(self) -> str:
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        body = self.BODY
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self) -> None:  # noqa: N802 - http.server API
+                self.rfile.read(int(self.headers["Content-Length"]))
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: Any) -> None:
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        return f"http://127.0.0.1:{self.server.server_address[1]}/v1/systemone"
+
+    def __exit__(self, *exc: object) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def test_async_clients_of_closed_loops_are_dropped_and_aclose_never_crashes() -> None:
+    import asyncio
+
+    request = DecisionRequest(model="m", state="s", questions={"q": NoulQuestion()})
+    with _KeepAlive() as url:
+        b = HTTPBackend(url=url, api_key="k", model="m")
+        for _ in range(3):
+            asyncio.run(b.adecide(request))  # each run binds a client to a loop that is then closed
+        assert len(b._aclients) == 1  # the clients of closed loops were dropped, not kept for the backend's life
+
+        async def main() -> httpx.AsyncClient:
+            async with b:
+                await b.adecide(request)
+                return b._aclient()
+
+        current = asyncio.run(main())  # exiting `async with` used to raise "Event loop is closed"
+        assert current.is_closed and b._aclients == {}
+        asyncio.run(b.aclose())  # idempotent
+
+
+def test_the_sync_client_is_created_once_under_concurrent_splits(monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    created: list[httpx.Client] = []
+    real = httpx.Client
+
+    class SlowClient(real):  # type: ignore[misc,valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            time.sleep(0.02)  # the default transport builds an SSL context: the race window of the real client
+            super().__init__(*args, **kwargs)
+            created.append(self)
+
+    monkeypatch.setattr(httpx, "Client", SlowClient)
+    handler, seen = recording([httpx.Response(200, json=DECISIONS_BODY)])
+    b, _ = backend(HTTPBackend.typesafe, handler)
+    with ThreadPoolExecutor(max_workers=4) as pool:  # Router._perform's split path
+        list(pool.map(b.decide, [REQUEST] * 4))
+    assert len(created) == 1 and len(seen) == 4
+    b.close()
+    assert all(c.is_closed for c in created)
 
 
 def test_scripted_backend_has_name_and_model() -> None:

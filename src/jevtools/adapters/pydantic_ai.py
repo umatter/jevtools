@@ -14,6 +14,16 @@ the loop's receipt). Output tools such as ``final_result`` are tools like any ot
 *elected*. ``provider_details["jev"]`` carries the native decision document (its ``pending_id`` lets the next
 request resume a prompt).
 
+When the agent's output type allows no text (``output_type=SomeModel``), a decision that is not a call — a confirm
+card, a clarify menu, an abstain or a finished loop without an elected output — cannot be answered as text
+(pydantic-ai would reject it and re-ask, spending another Jev round on the same turn). ``request`` raises
+:class:`JevPromptRequired` instead: it carries the decision, the prompt text, its ``pending_id`` and ``messages``
+(the history plus the prompt), so the host shows the prompt and resumes with
+``agent.run(reply, message_history=exc.messages)``. ``output_type=[SomeModel, str]`` answers prompts as text.
+
+``request_stream`` (``agent.run_stream``, ``run_stream_events``) decides like ``request`` and replays the response
+as one streamed message (a text handoff to ``text_model`` is requested non-streamed and replayed).
+
 All knowledge of the pydantic-ai API lives in this module, so API drift is isolated here (verified against
 pydantic-ai-slim 1.x: ``Model.prepare_request``, ``ModelRequestParameters.function_tools/output_tools/
 allow_text_output``, ``ModelResponse.provider_details/finish_reason``).
@@ -21,16 +31,20 @@ allow_text_output``, ``ModelResponse.provider_details/finish_reason``).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import replace
+from collections.abc import AsyncIterator, Iterable, Sequence
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import Any
 
 try:
+    from pydantic_ai.exceptions import AgentRunError
     from pydantic_ai.messages import (
         ModelMessage,
         ModelRequest,
         ModelResponse,
         ModelResponsePart,
+        ModelResponseStreamEvent,
         RetryPromptPart,
         SystemPromptPart,
         TextPart,
@@ -38,14 +52,14 @@ try:
         ToolReturnPart,
         UserPromptPart,
     )
-    from pydantic_ai.models import Model, ModelRequestParameters
+    from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
     from pydantic_ai.settings import ModelSettings
     from pydantic_ai.tools import ToolDefinition
     from pydantic_ai.usage import RequestUsage
 except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
     raise ImportError("jevtools.adapters.pydantic_ai needs pydantic-ai: pip install 'jevtools[pydantic-ai]'") from exc
 
-from jevtools.adapters._router import merge_context, router_for
+from jevtools.adapters._router import OUTPUT_TOOL_XJEV, merge_context, router_for
 from jevtools.adapters.pending import InMemoryPendingStore, PendingStore, adecide_turn
 from jevtools.canonical import jsonable
 from jevtools.context import Context
@@ -56,11 +70,32 @@ from jevtools.router import Router
 MODEL_NAME = "jevtools"
 
 
-OUTPUT_TOOL_XJEV: dict[str, Any] = {"risk": "read"}
-"""Tool-level ``x-jev`` of output tools (``final_result``…): returning the run's result has no side effect."""
 ABSTAIN_TEXT = "No tool applies to this request."
 """Default text of an abstain handoff without a ``text_model`` (a fixed template; pydantic-ai rejects an empty
 response when text output is expected)."""
+
+
+class JevPromptRequired(AgentRunError):
+    """The decision needs the user (a confirm card, a clarify menu) or elected no output (abstain, done), but the
+    agent's output type allows no text. ``text`` is the prompt; ``messages`` is the history plus the prompt as a
+    model response: ``agent.run(reply, message_history=exc.messages)`` resumes it (a click costs no Jev call)."""
+
+    def __init__(self, decision: Decision, text: str, messages: list[ModelMessage]) -> None:
+        super().__init__(f"jevtools {decision.outcome.value} ({decision.rule}) needs the user, but the output type "
+                         f"allows no text: {text}")  # fmt: skip
+        self.decision = decision
+        self.text = text
+        self.messages = messages
+
+    @property
+    def pending_id(self) -> str | None:
+        """The prompt's pending id (``None`` for an abstain or a finished loop)."""
+        return self.decision.pending.pending_id if self.decision.pending is not None else None
+
+    @property
+    def doc(self) -> dict[str, Any]:
+        """The native decision document."""
+        return self.decision.to_doc()
 
 
 def tool_to_openai(tool: ToolDefinition, *, output: bool = False) -> dict[str, Any]:
@@ -203,7 +238,24 @@ class JevModel(Model):
         if self.text_model is not None and decision.outcome is Outcome.ABSTAIN and not decision.content:
             handoff = await self.text_model.request(messages, model_settings, replace(params, function_tools=[]))
             return replace(handoff, provider_details={**(handoff.provider_details or {}), "jev": decision.to_doc()})
-        return self._response(decision, [TextPart(content=self.text_of(decision, messages))], "stop")
+        text = self.text_of(decision, messages)
+        response = self._response(decision, [TextPart(content=text)], "stop")
+        if not params.allow_text_output:  # a text answer would be rejected and the same turn decided again
+            raise JevPromptRequired(decision, text, [*messages, response])
+        return response
+
+    @asynccontextmanager
+    async def request_stream(
+        self,
+        messages: list[ModelMessage],
+        model_settings: ModelSettings | None,
+        model_request_parameters: ModelRequestParameters,
+        run_context: Any = None,
+    ) -> AsyncIterator[StreamedResponse]:
+        """Decide one step like :meth:`request` and replay the response as one streamed message."""
+        response = await self.request(messages, model_settings, model_request_parameters)
+        _, params = self.prepare_request(model_settings, model_request_parameters)
+        yield _ReplayedResponse(model_request_parameters=params, _response=response)
 
     def text_of(self, decision: Decision, messages: Sequence[ModelMessage]) -> str:
         """The text answer: the templated prompt, the handoff text, the last tool result when the loop is finished
@@ -230,4 +282,66 @@ class JevModel(Model):
         )
 
 
-__all__ = ["ABSTAIN_TEXT", "MODEL_NAME", "OUTPUT_TOOL_XJEV", "JevModel", "to_openai_messages", "tool_to_openai"]
+def _events(result: Any) -> Iterable[ModelResponseStreamEvent]:
+    """The events of a parts-manager call (one event, ``None``, or an iterator, depending on the pydantic-ai 1.x
+    minor version)."""
+    if result is None:
+        return ()
+    if hasattr(result, "event_kind"):
+        return (result,)
+    return list(result)
+
+
+@dataclass
+class _ReplayedResponse(StreamedResponse):
+    """A decided :class:`ModelResponse` replayed as a stream: one text delta per text part, one event per call."""
+
+    _response: ModelResponse = field(default_factory=lambda: ModelResponse(parts=[]))
+    _timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc), init=False)
+
+    def __post_init__(self) -> None:
+        self._usage = self._response.usage
+        self.provider_details = self._response.provider_details
+        self.provider_response_id = self._response.provider_response_id
+        self.finish_reason = self._response.finish_reason
+
+    async def _get_event_iterator(self) -> AsyncIterator[ModelResponseStreamEvent]:
+        for index, part in enumerate(self._response.parts):
+            if isinstance(part, TextPart):
+                for event in _events(self._parts_manager.handle_text_delta(vendor_part_id=index, content=part.content)):
+                    yield event
+            elif isinstance(part, ToolCallPart):
+                for event in _events(self._parts_manager.handle_tool_call_part(
+                        vendor_part_id=index, tool_name=part.tool_name, args=part.args,
+                        tool_call_id=part.tool_call_id)):  # fmt: skip
+                    yield event
+
+    @property
+    def model_name(self) -> str:
+        return self._response.model_name or MODEL_NAME
+
+    @property
+    def provider_name(self) -> str | None:
+        return self._response.provider_name
+
+    @property
+    def provider_url(self) -> str | None:
+        return None
+
+    @property
+    def timestamp(self) -> datetime:
+        return self._timestamp
+
+    async def close_stream(self) -> None:
+        """Nothing to close: the response is already complete."""
+
+
+__all__ = [
+    "ABSTAIN_TEXT",
+    "MODEL_NAME",
+    "OUTPUT_TOOL_XJEV",
+    "JevModel",
+    "JevPromptRequired",
+    "to_openai_messages",
+    "tool_to_openai",
+]

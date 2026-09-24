@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any, Literal
@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jevtools.canonical import canonical_str, jsonable, sha256_of
+from jevtools.preview import PREVIEW_CHARS, text_preview
 
 Role = Literal["user", "assistant", "system", "tool"]
 Mode = Literal["turn", "loop", "widen", "resume", "fill"]
@@ -31,8 +32,6 @@ Message = Mapping[str, Any]
 """An OpenAI-style chat message: ``{"role", "content", "tool_calls"?, "tool_call_id"?, "name"?}``."""
 
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-PREVIEW_CHARS = 1_000
-"""Default observation preview length when no chunk selection has set one."""
 
 
 class Turn(BaseModel):
@@ -106,7 +105,8 @@ class Observation(BaseModel):
     content: Any = None
     """The full result (text or JSON). Late-bound into arguments by code; never sent to Jev."""
     preview: str | None = None
-    """What ``state.observations`` shows (BM25-selected chunks, §6.2); ``None`` → the first characters of content."""
+    """What ``state.observations`` shows (BM25-selected chunks, §6.2); ``None`` → the content's chunks, in order,
+    up to :data:`~jevtools.preview.PREVIEW_CHARS` (no request to rank them against)."""
     arguments: dict[str, Any] = Field(default_factory=dict)
     """Arguments of the call that produced this result (rendered in ``progress``)."""
     summary: str | None = None
@@ -118,7 +118,7 @@ class Observation(BaseModel):
         if self.preview is not None:
             return self.preview
         text = self.content if isinstance(self.content, str) else canonical_str(jsonable(self.content))
-        return text if len(text) <= PREVIEW_CHARS else text[: PREVIEW_CHARS - 1] + "…"
+        return text_preview(text, "", PREVIEW_CHARS)
 
     def to_state(self) -> dict[str, Any]:
         """The ``observations`` entry: ``{"step", "tool", "status", "preview"}``."""
@@ -195,7 +195,8 @@ class Context(BaseModel):
 
     - ``messages``: the conversation; a bare string is one user turn. ``role: tool`` messages become observations.
     - ``now``/``tz``/``clock``: the time reference. ``now`` wins over ``clock``; ``tz`` names the IANA zone.
-    - ``user``: the user profile. ``shareable`` lists the fields that may be sent to Jev (``None`` = all).
+    - ``user``: the user profile. ``shareable`` lists the fields that may be sent to Jev (``None`` = all but
+      secrets: the planner never sends a field a ``secret`` slot reads or a field with a secret name).
       ``default_from: "user.*"`` may read every field, shareable or not.
     - ``sources``: registered candidate sources by name (``jevtools.sources.Source`` objects).
     - ``observations``: loop observations (§6.3), in step order.
@@ -292,20 +293,25 @@ class Context(BaseModel):
         return "\n\n".join(texts) if texts else None
 
     def all_observations(self) -> list[Observation]:
-        """Declared observations followed by observations parsed from ``role: tool`` messages (drop-in loops)."""
+        """Declared observations followed by observations parsed from ``role: tool`` messages (drop-in loops),
+        whose previews are the chunks BM25 ranks highest against the request (§6.2, as for ingested results)."""
         observations = list(self.observations)
         calls = _tool_calls_by_id(self.messages)
         step = max((o.step for o in observations), default=0)
+        request = self.request
         for turn in self.messages:
             if turn.role != "tool":
                 continue
             step += 1
             name, arguments = calls.get(turn.tool_call_id or "", (turn.name or "tool", {}))
+            content = turn.content if turn.content is not None else turn.text
+            text = content if isinstance(content, str) else canonical_str(jsonable(content))
             observations.append(
                 Observation(
                     step=step,
                     tool=turn.name or name,
-                    content=turn.content if turn.content is not None else turn.text,
+                    content=content,
+                    preview=text_preview(text, request, PREVIEW_CHARS),
                     arguments=arguments,
                     call_id=turn.tool_call_id,
                 )
@@ -314,11 +320,11 @@ class Context(BaseModel):
 
     # -- user profile -------------------------------------------------------------------------------------------
 
-    def user_state(self) -> dict[str, Any]:
-        """The shareable profile fields, in profile order."""
-        if self.shareable is None:
-            return dict(self.user)
-        return {k: v for k, v in self.user.items() if k in self.shareable}
+    def user_state(self, exclude: Collection[str] = ()) -> dict[str, Any]:
+        """The shareable profile fields, in profile order, without the ``exclude``d ones (secrets, shareable or not:
+        §14 — secrets are never sent)."""
+        return {k: v for k, v in self.user.items()
+                if (self.shareable is None or k in self.shareable) and k not in exclude}  # fmt: skip
 
     def lookup(self, path: str) -> Any:
         """Resolve a context path such as ``user.home_city`` (roots: ``user``, ``locale``, ``tz``, ``now``).
@@ -395,19 +401,19 @@ def is_loop(ctx: Context, mode: str = "turn") -> bool:
     return mode == "loop" or bool(ctx.all_observations())
 
 
-def build_state(ctx: Context, mode: str = "turn") -> dict[str, Any]:
+def build_state(ctx: Context, mode: str = "turn", *, secret_fields: Collection[str] = ()) -> dict[str, Any]:
     """The data-only Jev state in normative key order (spec §3.5.1).
 
-    ``request``, ``history`` (always present), ``now``, ``user`` (omitted when empty), ``system`` (only with
-    ``include_system``), then ``progress`` and ``observations`` in loop mode. Widen/fill/resume rounds of a loop
-    step see the same state because loop sections follow the observations, not the mode alone.
+    ``request``, ``history`` (always present), ``now``, ``user`` (omitted when empty; never the ``secret_fields``),
+    ``system`` (only with ``include_system``), then ``progress`` and ``observations`` in loop mode. Widen/fill/resume
+    rounds of a loop step see the same state because loop sections follow the observations, not the mode alone.
     """
     state: dict[str, Any] = {
         "request": ctx.request,
         "history": [turn.to_state() for turn in ctx.history],
         "now": render_now(ctx.current_time(), ctx.timezone_name),
     }
-    user = ctx.user_state()
+    user = ctx.user_state(exclude=secret_fields)
     if user:
         state["user"] = jsonable(user)
     if ctx.include_system and ctx.system:

@@ -114,6 +114,18 @@ def test_parse_short_reply() -> None:
     assert parse_short_reply("yes", [{"id": "pick:to:0", "text": "A"}]) is None
 
 
+def test_parse_short_reply_numeric_option_texts() -> None:
+    """Review #7: a reply equal to an option's text picks that option, never the option with that number."""
+    numeric = [{"id": "pick:quantity:0", "text": "2"}, {"id": "pick:quantity:1", "text": "3"},
+               {"id": "other", "text": "Something else"}]  # fmt: skip
+    assert parse_short_reply("2", numeric) == "pick:quantity:0"
+    assert parse_short_reply("3", numeric) == "pick:quantity:1"
+    assert parse_short_reply("1", numeric) is None  # option 1 or quantity 1: not a click
+    assert parse_short_reply("something else", numeric) == "other"
+    grid = [{"id": "pick:duration:0", "text": "30 min"}, {"id": "pick:duration:1", "text": "45 min"}]
+    assert parse_short_reply("2", grid) is None and parse_short_reply("45 min", grid) == "pick:duration:1"
+
+
 # --------------------------------------------------------------------------------------------------------------------
 # Default rendering (no x-jev.render): natural, compact, deterministic
 # --------------------------------------------------------------------------------------------------------------------

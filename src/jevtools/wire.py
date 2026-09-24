@@ -72,7 +72,7 @@ Question = Annotated[ChoiceQuestion | NoulQuestion | ScoreQuestion, Field(discri
 
 
 class ChoiceAnswer(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, allow_inf_nan=False)
 
     type: Literal["choice"] = "choice"
     choice: str
@@ -81,14 +81,14 @@ class ChoiceAnswer(BaseModel):
 
 
 class NoulAnswer(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, allow_inf_nan=False)
 
     type: Literal["noul"] = "noul"
     noul: float
 
 
 class ScoreAnswer(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, allow_inf_nan=False)
 
     type: Literal["score"] = "score"
     score: float
@@ -126,8 +126,13 @@ class DecisionResponse(BaseModel):
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> DecisionResponse:
-        """Parse a response body, skipping answer types this version does not model."""
-        answers = payload.get("answers") or {}
+        """Parse a response body, skipping answer types this version does not model. A non-object ``answers`` and
+        non-finite numbers (NaN, infinities) raise :class:`ValueError` (a malformed body, never a partial parse)."""
+        answers = payload.get("answers")
+        if answers is None:
+            answers = {}
+        if not isinstance(answers, dict):
+            raise ValueError(f"answers is not a JSON object (got {type(answers).__name__})")
         known = {
             name: raw
             for name, raw in answers.items()

@@ -20,11 +20,21 @@ from decimal import Decimal
 from typing import Any
 
 from jevtools.ballot import BallotQuestion, slot_qid
-from jevtools.candidates import Bottom, Candidate, Channel, Pool, display_value, least_trusted, value_key
+from jevtools.candidates import (
+    NOT_STATED,
+    Bottom,
+    Candidate,
+    Channel,
+    Pool,
+    display_value,
+    least_trusted,
+    value_key,
+)
 from jevtools.extract.base import Mention
 from jevtools.extract.numbers import TIME_UNITS
 from jevtools.extract.temporal import RangeReading, Reading, TemporalValue, localize, utc_offset
 from jevtools.kinds.base import (
+    LATE_DEFAULT,
     ResolveContext,
     SlotResult,
     ValueEntry,
@@ -260,14 +270,17 @@ class TemporalResolver(ChoiceResolver):
         if set(questions) != {"date", "time"}:
             questions = {q.meta["part"]: q for q in self.questions(tool, slot, pool, rc)}
         oop = rc.policy.shapes.out_of_pool
-        rd = decode_choice(slot, questions["date"], answers.get(questions["date"].qid), out_of_pool=oop)
-        rt = decode_choice(slot, questions["time"], answers.get(questions["time"].qid), out_of_pool=oop)
+        dq, tq = questions["date"], questions["time"]
+        rd = decode_choice(slot, dq, answers.get(dq.qid), out_of_pool=oop)
+        rt = decode_choice(slot, tq, answers.get(tq.qid), out_of_pool=oop)
         tz = str(pool.meta.get("tz") or rc.ctx.timezone_name)
         dist: dict[str, float] = {}
         values: dict[str, Any] = {}
         entries: dict[str, ValueEntry] = {}
-        for day, pd in rd.top(3):
-            for clock, pt in rt.top(3):
+        # Only offered part values combine (never a sentinel-decoded whole default, never a zero-mass key).
+        days, clocks = _part_values(rd, dq), _part_values(rt, tq)
+        for day, pd in days:
+            for clock, pt in clocks:
                 dt = localize(date.fromisoformat(day), time.fromisoformat(clock), tz)[0][0]
                 value = normalize_temporal(dt, slot.json_schema)
                 key = value_key(value)
@@ -285,6 +298,7 @@ class TemporalResolver(ChoiceResolver):
             mass = rd.mass(bottom) + rt.mass(bottom)
             if mass:
                 dist[bottom.value] = mass
+        self._part_defaults(tool, slot, rc, (rd, dq), (rt, tq), dist, values, entries)
         result = elect(
             path=slot.path,
             kind=slot.kind,
@@ -298,6 +312,42 @@ class TemporalResolver(ChoiceResolver):
             notes=rd.notes + rt.notes,
         )
         return result.with_(normalizer=self.normalizer, parts={"date": rd, "time": rt})
+
+    def _part_defaults(
+        self,
+        tool: ToolSpec,
+        slot: SlotSpec,
+        rc: ResolveContext,
+        date_part: tuple[SlotResult, BallotQuestion],
+        time_part: tuple[SlotResult, BallotQuestion],
+        dist: dict[str, float],
+        values: dict[str, Any],
+        entries: dict[str, ValueEntry],
+    ) -> None:
+        """A slot default applies only when *both* parts are not stated (joint ``NOT_STATED`` mass); a date stated
+        without a time (or the reverse) is incomplete, never combined with a piece of the default (⊥missing)."""
+        default = resolve_default(tool, slot, rc.ctx)
+        if default is None or default.omit:
+            return
+        (rd, dq), (rt, tq) = date_part, time_part
+        ns_date, ns_time = rd.sentinels.get(NOT_STATED, 0.0), rt.sentinels.get(NOT_STATED, 0.0)
+        joint = ns_date * ns_time
+        real_date = sum(p for _, p in _part_values(rd, dq, None))
+        real_time = sum(p for _, p in _part_values(rt, tq, None))
+        partial = ns_date * real_time + real_date * ns_time
+        if partial:
+            dist[Bottom.MISSING.value] = dist.get(Bottom.MISSING.value, 0.0) + partial
+        if not joint:
+            return
+        if default.late is not None:
+            dist[LATE_DEFAULT] = dist.get(LATE_DEFAULT, 0.0) + joint
+            entries.setdefault(LATE_DEFAULT, ValueEntry(display=default.display, late=default.late, p=joint))
+            return
+        key = value_key(default.value)
+        dist[key] = dist.get(key, 0.0) + joint
+        values[key] = default.value
+        entry = ValueEntry(display=default.display, channel=default.channel, prov={"default": True}, p=joint)
+        entries.setdefault(key, entry)
 
     # -- ranges -----------------------------------------------------------------------------------------------------
 
@@ -350,6 +400,15 @@ class TemporalResolver(ChoiceResolver):
             return unasked_result(slot, resolve_default(tool, slot, rc.ctx)).with_(normalizer=self.normalizer)
         result = decode_choice(minimum, question, answers.get(question.qid), out_of_pool=rc.policy.shapes.out_of_pool)
         return _component(result, "max", rc.policy.shapes.out_of_pool).with_(path=slot.path, normalizer=self.normalizer)
+
+
+def _part_values(result: SlotResult, question: BallotQuestion, n: int | None = 3) -> list[tuple[str, float]]:
+    """The ``n`` most probable offered values of a factorized part with positive mass (option values only: a
+    ``NOT_STATED`` that decodes to the slot default is not a date or a time)."""
+    offered = {value_key(o.value) for o in question.options}
+    real = [(k, p) for k, p in result.dist.items() if k in offered and k in result.values and p > 0]
+    real.sort(key=lambda kp: -kp[1])
+    return [(str(result.values[k]), p) for k, p in real[:n]]
 
 
 def _least_trusted(*results: SlotResult) -> Channel | None:

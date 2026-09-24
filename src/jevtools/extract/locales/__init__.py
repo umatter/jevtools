@@ -78,6 +78,12 @@ class Locale:
     hedges: frozenset[str] = frozenset()
     chitchat: tuple[Phrase, ...] = ()
     anaphors: tuple[Phrase, ...] = ()
+    day_part_homographs: Mapping[str, tuple[int, int]] = field(default_factory=dict)
+    """Relative-day words that are also a day-part noun (de ``Morgen``: tomorrow / morning): read as the day part
+    (a RANGE) after one of :attr:`day_part_homograph_cues` (``heute Morgen``, ``jeden Morgen``)."""
+    day_part_homograph_cues: frozenset[str] = frozenset()
+    greetings: frozenset[str] = frozenset()
+    """Words that turn a following homograph into a greeting with no temporal meaning (``Guten Morgen``)."""
 
 
 def get_locale(code: str | None) -> Locale:

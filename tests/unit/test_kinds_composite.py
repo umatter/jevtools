@@ -14,7 +14,7 @@ R5 = "Book a 45 min sync with Bob and Carol next Tuesday at 3pm"
 BOB, BROWN = "Bob Meier <bob.meier@muster.ch>", "Robert Brown <rbrown@partner.io>"
 CAROL, WEBER = "Carol Liu <carol.liu@muster.ch>", "Caroline Weber <caroline.weber@muster.ch>"
 
-# -- anchored lists --------------------------------------------------------------------------------------------------
+# -- anchored lists ----------------------------------------------------------------------------------------------------
 
 
 def test_r5_attendees_questions_and_decode() -> None:
@@ -146,7 +146,7 @@ def test_array_of_objects_basic() -> None:
     assert result.factor == pytest.approx(0.9 * 0.8 * 0.95 * 0.9 * 0.9)
 
 
-# -- records and unions ----------------------------------------------------------------------------------------------
+# -- records and unions ------------------------------------------------------------------------------------------------
 
 
 def test_record_flattened_leaves() -> None:
@@ -206,7 +206,7 @@ def test_union_branch_choice() -> None:
     assert card.shape == "missing"
 
 
-# -- text ------------------------------------------------------------------------------------------------------------
+# -- text --------------------------------------------------------------------------------------------------------------
 
 
 def test_r2_subject_and_body_candidates() -> None:
@@ -226,7 +226,7 @@ def test_r2_subject_and_body_candidates() -> None:
     assert questions[0].criteria is not None and questions[0].instructions["candidate"] == template.value  # type: ignore[index]
     result = decode(tool, tool.slot("body"), body, {questions[0].qid: noul(0.91), questions[1].qid: noul(0.88)}, rc)
     assert result.value == template.value and result.factor == pytest.approx(0.91) and result.late == template.late
-    assert [a.value for a in result.alternatives] == [clause.value] and result.normalizer == "text@1"
+    assert [a.value for a in result.alternatives] == [clause.value] and result.normalizer == "text.template@1"
 
 
 def test_titles_queries_and_r7() -> None:
@@ -281,3 +281,63 @@ def test_perspective_and_observation_candidates() -> None:
     }
     subject, _ = resolve(catalog["send_email"], catalog["send_email"].slot("subject"), rc)
     assert subject.candidates[0].value == "Fwd: ACME INV-2291"
+
+
+# -- review regression: an array of objects keeps its leaves' flags and channel ----------------------------------------
+
+
+def test_list_of_records_propagates_leaf_presence_conflict_to_p8() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.context import Context
+    from jevtools.router import Router
+    from jevtools.spec.catalog import Catalog
+    from tests.scenario_sources import contacts
+    from tests.support import SCENARIO_NOW
+
+    bob, carol = "Bob Meier <bob.meier@muster.ch>", "Carol Liu <carol.liu@muster.ch>"
+    item = {"type": "object", "properties": {"email": {"type": "string", "format": "email"},
+                                             "role": {"type": "string", "enum": ["required", "optional"]}}}  # fmt: skip
+    fn = {"name": "create_meeting", "description": "Create a meeting.",
+          "parameters": {"type": "object", "properties": {"people": {"type": "array", "items": item}},
+                         "required": ["people"]}}  # fmt: skip
+    catalog = Catalog.from_openai([{"type": "function", "function": fn}], sources=[contacts()])
+    script = {"tool": {"create_meeting": 0.99, "NO_TOOL": 0.005, "UNSUPPORTED": 0.005},
+              "create_meeting.authorized": 0.99,
+              "create_meeting.people.m0.email": {bob: 0.97}, "create_meeting.people.m0.email.present": 0.05,
+              "create_meeting.people.m0.role": {"optional": 0.97, "NOT_STATED": 0.03},
+              "create_meeting.people.m1.email": {carol: 0.97}, "create_meeting.people.m1.email.present": 0.97,
+              "create_meeting.people.m1.role": {"NOT_STATED": 0.97, "required": 0.03},
+              "create_meeting.people.more": 0.02}  # fmt: skip
+    ctx = Context(messages="Meet Bob and Carol", now=SCENARIO_NOW, locale="en-CH", sources=[contacts()])
+    decision = Router(catalog, backend=ScriptedBackend(script), context=ctx).decide("Meet Bob and Carol")
+    assert (decision.outcome, decision.rule) == ("clarify", "P8.consistency")
+    assert decision.slots["people"].channel == "registry"  # the leaves' least-trusted channel, not None
+
+
+# -- review regression: the perspective rewrite never takes a third party's pronouns -----------------------------------
+
+
+THIRD_PARTIES = ["Email Anna that Tom is sick and he can't come today", "Tell Anna that Marco says his train is late"]
+
+
+@pytest.mark.parametrize("request_text", THIRD_PARTIES)
+def test_perspective_rewrite_skips_third_parties(request_text: str) -> None:
+    catalog, rc = scenario(request_text)
+    tool = catalog["send_email"]
+    body, _ = resolve(tool, tool.slot("body"), rc)
+    assert not [c for c in body.candidates if c.prov.get("rewrite") == "perspective"]
+
+
+@pytest.mark.parametrize(
+    ("request_text", "variant"),
+    [
+        ("Tell Anna she should call me", "You should call me."),
+        ("Tell Bob his car is ready", "Your car is ready."),
+        ("Email Anna that she should come to Zurich on Monday", "You should come to Zurich on Monday."),
+    ],
+)
+def test_perspective_rewrite_keeps_recipient_cases(request_text: str, variant: str) -> None:
+    catalog, rc = scenario(request_text)
+    tool = catalog["send_email"]
+    body, _ = resolve(tool, tool.slot("body"), rc)
+    assert [c.value for c in body.candidates if c.prov.get("rewrite") == "perspective"] == [variant]

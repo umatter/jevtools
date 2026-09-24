@@ -1,7 +1,9 @@
 """Normalizers (spec §4.3): deterministic, versioned; the trace records ``name@version``.
 
 Every candidate value is ``normalize(raw)`` for the kind's normalizer at pool time, so decoding copies the
-elected value verbatim (I1). ``jt.verify`` re-runs ``NORMALIZERS[name@version](raw, schema)`` to check a binding.
+elected value verbatim (I1). The ``normalizer`` a binding records names the function that produced its value:
+:data:`NORMALIZERS` maps every recorded ``name@version`` to it (``get_normalizer``), for replays and external
+verifiers. ``jt.verify`` checks bindings against the stored options' values (§3.9 step 3); it does not re-run them.
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation, localcontext
 from typing import Any
 
 from jevtools.extract.catalogs import minor_units
@@ -125,7 +127,10 @@ def normalize_quantity(
 def quantize_money(raw: Any, currency: str | None) -> Decimal:
     """``Decimal`` quantized half-even to the currency's ISO 4217 minor unit (2 when unknown)."""
     places = minor_units(currency)
-    return to_decimal(raw).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN)
+    value = to_decimal(raw)
+    with localcontext() as ctx:  # a 29+ digit amount must not raise InvalidOperation under the 28-digit default
+        ctx.prec = max(ctx.prec, value.adjusted() + places + 3)
+        return value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN)
 
 
 def normalize_money(raw: Any, schema: Mapping[str, Any] | None = None, *, currency: str | None = None) -> Any:
@@ -187,11 +192,17 @@ def normalize_email_value(raw: Any, schema: Mapping[str, Any] | None = None) -> 
     return normalize_email(normalize_string(raw))
 
 
+_ESCAPING_PREFIX = re.compile(r"^(?:~|\$\{?\w|%\w+%|[A-Za-z]:(?:/|$))")
+"""Home (``~/.ssh``), environment (``$HOME/x``, ``%APPDATA%``) and drive (``C:/Windows``) prefixes."""
+
+
 def normalize_path(raw: Any, schema: Mapping[str, Any] | None = None, *, known: bool = False) -> str:
-    """``path@1``: POSIX-normalize; ``..`` and absolute paths are rejected unless present in the source."""
+    """``path@1``: POSIX-normalize; ``..``, absolute, home (``~``), environment (``$HOME``) and drive (``C:/``)
+    paths are rejected unless present in the source (``known``)."""
     text = normalize_string(raw).replace("\\", "/")
     path = posixpath.normpath(text)
-    if not known and (path.startswith("/") or path == ".." or path.startswith("../") or "/../" in f"/{path}/"):
+    escapes = path.startswith("/") or path == ".." or path.startswith("../") or "/../" in f"/{path}/"
+    if not known and (escapes or _ESCAPING_PREFIX.match(path)):
         raise NormalizationError(f"path {text!r} escapes the workspace")
     return path
 
@@ -231,6 +242,7 @@ NORMALIZERS: dict[str, Normalizer] = {
         Normalizer("text@1", normalize_text),
         Normalizer("text.title@1", normalize_title),
         Normalizer("text.query@1", normalize_query),
+        Normalizer("text.template@1", normalize_title),
         Normalizer("quantity@1", normalize_quantity),
         Normalizer("money@1", normalize_money),
         Normalizer("temporal.iso8601@1", normalize_temporal),

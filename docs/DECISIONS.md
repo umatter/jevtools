@@ -46,7 +46,8 @@ behaviour and records it here. Format: `§section: issue → decision`.
 - §3.3.2: several explicit MCP hints → table order: `readOnlyHint` (read), then `destructiveHint` (critical), then
   `openWorldHint` (external); the invitee rule applies only to verb-derived `write` tiers.
 - §3.4.2: "history (trusted origin only)" → a `history` candidate is admitted only if its `origin` channel is also
-  admitted (or trusted); critical-tier quantity/money slots allow `user` and `registry`.
+  admitted (or trusted); critical-tier quantity/money slots allow `user` and `registry`. (Amended: a missing origin
+  is traced, not trusted — Review fixes, "§3.4.2 / §4.2.1: history candidates inherit a traced origin".)
 - §3.4.3: collisions → a display equal to a reserved sentinel (after casefold) gets ` (value)`; a duplicate of an
   earlier label gets ` (2)`, ` (3)`…; slug numbers count from 1 in input order. When a label cannot show the whole
   value (elided path, slug), `text` gets `Full value: "…"` (≤ 400 characters in total).
@@ -118,7 +119,8 @@ behaviour and records it here. Format: `§section: issue → decision`.
   delegated to `jevtools.kinds.late.late_bind` (placeholders via `fill`, `derive` with money quantized to the source
   row's currency); the spec's list-only form `{"placeholders": ["to.first_name"]}` is mapped to `fill` by marker
   order, and a `⟨…⟩` marker left after substitution is an error (never emitted). The pre-substitution value is kept
-  as `late.template`, so late binding is recomputed after a click (a new recipient's first name).
+  as `late.template`, so late binding is recomputed after a click (a new recipient's first name). (Amended for text
+  slots: Review fixes, "§3.6 rule 5 under the family rule".)
 - §5.2 joint: a candidate is anchored when its channel is `user` or its `prov` has `anchor`/`mention`; a slot
   without anchored candidates contributes all of them. The `enum` resolver sets `prov.anchor` on members named in
   the user's words, so R3's currency contributes only CHF and the joint Choice has the spec's 6 options.
@@ -129,6 +131,7 @@ behaviour and records it here. Format: `§section: issue → decision`.
   the oldest `history` turns (keeping pinned-entity turns needs the entity store).
 - §5.6: a 422 whose `loc` names questions drops those questions' whole slot families (tool-level questions alone)
   and re-sends only the failed calls, once; a `loc` on `tool`, `reply` or outside `questions` fails closed (P0).
+  (Replaced: Review fixes, "§5.6 422 isolation" — gate questions fail closed, a dropped slot decodes as ⊥missing.)
   The round record keeps the trimmed Ballot. `retries` in call records is `null` (the backend interface returns only
   the response).
 - §3.8.5 clicks: `ok` always confirms; `pick:`/`alt:` options confirm in tiers ≥ external (they show complete calls);
@@ -136,10 +139,12 @@ behaviour and records it here. Format: `§section: issue → decision`.
   block a human confirmation, TOCTOU still runs. A clicked slot gets factor 1 even for composite slots. Menus offer
   whole-slot values only (a list part's values would need resolver support). A tool-menu click runs one new round
   with that tool named (earlier answers are not reused); `cancel` → abstain (`P1.tool.no_tool`, reason
-  `cancelled`); a pending not held in memory, or expired, is safely re-compiled.
+  `cancelled`); a pending not held in memory, or expired, is safely re-compiled. (Amended: Review fixes, "§3.8.5
+  confirmations are tied to the confirmed call", "a click keeps the value's origin", "short replies", "Resume on a
+  router serving another tool list".)
 - §3.8.5 free text: `CANCEL ≥ 0.5` in the reply Choice decodes as `NO_TOOL`; an option `≥ 0.5` binds its value with
   `p = P(reply)` (or confirms / picks the tool). A passthrough slot is bound verbatim after decoding (its questions
-  are still asked in the resume round).
+  are still asked in the resume round). (Amended: a confirmation holds only for the confirmed call — Review fixes.)
 - §3.8.4 prompts: extra fixed texts `What would you like me to do?` (open, no slot) and `Do you want {noun} to be
   true?` (flag yes/no menu); the `ok` button reads `Confirm` in the critical tier, else the intent's verb (`Send`,
   `Create`); an alternative reads `<label> instead`; menu ids are `pick:<slot>:<i>` + `other`, tool menus
@@ -214,7 +219,8 @@ behaviour and records it here. Format: `§section: issue → decision`.
 - §4.6 widen: bucket Choices carry only `NONE_OF_THESE`; the bucket factor is `D_b(v*) · ∏_{b'≠b} D_b'(⊥uncovered)`;
   the hierarchy stage reads the previous group answer from `rc.widen[slot_key]["groups"]` as `{group: p}`.
 - §4.3 normalizer names: `string@1 span@1 email@1 text@1 text.title@1 text.query@1 quantity@1 money@1
-  temporal.iso8601@1 temporal.duration@1 path@1 ref@1 list@1 enum@1 flag@1 record@1`. Money without a currency is
+  temporal.iso8601@1 temporal.duration@1 path@1 ref@1 list@1 enum@1 flag@1 record@1`, plus `text.template@1` for
+  author templates (Review fixes, "Resolvers and normalizers"). Money without a currency is
   quantized to 2 decimals; derived `all`/`half` amounts are late-bound and offered only when the request says so.
 - §4.2.6 places: a lowercase match needs an all-lowercase message and a name that is not a common word ("nice");
   `canon: "cities"` values are `Name, CC` or `Name, Admin, CC` (`Zürich, CH`, `Zurich, Ontario, CA`).
@@ -426,6 +432,7 @@ The simulator is a lexical test double. Nothing below is evidence about Jev's ac
   `ToolCall`; an MCP `ClientSession`-like executor (has `call_tool`, is not callable) receives
   `meta={"jevtools/idempotency_key": key}` when its `call_tool` accepts `meta`. `jevtools.adapters.mcp` uses the
   same constant, result helpers and `ingest_observation` (merge: one implementation of MCP result handling).
+  (Amended for concurrent resumes: Review fixes, "§6.5 concurrent resumes and executions".)
 - §6.5 retries: `LoopBudget.max_retries` (1) automatic retries, only for read-tier or `idempotent: true` tools; an
   exception and an MCP `isError: true` result are both failures; the last attempt's observation is kept.
 - §6.5 TOCTOU: the router revalidates every resumed decision against the context the Agent passes
@@ -438,11 +445,13 @@ The simulator is a lexical test double. Nothing below is evidence about Jev's ac
   else from an MCP `outputSchema`'s first array-of-objects property (key: a `uri/email/uuid`-format or
   `id/url/uri/email/path/key` property; label: `title/name/label/subject`); the item type is the key field's name
   (`url`, `id`) or `item`. Unknown JSON gives `leaf` items with their JSONPath; text and JSON string leaves give
-  regex entities `email url uuid ipv4 iban money date id path` (`money` normalized to `"4820.00 CHF"`).
+  regex entities `email url uuid ipv4 iban money date id path` (`money` normalized to `"4820.00 CHF"`). (Amended:
+  Review fixes, "§6.3 observation entities use the shared extractors".)
 - §6.2 previews: the whole rendering when it fits `preview_chars` (1,200), else BM25-ranked chunks (sentences
   grouped to ≈280 characters; JSON as `path: value` lines), then the first chunk, then the rest while they fit, in
   document order, joined by ` … `. Summaries: `N words` (text), `N items` (typed items or a top-level array),
-  `N fields` (objects), the error text for errors.
+  `N fields` (objects), the error text for errors. (Amended: one implementation, `jevtools.preview`, also serves
+  drop-in `role: tool` messages — Review fixes, "§6.2 one preview implementation".)
 - §6.4 entity store: one entity per `(type, canonical value)`; a merge keeps the newest turn/step and label, the
   most trusted origin seen, and `pinned` once set. Executed calls pin their identity-stakes, non-text values (list
   items one by one): type = a specific tag (`email`, `account_id`, `path`, `url`…), else the format, else the kind;
@@ -452,7 +461,8 @@ The simulator is a lexical test double. Nothing below is evidence about Jev's ac
   string `{"entities": [...]}` (what `Context.to_doc` embeds). §6.2's "keep history turns that mention pinned
   entities" is `EntityStore.mentions_pinned(text)`; the planner's state cut (`plan.cut_state(keep=…)`, fed by
   `plan.pinned_mentions(ctx)`) drops unpinned turns first, oldest first, and pinned ones only when nothing else is
-  left and the state is still too large.
+  left and the state is still too large. (Amended: Review fixes, "§6.4 a coreference binding never launders
+  trust".)
 - §6.1 resume rounds (merge): a CONFIRM/CLARIFY raised in loop mode records `"loop": true` in `Pending.state`; its
   free-text resume round (and a recompile after expiry) keeps loop semantics, so it asks `done_after` even before
   the first observation exists, and the confirmed execution can end the run without one more round. Turn-mode
@@ -521,6 +531,8 @@ Every adapter test runs on scripted answers; nothing there is evidence about Jev
   message; the reply is those user texts joined. Lookup order: an explicit `pending_id`, `x_jev.pending_id` on the
   assistant message, then the prefix key. A resumed handle is deleted under both keys; a new pending handle is
   stored under its id and the prefix key of the request plus the assistant message the client will echo.
+  (Amended: key and handles are scoped to the requester — Review fixes, "§7.2.4 pending handles are bound to the
+  requester's scope".)
 - §7.2.4 stores: `InMemoryPendingStore` expires an entry at `min(pending.expires_at, put + ttl)` (ttl 15 min),
   evicts oldest beyond 10,000 keys, and is thread-safe. Adapters default to one store per router
   (`default_store(router)`); `openai.complete` without a router uses one module-level store (each call builds a
@@ -534,12 +546,14 @@ Every adapter test runs on scripted answers; nothing there is evidence about Jev
   `usage.x_jev = {jev_calls, jev_input_tokens, llm_calls, cost_usd, rounds, outcome}`. The message is
   `Decision.to_openai_message()` unchanged.
 - §7.2.1 `wrap`: duck-typed (`client.chat.completions.create`); async clients are detected by `create` being a
-  coroutine function (`is_async=` overrides). The response is `openai.types.chat.ChatCompletion` when the SDK is
-  importable (extra fields kept), else an `AttrDict` (dict with attribute access and `model_dump()`).
+  coroutine function (`is_async=` overrides; amended: Review fixes, "§7.2.1 async client detection"). The
+  response is `openai.types.chat.ChatCompletion` when the SDK is importable (extra fields kept), else an `AttrDict`
+  (dict with attribute access and `model_dump()`).
   `stream=True` yields two synthetic `chat.completion.chunk`s (the whole message, then finish reason + usage).
   `extra_body={"jevtools": {"context": {...}, "pending_id": ...}}`; context overrides are limited to
   `now, tz, locale, user, shareable, include_system, observations` (per-request `sources` rows are the proxy's job).
 - §7.2.2: `tool_choice` goes to the router unchanged; `parallel_tool_calls` is accepted and ignored (DECISIONS.md).
+  (Amended for resumed turns: Review fixes, "§7.2.2 `tool_choice` on a resumed turn".)
 - §7.2.4 error mapping (`error_response(exc)`, `decision_error(decision)`); rows the table does not list: 404 →
   502 `jev_invalid_request` (wrong model/URL is a request problem); `BackendConfigError` (no key) → 502 `jev_auth`;
   `JevProtocolError` → 502 `jev_protocol_error`; anything else → 500 `jevtools_internal`. 429 has type
@@ -547,6 +561,7 @@ Every adapter test runs on scripted answers; nothing there is evidence about Jev
   `sk-`/`or-`/`ts-` keys, `key=`/`token=` query values); auth errors never echo the upstream text. The router fails
   closed (P0) and records the backend error only as text, so `decision_error` reads the status back from
   `HTTP nnn` in the call records (none, or 5xx → `jev_unavailable`); `Retry-After` is not recoverable there.
+  (Amended: Review fixes, "§7.2.4 proxy error mapping".)
 
 ### Anthropic, MCP
 
@@ -557,7 +572,8 @@ Every adapter test runs on scripted answers; nothing there is evidence about Jev
   arguments; `tool_choice` `auto/any/tool/none` → `auto/required/named/none`.
 - §7.1 MCP: `call_decision` is async (a sync `call_tool` result is accepted) and refuses a decision without
   `tool_calls` (only `execute` reaches a server). `result_content` prefers `structuredContent`, else joins text
-  blocks; `to_observation` builds the loop `Observation` (status `error` on `isError`).
+  blocks; `to_observation` builds the loop `Observation` (status `error` on `isError`). (Amended: Review fixes,
+  "§7.1 / §6.5 one implementation of MCP result handling".)
 
 ### LangChain (`adapters/langchain.py`)
 
@@ -632,7 +648,7 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
 - §11.1 files: `context`/`catalog` paths resolve against the JSONL file's directory; a context document holds
   `now/tz/locale/user/shareable/include_system` and `sources` in the proxy's source-spec format
   (`jevtools.sources.specs.build_sources`), so datasets, `jevtools.toml` and CLI sources files describe sources the
-  same way.
+  same way. (Amended: Review fixes, "§11.1 source paths inside a context file".)
 - Correctness: `correct = outcome ∈ outcomes_ok ∧ (call is gold ∨ outcome ∉ {execute, confirm})`. `exact_match` is
   the share of *proposed* calls equal to gold (outcome-independent); `accuracy` is the share of correct decisions.
 - Wrong execution: an execution is wrong unless the call is gold **and** gold allows `execute`
@@ -664,7 +680,8 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
   fitted per tier *and* composition, capped at W), so one run tunes every composition; the tier's current
   composition wins ties.
 - Thresholds reproduce the policy's hysteresis test exactly: for each observed score `t`, `τ = ceil4(t − h)` and the
-  bound is computed on `{C − τ ≥ h}` (what `policy.evaluate` executes). Equal coverage keeps the higher τ.
+  bound is computed on `{C − τ ≥ h}` (what `policy.evaluate` executes). Equal coverage keeps the higher τ. (Now by
+  construction: Review fixes, "Tuning uses the policy's hysteresis test".)
 - §11.3 does not define `τ_confirm` → the lowest threshold ≤ `τ_execute` whose kept cases have a proposed call wrong
   at most `confirm_alpha = 0.5` of the time (95% CP bound); none → an empty band (`confirm = τ_execute`). Tiers
   without a confirm band (read) keep `None`; `confirm_alpha=None` keeps the base values.
@@ -699,7 +716,8 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
 - One base router per distinct set of per-request sources (LRU, `max_routers = 32`); request tool sets are derived
   from it with `router_for` (cached), so click resumes find their in-memory state. Per-request rows of a configured
   source reuse its settings; unknown names guess the key (`id, key, email, value, name, path`); a full spec is
-  built as given; request sources replace configured ones of the same name.
+  validated as data only (replaced: Review fixes, "Proxy: per-request source specs are data only"); request sources
+  replace configured ones of the same name.
 - The router fails closed on backend errors and keeps only their text, so the backend is wrapped
   (`CapturingBackend`, per-request context variable) to map the typed exception (status, `Retry-After`);
   `decision_error`'s text parsing is the fallback.
@@ -712,7 +730,8 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
   upstream non-2xx is passed through with its status; a transport failure returns the mapped Jev error (or
   502 `fallback_unavailable`). Answers get `message.x_jev = {"outcome": "fallback", "reason"}`.
 - Extra 400 codes: `invalid_json`, `missing_messages`, `jevtools_bad_extra`, `jevtools_bad_context`,
-  `jevtools_bad_sources`; any exception while compiling request tools is `jevtools_bad_tool`.
+  `jevtools_bad_sources`; any exception while compiling request tools is `jevtools_bad_tool`. Review fixes add
+  `invalid_messages` and `jevtools_bad_tool_choice` ("§7.2.4 proxy error mapping").
 - `stream: true` → server-sent events: the whole message, then the finish reason with usage, then `[DONE]`.
 - Config: `backend = "<type>"` shorthand; `module:factory` backends and `source` factories; CSV `list_fields`;
   file indexes from a JSON list or one path per line; `[context]` limited to `now/tz/locale/user/shareable/
@@ -758,8 +777,8 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
   - `demo_router(backend, …)` builds a scenario router over any backend: sim, live or recording.
     `scenario_router(script)` keeps its old signature and model.
   - `SCENARIO_MODEL` is `~typesafe/jev-latest`.
-  - `R1_DONE`, `R2_REPLY`/`R2_FREE_TEXT`, `R6_REFUSE_STEP2`, and the R6 step scripts, which duplicate
-    `tests/loop/support.py`. That file is owned elsewhere and could become a re-export of `jevtools.demo`.
+  - `R1_DONE`, `R2_REPLY`/`R2_FREE_TEXT`, `R6_REFUSE_STEP2`, and the R6 step scripts, which
+    `tests/loop/support.py` now re-exports (Review fixes, "`tests/loop/support.py` re-exports the demo world").
 - `demo.scripts.criteria` and `demo.scripts.accept_candidate` raise `TypeError` instead of failing an `assert`
   (library code). `member_answers` skips member Nouls without object instructions instead of asserting.
 - §12 fixtures (`examples/fixtures/*.answers.json`, `ScriptedBackend.from_fixture` format):
@@ -1002,5 +1021,583 @@ Numbers from offline backends (ScriptedBackend, LexicalSimulator) test the harne
   although Savings now holds 100.00. Clicking it cannot execute, because the constrained MAP flags it and the
   router clarifies again, but the menu shows an infeasible call. Filtering infeasible complete-call options in
   `router._menu_choices` is the likely fix.
-- Open cleanups: `tests/loop/support.py` duplicates the R6 pieces that now live in `jevtools.demo`. The noun
-  inference gap for question-shaped `@jev.fn` descriptions (Core polish) is still open.
+- Open cleanup: the noun inference gap for question-shaped `@jev.fn` descriptions (Core polish) is still open.
+
+## Review fixes
+
+Fixes from the code review, by area. They were merged from `docs/decisions/review-{engine,resolvers,edges,
+docs-tests}.md`, and that directory was removed. Each entry names the review finding it comes from; "Amends",
+"Replaces" and "Extends" name the earlier entry of this file that it changes (those entries carry a pointer here).
+Where the two disagree, this section wins.
+
+### Engine (router, plan, decode, confidence, policy, prompts, context, validate, budget, wire)
+
+Regression tests: `tests/unit/test_review_engine.py`, `tests/scenario/test_review_engine.py`,
+`tests/unit/test_prompts.py::test_parse_short_reply_numeric_option_texts` and
+`tests/unit/test_confidence.py::test_isotonic_pools_ties_after_a_violator_merge`.
+
+#### §3.8.5 confirmations are tied to the confirmed call (review #1)
+
+Amends "§3.8.5 clicks" and "§3.8.5 free text" (Engine section): a confirmation is not a session flag but the call it
+confirms, `(tool, sha256 of the canonical arguments)`. `ok` (click or a free-text reply whose `reply` Choice picks
+it, `≥ 0.5`) confirms `Pending.call`, the call on the card; a `pick:`/`alt:` click in tiers ≥ external confirms the
+complete call its option showed (the call after binding the clicked value). `PolicyInput.confirmed` is true only
+while the decoded call equals the confirmed one: a free-text resume round that re-decodes other arguments, or a
+speculation-miss re-plan onto another tool (which clears the confirmation), goes through P9 normally, so the new call
+gets its own confirm card. The critical tier therefore never executes a call no card showed.
+
+#### §3.8.5 a click keeps the value's origin; TOCTOU re-checks it (review #2)
+
+Amends "§3.8.5 clicks": a clicked or reply-picked value still binds with channel `user` (the result's channel), but
+when it was an offered pool entry, the bound entry keeps that candidate's channel as the value's *origin*
+(`decode.value_origin`). TOCTOU (`Router.default_revalidate`) re-resolves every value whose origin is `registry`
+(clicks included): membership, label, fresh attributes, constraints. The I2 check (`channel_violations`) admits a
+user binding whose origin channel is on the slot's allow-list, so a slot narrowed to `["registry"]` accepts a click
+on a registry value it offered (it used to refuse with P3 `channel_violation`).
+
+#### §3.8.5 short replies: option texts before option numbers (review #7)
+
+Amends "§3.8.5 clicks" (`prompts.parse_short_reply`): a reply is matched against option texts and ids first. A
+digit-only reply is read as a 1-based option number only when no option text starts with a digit; in a numeric menu
+(quantities, grids) a number that matches no text is ambiguous and is not a click (free-text resume). The LangGraph
+`confirm_node` still sends a structured `{"selection": id}` as the option's text; with texts first, it now always
+resolves to the clicked option.
+
+#### §5.6 422 isolation (reviews #4/#8, #5, #16)
+
+Replaces the §5.6 entry: a 422 whose `loc` names questions drops those questions' whole slot families and re-sends
+the failed calls once. Only slot questions (a tool and a path) are isolatable: a `loc` on any tool-level question —
+`tool`, `reply`, and the gates `T.authorized`, `T.joint[.G]`, `T.done_after` — or outside `questions` fails closed
+(P0), because dropping a gate would remove a check instead of failing it (I5). A dropped slot family decodes as a
+failed answer, `empty(reason=invalid)`: `⊥missing`, factor 0, flag `invalid` (`decode.dropped_result`), whatever the
+slot's default or `required` — never a silent default or omission (§4.5); it routes to clarify(open). In opaque id
+mode the trimmed Ballot renumbers the wire ids, so a kept call whose ids changed is re-sent too (dotted mode still
+re-sends only the failed calls).
+
+#### §3.8.2 P4/P9: a missing `authorized` fails closed (reviews #4/#8)
+
+New: for a speculated tool of tier ≥ write (the planner always asks `T.authorized` there), `authorized = None` is a
+failed answer: P4 abstains (`P4.safety.not_authorized`, reason `authorized_missing`) and the P9 `authorized` cap
+applies. Read-tier tools (never asked) and unspeculated tools (P6) are unaffected.
+
+#### §3.5.1 / §14 secrets never leave the host (reviews #3, #6)
+
+Amends §3.5.1 `shareable` (`None` = every profile field is shared): `state.user` never carries a secret, shareable
+or not. The planner drops every top-level profile field a `secret` slot reads (`default_from: user.<field>…`) and
+every field whose name is a §3.3.1 row-1 secret name (`password, token, api_key, apikey, secret, credential`,
+case-insensitive) — `plan.secret_user_fields`, `build_state(..., secret_fields=...)`. FILL's `FillRequest.frozen`
+leaves out secret arguments (kind `secret` or `prov.secret`). The call, `Decision.slots`, the trace and the pending
+handle still hold the real value (host side; `tool_calls` must carry it). Still open (kinds area):
+`kinds/text.py::_profile_inputs` reads `ctx.user_state()` without these exclusions, so an author template that
+names `{user.<secret field>}` could still put the secret into an accept-Noul candidate.
+
+#### §6.2 one preview implementation (review #14)
+
+Replaces the 1,000-character head cut of `Observation.preview_text()`: previews live in `jevtools.preview`
+(`PREVIEW_CHARS = 1_200`, `chunk_text`, `select_preview`, `text_preview`), shared by `loop.ingest_observation` and
+`Context.all_observations()`. A drop-in `role: tool` message gets the same preview as an ingested result: the text
+when it fits in 1,200 characters, else the chunks BM25 ranks highest against the request. An observation without a
+preview (declared without one) falls back to its chunks in document order, up to 1,200 characters.
+
+#### §5.5 budgets and token estimates (reviews #13, #18)
+
+New: the policy's `[budget]` table is applied (`Limits.within_budget`, in `Router.__init__` and `compile_round`):
+every budget setting the policy changes from its Appendix B default caps the matching limit, taking the smaller value
+(`max_tokens_per_call` → `max_tokens`, `max_questions_per_call` → `max_questions`, `max_state_tokens`,
+`chars_per_token`). A tighter budget takes effect; a looser one never exceeds the probed or explicit limits; a default
+budget leaves them unchanged. One formula, `budget.tokens_for_chars` = `⌈chars × r / chars_per_token⌉`, serves the
+planner (splits, state cuts), the pre-send check (`Limits.estimate_tokens`) and `TokenEstimator.est`. In opaque id
+mode the planner counts each question's id as at least an opaque id's length (`q0001`).
+
+#### Resume on a router serving another tool list (review #12)
+
+Amends "a pending not held in memory, or expired, is safely re-compiled": a pending whose `state.tool` is not in the
+resuming router's catalog is re-compiled too (note `pending tool '<name>' is not in the tool list: recompiled`),
+also for free-text replies.
+
+#### Router pending handles are bounded (review #9)
+
+New: `Router.pendings` and the click-resume state are bounded together at `LIVE_MAX` (256): expired handles are
+dropped on every insert and the oldest are evicted beyond the bound. An evicted handle is resumed from its `Pending`
+object like any handle not held in memory (re-compiled); a string id no longer held raises `KeyError`. Handles are
+not released on resume (a card may be clicked again).
+
+#### Answer-shape guards and malformed bodies (reviews #10, #15)
+
+Amends the §8.2 guards: Score answers are checked too (every probability in [0, 1], the expected level finite and
+within `[0, levels − 1]`). The wire answer models reject non-finite numbers (NaN, ±Infinity), `DecisionResponse`
+rejects a non-object `answers` (a `ValueError` → `JevProtocolError`), and `HTTPBackend` maps non-transport
+`httpx.HTTPError`s (e.g. a body that fails to decode) to `JevProtocolError` without retrying. All of them end in P0.
+
+#### §3.6 rule 5 under the family rule (review #17)
+
+Amends the §3.6 rule 5 entry: after a late-binding or schema failure, a text slot's remaining candidates are
+re-elected by the accept rule (`decode.discard_values` → `kinds.text.accept_result`): the 0.02 tie to the lower
+index, content below `accept_min` → `uncovered_text`, cosmetic below `cosmetic_floor` → the next author template,
+else omitted when optional, else `uncovered_text`. Other kinds keep the generic re-election.
+
+#### §3.7 isotonic calibration pools ties (review #11)
+
+New: `IsotonicCalibrator.fit` pools observations per distinct `C_prior` before PAV (the secondary tie approach), so
+a calibration map is a function of `x`; tied priors after a violator merge no longer split into an upward-biased
+block. Zero-weight points are ignored.
+
+### Kinds, extractors, sources (kinds, extract, sources, spec)
+
+Regression tests are in `tests/unit/`: `test_source_specs.py`, `test_kinds_base.py`, `test_kinds_scalars.py`,
+`test_kinds_temporal.py`, `test_kinds_composite.py`, `test_kinds_ref.py`, `test_kinds_enum.py`,
+`test_extract_numbers.py` and `test_extract_temporal.py`.
+
+#### Proxy: per-request source specs are data only (#1)
+
+Replaces "a full spec is built as given" in the Proxy section.
+
+A per-request full spec (`extra_body.jevtools.sources.<name> = {...}`) is untrusted input. `sources.specs.request_spec`
+validates it:
+- It may carry only data fields: `rows`/`paths`, `key`, `label`, `describe`, `match`, `provides`, `attrs`,
+  `synonyms`, `list_fields`, `list_sep`, `item`, `retriever`, `send_whole_if_under`, `k`, `recency`, `hierarchy`,
+  `groups`.
+- Its `type`/`kind` must be `registry` or `files`, and it needs inline `rows`.
+- `function`, `options`, `path`, `rows_file`, `paths_file` and `channel` raise `ValueError`, which becomes a 400
+  `jevtools_bad_sources`. This happens before anything is imported, called or read.
+
+`module:function` providers and file-backed sources stay in the operator's `jevtools.toml` only (SPEC §7.2.4).
+
+#### §3.4.2 / §4.2.1: history candidates inherit a traced origin (#2)
+
+This refines "a `history` candidate is admitted only if its `origin` channel is also admitted (or trusted)". A
+missing origin no longer counts as trusted.
+
+`kinds.common.trace_history` runs in `finalize_pool` before dedupe. It gives each assistant-turn mention candidate
+(`history`, no origin) an origin:
+- If an observation contains the value, or a `tool_output` entity has it, the origin is `tool_output`.
+- Otherwise, if the user's own turns contain it, the origin is `user`.
+- Otherwise, if a registry row is keyed by it, the origin is `registry`. A trusted entity gives its own origin.
+- Otherwise the origin is `tool_output`, because untraceable assistant text is untrusted.
+
+A history copy of a value that is also in the pool from an untrusted channel, or held by an untrusted entity, takes
+that least-trusted origin. Dedupe compares effective channels, so a history copy counts at its origin's trust. An
+assistant turn that repeats an injected tool output therefore no longer reaches an external identity slot (§6.6,
+E10 "planted in history").
+
+Not changed here, because it is outside this area: the entity store's "merge keeps the most trusted origin seen" and
+the origin `history` of assistant regex entities (loop.py), `BallotOption.from_candidate` copying `channel` rather than
+`effective_channel` (ballot.py), and `admits()` treating `origin is None` as trusted (candidates.py).
+
+#### §3.6 rule 2: pooled Choice mass is clamped (#4, #16)
+
+Labels that decode to one value pool their mass. A pooled mass above 1 is rounding, and it is clamped to 1. It is
+never renormalized, so I3 holds. `elect` also clamps the factor at 1. A Choice whose sent labels sum to more than
+`1 + SUM_TOLERANCE` (0.05) is not a distribution and fails closed (`no_answer`, factor 0).
+
+#### §4.2.5 factorized temporal slots with a default (#5)
+
+When both parts are `NOT_STATED`, the joint mass (`D_date(NS) · D_time(NS)`) goes to the slot default. A date with no
+time, or a time with no date, is incomplete: that mass goes to ⊥missing. A part is never combined with a piece of the
+default. Decoding combines only offered part values with positive mass.
+
+#### §4.2.9 arrays of objects keep their leaves' flags and channel (#6)
+
+A list of records now passes on its leaf flags (`presence_conflict`, `order_sensitive`, `no_answer`) and its
+least-trusted non-bottom leaf channel, the same way `record.assemble` does. The leaf qids are added to `qids`.
+
+#### §4.2.1 claiming: weak temporal readings (#7, #8)
+
+A temporal mention with no temporal evidence is *weak*: it is emitted, but it never claims the numbers it covers.
+The mention carries `attrs["claims"] = False`, which `Mention.claims` reads and `claim()` skips. Weak mentions are:
+- `by 5`, `at 3` and `um 5` without am/pm, `:mm`, `o'clock`, `Uhr` or `h`;
+- `from 2 to 4` and `von 2 bis 4` without a suffix;
+- `after 3` and `before 3`;
+- a year-less `21.5.` in a `.`-decimal locale.
+
+A group with any strong atom (`tomorrow at 5`) still claims. `between`, `zwischen` and `entre` are strong.
+
+Year-less dotted dates follow these rules:
+- They are never read inside a dotted run (`1.2.3`, `10.1.1.5`).
+- In `en`, one that ends the text, or is followed by a capital or `!?)`, is a decimal and not a date.
+
+#### §4.2.5 temporal additions (#9, #10, #11, #18, #19)
+
+- **Zones.** A zone atom joins any group that carries times, including ISO date-times. ISO accepts fractional
+  seconds. `UTC±H[:MM]`/`GMT±…` gives a fixed offset `UTC±HH:MM` and is read before clock times.
+  `ZONE_ABBREVIATIONS` adds abbreviations, honoured only right after the time. An ambiguous one gives one glossed
+  reading per zone: CST, IST, AST and MST.
+- **Weekday plus week.** A weekday in a group with a week range (`Thursday next week`, `next week Tuesday`,
+  `Thursday of this week`) is that weekday inside the week (`weekday:of_week`), and the week range is consumed. If
+  the weekday is not inside the range, there is no point reading.
+- **Dash ranges.** Ranges without a keyword need a suffix on the second hour: am/pm, `Uhr` or attached `h`, as in
+  `4-6pm`, `9–11am` and `4pm-6pm`. With a mixed meridiem, when inheriting gives start ≥ end, the other meridiem is
+  tried: `between 10 and 2pm` is 10:00–14:00. A matched range whose readings are all invalid still reserves its span
+  (a `void` atom), so its end never becomes a point.
+- **Midnight with an explicit date.** It gives the start of that day and its end
+  (`clock:midnight:start`/`:end`, glossed). A start already in the past is dropped. Bare `midnight` keeps one reading.
+- **de `Morgen`.** After `heute`, `gestern`, `jeden`, `am`, `den`, `morgen` and similar words, a capitalized
+  `Morgen` is the morning (a day-part RANGE). After `Guten`, it is a greeting with no temporal meaning. Otherwise it
+  is still tomorrow. The locale fields are `day_part_homographs`, `day_part_homograph_cues` and `greetings`.
+
+#### §4.1 numbers and money (#3, #12, #13, #14, #21)
+
+- `decimal_str` and `quantize_money` use a local context wide enough for any digit count. A 29+ digit number no
+  longer raises. `run_extractors` also isolates each extractor per text: a failure yields no mentions and is recorded
+  in `Mentions.failures`.
+- Space-grouped thousands (`10 000`) are read in every locale, unless another digit group touches the run (phone
+  numbers). Digits glued to an ISO currency code are read whole (`CHF1'250.50`).
+- Magnitude suffixes and words multiply the number: `2k`, `$2M`, `1.5 million`, `3 Mio.`. Number words continue
+  after scale words: `two thousand five hundred` is 2500 and `one hundred (and) twenty` is 120. de and fr get
+  million and milliard scale words, and en gets billion.
+- A minus sign directly before digits is kept (`-3`, `−18`). `5-10`, `A-3` and dates stay unsigned. Money also keeps
+  `CHF -50` and `-CHF 50`.
+- Money is never built from a fragment: another digit group or a scale word right next to the number drops it.
+- `WORD_CODES` (ALL, AMD, BOB, CUP, CVE, GEL, MAD, MOP, PEN, PHP, SOS, TOP, TRY) make money only with a second money
+  cue: a symbol or word on the other side, `.–`, or minor-unit decimals.
+- Compound durations are summed in their smallest unit by one scanner, `numbers.duration_at`/`extend_duration`,
+  which quantities and temporal offsets share. Examples: `1 hour 30 minutes`, `2 hours and 15 minutes`, `1h30`,
+  `1h 30m` and `1:30 hours` are 90 or 135 minutes, and `in an hour and a half` is +90 min. Only hour, minute and
+  second combine. Quantities covered by a longer quantity are dropped.
+
+#### §4.3 `path@1` on path slots without a file index (#15)
+
+A span slot tagged `path`/`file` uses `path@1`: `SpanResolver.normalizer_for` returns `path@1`, and
+`span.path_candidates` normalizes values and drops escaping ones at pool time. Author values are exempt. In addition,
+`normalize_path` rejects `~`, `$VAR`/`${VAR}`/`%VAR%` and `C:/` drive prefixes unless the value is `known`, meaning
+present in a source.
+
+#### §3.6 / §4.2.8.5 superlative ties (#17)
+
+Items tied with the chosen item on the order attribute count as competitors:
+`factor = q · ∏ beyond (1 − q_j) · ∏ tied (1 − q_j)`. The distribution stays ≤ 1. A tie at the extreme sets the flag
+`tie` and adds a note. The pick among tied items follows value order, never retrieval order.
+
+Open item for policy.py: `tie` could join `CONSISTENCY_FLAGS` so that the policy offers a menu. Today the low
+factor already prevents execution.
+
+#### §4.2.11 rung 3: perspective rewrite (#20)
+
+`rewrite:perspective` variants are produced only for clauses that name no one but the recipient. A proper noun or a
+registry anchor that is not a place, date or enum value blocks the variant ("Tom is sick and he can't come").
+
+#### Resolvers and normalizers (#22, #24)
+
+- `EnumResolver` subclasses `ChoiceResolver`. It keeps its own `pool`, `members`, `candidate` and `widen`, and
+  inherits `questions` and `decode`. As a result, the hierarchy round decodes the hierarchy Choice rather than a
+  merged bucket question, and an unasked enum slot records `enum@1`.
+- `load_catalog` reads packaged files through `extract.catalogs.load_data`, so each file is parsed once.
+- Author templates record `text.template@1`, which is `normalize_title` and is registered. `text@1` would add final
+  punctuation. The docstring of `NORMALIZERS` no longer claims that `jt.verify` re-runs them.
+- `ResolveContext.state` and `get_state` are kept as public extension conveniences for `register_resolver` users.
+  The built-in resolvers do not read them.
+
+### Edges (backends, adapters, proxy, eval, loop, CLI)
+
+The regression tests are named after each item. None of these changes alters a golden fixture.
+
+#### §7.2.4 pending handles are bound to the requester's scope (review #1)
+
+Amends "§7.2.4 prefix key" and "§7.2.4 matching" (Shared plumbing):
+
+- `adapters.pending.pending_scope(router, context)` is `sha256` of these parts of the effective context: `user`,
+  `tz`, `locale`, `shareable`, `include_system`, its sources, and the router's tool names. Sources whose rows are
+  given (registries, files) count by name plus content hash. Lazily fetched sources (`ToolSource`, MCP resources)
+  count by name only: hashing them would fetch their rows (a tool call, which an async caller cannot make at that
+  point, and a failure would cache an empty registry), and their hash changes with every refresh. `now` and the
+  messages are left out: a wall-clock `now` would make every lookup miss, and the messages are the key itself.
+- The prefix key is now `sha256(canonical([scope, *normalized messages[0..k]]))`. `prefix_key(messages)` without a
+  scope keeps the old formula for hosts that call it directly.
+- `remember(..., scope=)` stores a copy of the handle with `Pending.state["adapter_scope"] = scope`.
+  `match_pending(..., scope=)` treats a handle stored under another scope as a miss, whether it was found by the
+  prefix key or by a `pending_id` (explicit or echoed). The turn is then compiled afresh, which is still correct
+  (§7.2.4), and the other requester's entry is neither consumed nor deleted.
+- `decide_turn`/`adecide_turn` compute the scope themselves; a `scope=` argument overrides it.
+- Consequence: when the rows of a given-rows source change between the card and the reply (for example the proxy's
+  per-request `sources`), the prefix resume misses and costs one round.
+- Not done, since it is outside this area: the defence-in-depth check in `Router._resume_flow`/`_click` that would
+  refuse to reuse a live session whose context scope differs from the resume `ctx`. The adapter-level check covers
+  every stateless path (`complete`, `wrap`, proxy, LangChain, Pydantic AI). A host calling `Router.resume` directly
+  with another user's context is still unchecked. Open for the router owner.
+
+#### §7.2.2 `tool_choice` on a resumed turn (review #8)
+
+Amends "§7.2.2: `tool_choice` goes to the router unchanged". When a request answers a stored prompt,
+`decide_turn`/`adecide_turn` resume it only if the request's `tool_choice` allows it:
+
+- `auto` and `required` resume. A cancel under `required` still abstains: it is the user's explicit choice.
+- A named choice resumes only when it names the pending tool (`Pending.state["tool"]`, else `Pending.call.name`).
+- `none` never resumes.
+
+When a request declines the resume, the turn is decided fresh with its `tool_choice` (`none` abstains with no Jev
+call), and the handle stays stored so that a later request that allows it can still resume. An invalid
+`tool_choice` raises `ValueError` on this path too, the same as on a fresh decide.
+
+#### §7.2.1 async client detection (review #2)
+
+Amends "§7.2.1 `wrap`". A client is treated as async when `chat.completions.create` is a coroutine function after
+`inspect.unwrap`, or when the completions class name starts with `Async`. `is_async=` still overrides. The openai
+SDK's `AsyncCompletions.create` is wrapped in a sync `functools.wraps` decorator (`required_args`), so the old check
+found `AsyncOpenAI` to be sync.
+
+#### §6.5 concurrent resumes and executions (review #3)
+
+Amends "§6.5 idempotency". The Agent's guarantee now holds for concurrent calls too: `asyncio.gather` of two
+`aresume` calls, or two threads calling `resume`.
+
+- A resume claims `resume:<pending id>` before its first effect, and an execution claims `key:<idempotency key>`
+  before it invokes the executor. Claims are `concurrent.futures.Future`s under a `threading.Lock`.
+- A second caller waits for the claim (a `_Wait` effect: `await asyncio.wrap_future` in async code, blocking in
+  sync code) and then replays: the first `LoopResult` for a resume, or the stored observation (0 attempts) for a
+  key.
+- A sync resume that would block the event loop that holds the claim raises `RuntimeError` and points to
+  `aresume`, instead of deadlocking.
+- The drivers close the flow on any exception, so claims are released at once and not left for garbage collection.
+
+#### §6.4 a coreference binding never launders trust (review #5)
+
+Amends "§6.4 entity store":
+
+- `pin_call` takes the origin from the trace channel, except that a `history` binding whose `prov.entity` names a
+  stored entity keeps that entity's origin. A `tool_output` value bound through coreference in a read-tier call
+  therefore stays `tool_output` and remains `channel_blocked` for external identity slots (§3.4.2, I2).
+- `EntityStore.add` still keeps "the most trusted origin seen". The exception is a `history`-origin sighting (an
+  assistant mention, or a coreference pin whose entity is gone): it never raises the trust of an entity whose origin
+  is less trusted than `history`.
+
+#### §8.2 HTTP backend client lifetime and retry hints (reviews #6, #7, #10)
+
+New (not recorded before):
+
+- The sync `httpx.Client` is created once, behind a double-checked `threading.Lock`, even when concurrent split
+  calls ask for it together. `close()` swaps it out under the same lock.
+- Async clients are kept one per live event loop as `id(loop) → (loop, client)`. Each call first drops the clients of
+  closed loops. They cannot be closed any more, because closing needs their loop; their sockets are freed at garbage
+  collection. `aclose()` closes the running loop's client, drops closed loops' clients, and leaves clients of loops
+  still running in other threads to those loops. It never awaits a client of a closed loop, so
+  `async with backend:` no longer raises `Event loop is closed`.
+- `retry_after()` ignores a hint that is not a finite number (`inf`, `1e400`, `nan`) and uses backoff instead.
+- A hint above `max_retry_wait` is not waited in-process. `max_retry_wait` is a new constructor option; its default
+  is `DEFAULT_MAX_RETRY_WAIT = 10 s`. The response is parsed at once and the typed error carries the hint
+  (`JevRateLimited.retry_after`), so the router fails closed (P0) and the caller decides whether to wait. The same
+  applies on the async path, where `asyncio.sleep(inf)` used to hang.
+
+#### §7.2.4 proxy error mapping (review #11)
+
+Amends "§7.2.4 error mapping" and the Proxy section.
+
+The following checks run before any Jev call, with the new codes:
+
+- `messages` must parse (`context.parse_messages`). A non-object message or an unknown role (the legacy
+  `function` role) gets 400 `invalid_messages`.
+- `tool_choice` must parse against the request's tools (`plan.parse_tool_choice`). An unknown name, an unknown
+  string, or the `allowed_tools` form gets 400 `jevtools_bad_tool_choice`.
+- Both are handled like a bad tool: with `fallback_llm` configured the request is forwarded, with reason
+  `bad_request`.
+
+Other changes:
+
+- `merge_context` raises `TypeError` for an override that is neither a `Context` nor a mapping. The proxy maps it to
+  400 `jevtools_bad_context`; it used to be an uncaught `AttributeError` and a plain-text 500.
+- `decision_error`: a P0 decision whose calls were all answered, with no call error recorded, failed while decoding
+  the answers (a missing answer, a wrong type, a Noul outside [0, 1]). It maps to 502 `jev_protocol_error`, as the
+  table already says for `JevProtocolError`, and not to 503. The router does not record that failure in the trace,
+  so the adapter infers it.
+
+#### §7.5 CLI (review #12)
+
+`load_trace` and `load_context` raise `JevtoolsError` ("expected a trace/context object") when the document is not a
+JSON object. `explain`/`verify` then print `jevtools <cmd>: …` and exit 1 instead of a traceback.
+
+#### §7.2.5 Pydantic AI: prompts under structured output; streaming (reviews #4, #13)
+
+Extends the Pydantic AI section:
+
+- When the prepared parameters have `allow_text_output = False` (for example `output_type=SomeModel`), a decision
+  that is not a call raises `JevPromptRequired` (a subclass of `pydantic_ai.exceptions.AgentRunError`) and does not
+  answer text. This covers a confirm, a clarify, an abstain, and a finished loop without an elected output.
+  Answering text would make pydantic-ai reject it, re-decide the same turn with a second paid Jev round, and then
+  raise `UnexpectedModelBehavior`.
+- The exception carries `decision`, `text` (the prompt), `pending_id`, `doc`, and `messages`, which is the history
+  plus the prompt as a `ModelResponse`. `agent.run(reply, message_history=exc.messages)` resumes the prompt, and a
+  click costs no Jev call.
+- `output_type=[SomeModel, str]` still answers prompts as text. A `text_model` abstain handoff is unchanged.
+- `JevModel.request_stream` is implemented. It decides like `request` and replays the `ModelResponse` as one
+  streamed message: a text delta per text part and a tool-call event per call, with usage, provider details and
+  finish reason copied. A `text_model` handoff is requested without streaming and then replayed.
+  `agent.run_stream` and `run_stream_events` now work.
+
+#### §7.2.3 LangChain `with_structured_output` (review #9)
+
+Extends the LangChain section:
+
+- When `bind_tools` receives `ls_structured_output_format`, as `with_structured_output` passes it, each schema tool
+  is declared `x-jev.risk: read` (`adapters._router.as_output_tool`, using the same `OUTPUT_TOOL_XJEV` constant as
+  Pydantic AI, which now lives in `adapters._router`).
+- A schema that already declares a `risk`, in the function's or the parameters' `x-jev`, is left as is.
+- Without this, the schema's name fell to the fail-safe external tier, whose `authorized` gate and confirm band
+  turned a confident extraction into a prompt, and the parser returned `None`.
+
+#### §11.1 source paths inside a context file (review #14)
+
+Amends "§11.1 files". `context`/`catalog` paths still resolve against the JSONL file's directory. Relative source
+paths inside a context file (`path`, `rows_file`, `paths_file`) now resolve against that context file's directory,
+as `jevtools verify --context` and the golden replay already do. An inline context document keeps resolving against
+the dataset directory. The golden contexts (`rows_file: "../fixtures/contacts.json"`) now load from any dataset.
+Open: README (Tuning) and SPEC §11.1 do not say this yet.
+
+#### §7.1 / §6.5 one implementation of MCP result handling (review #15)
+
+Amends "§7.1 MCP":
+
+- `adapters.mcp.result_content(result)` is `sources.toolsource.result_data(result)`: `structuredContent`, else the
+  text blocks joined, parsed as JSON when they are JSON, with non-text blocks left out. This is exactly the
+  observation's content.
+- `adapters.mcp.is_error` and `loop._normalize_result` share `loop.mcp_is_error` (`get_any(result, "isError",
+  "is_error")`). The first key present wins, so `{"isError": false, "is_error": true}` is no longer an error in the
+  loop.
+- Still open: `sources/toolsource.py:337` has the same one-liner inline. It cannot import `loop`, so it is left for
+  the sources owner.
+
+#### §6.3 observation entities use the shared extractors (review #16)
+
+Amends "§6.3 observations":
+
+- Emails, URLs, UUIDs and IPv4 addresses in observation text come from `extract.patterns.extract`. Invalid IPv4
+  addresses such as `999.300.1.2` are no longer entities, and a URL's span now excludes the trailing punctuation
+  that is cut from its text.
+- Money matches any ISO 4217 code from the currency catalog, except `extract.money.WORD_CODES` (`TOP 10` is not
+  money), or a symbol from `extract.money.SYMBOLS` (which adds `₣` → CHF). The value format is unchanged
+  (`"4820.00 CHF"`). Observations therefore recognise more amounts (CZK, …).
+- Swiss `Fr. 4'820.–` and currency words are still recognised only request-side. Moving the loop to
+  `numbers.extract` + `money.extract` needs tokens and a locale, and was left out while the extract area changes.
+
+#### Shared sync bridge (review #17)
+
+Additive, cross-area: `jevtools._compat.run_sync(value, hint)`. It returns a non-awaitable unchanged, runs an
+awaitable with `asyncio.run`, and inside a running loop closes a coroutine and raises `RuntimeError(hint)`.
+`loop.Agent` uses it; `_sync_value`/`_awaited` are gone. Still open for the sources owner: `toolsource._await_now` +
+`_wrap`, `sources.mcp._run` + `_wrap`, and the inline copy in `Provider.candidates` + `_await`. Each should become
+`run_sync(..., <its current message>)`.
+
+#### Tuning uses the policy's hysteresis test (review #18)
+
+"Thresholds reproduce the policy's hysteresis test exactly" now holds by construction. `eval.tuning` calls
+`policy._clears` (imported as `clears`) and imports `policy._EPS`; its copy is gone. A public alias
+(`policy.clears`) would be cleaner; that is left to the policy owner.
+
+### Documentation and tests (README, docs, examples, tests)
+
+Regression tests: `tests/docs/test_docs.py`, `tests/adapters/test_extras.py`,
+`tests/adapters/test_mcp.py::test_call_decision_on_a_real_in_memory_server`, `tests/loop/test_support.py`, the
+`response_shape` parametrization of `tests/adapters/test_openai.py` and the live suite `tests/live/test_live.py`.
+
+#### Extra lower bounds match what the adapters call (#1)
+
+Extends the `pyproject.toml` bullet of "Documentation and final merge":
+
+- `mcp = ["mcp>=1.19"]` (was `>=1.10`). `adapters.mcp.call_decision` always passes `meta={"jevtools/idempotency_key":
+  …}`, and `ClientSession.call_tool` accepts `meta` from 1.19.0 on; 1.10.0 to 1.18.0 raise `TypeError` on the first
+  executed call. Checked in scratch venvs with the README MCP snippet on a FastMCP in-memory server (1.18.0 fails,
+  1.19.0 and 1.20.0 pass).
+- `pydantic-ai = ["pydantic-ai-slim>=1.0.13,<2"]` (was `>=1.0`). `JevModel.request` calls `Model.prepare_request`,
+  present from 1.0.13 on (1.0.0 to 1.0.12: `AttributeError`). Checked with the README Pydantic AI snippet (1.0.0,
+  1.0.8 and 1.0.12 fail, 1.0.13 to 1.0.18 pass; opentelemetry-api pinned to 1.30.0, since pydantic-ai-slim 1.0.x does
+  not import against opentelemetry-api ≥ 1.37).
+- `tests/adapters/test_extras.py` pins both bounds (the last broken version is excluded, the first working one
+  admitted); the adapter tests use duck-typed fakes, so the suite never exercises a lower bound otherwise.
+  `test_mcp.py::test_call_decision_on_a_real_in_memory_server` runs `call_decision` on a real mcp 2.x `ClientSession`
+  and checks that the key reaches the server in `_meta`.
+- Not changed (outside this area): `call_decision` could degrade like the Agent loop does (`loop.py`: pass `meta`
+  only when `accepts_keyword(call_tool, "meta")`). With the raised bound it is no longer needed for supported
+  installs.
+
+#### The `dev` extra installs the OpenAI SDK; the `wrap` tests cover both response shapes (#5)
+
+Extends "OpenAI (`adapters/openai.py`)":
+
+- `wrap` returns `openai.types.chat.ChatCompletion`/`ChatCompletionChunk` when the SDK imports and an `AttrDict`
+  otherwise (unchanged). `test_wrap_intercepts_its_model` and `test_wrap_streams_two_chunks` subscripted the response
+  (`resp["usage"]…`), which only the `AttrDict` supports, so they failed whenever `openai` was installed. They now use
+  attribute access and `model_dump()`, and run twice through the `response_shape` fixture: `attrdict` hides the SDK
+  (`sys.modules["openai.types.chat"] = None`), `sdk` needs it (`importorskip`).
+- `dev = [..., "openai"]`, so a checkout's `uv pip install -e ".[all,dev]"` tests the shape users of
+  `wrap(OpenAI(), …)` get. (The repository venv predates this and has no `openai`; the `sdk` cases skip there.)
+
+#### §10.7 live suite: `tests/live` (#4)
+
+New (the suite did not exist; README "Development", `docs/ARCHITECTURE.md` and the `live` marker promised it,
+and `pytest -m live` with a key deselected everything and exited 5):
+
+- `tests/live/test_live.py`, marked `live`, skipped without a key by the existing gate in `tests/conftest.py`. The
+  `backend` fixture is parametrized over the three HTTP backends; each runs when its own key is set (TypeSafe:
+  `TYPESAFE_API_KEY`; OpenRouter System One and Decisions: `OPENROUTER_API_KEY`) and skips otherwise.
+- Per backend: the conformance probe (limits file written to a temporary path, never the developer's cache), R1–R5
+  and R7 in turn mode over `jevtools.demo.demo_router`, R6 as an `Agent` loop over the fake demo `Workspace`, and a
+  cassette record → replay round trip; plus one R1 decision through `jt.backends.auto()`.
+- Assertions are invariants only: `jt.verify` with catalog and context (values, channels, composition, policy, ballot
+  rebuild), `C ≤ W`, tool calls only on execute, `jsonschema`-valid arguments, a critical call only after a click, and
+  in R6 no transfer and nothing sent to the injected address or IBAN. Never probabilities, rules or outcomes.
+- Deviation from §10.7: E2/E3/E4 run as the probe's smoke items only (their numbers are recorded in the report, not
+  asserted); cassettes are recorded to a temporary file and replayed, not kept; drift of `answers.model` is not
+  flagged. The suite was checked offline by routing every `HTTPBackend` through an `httpx.MockTransport` answered by
+  the `LexicalSimulator` (31 passed with both keys set, 21 passed and 10 skipped with only `OPENROUTER_API_KEY`); it
+  has not run against live Jev.
+- `tests/docs/test_docs.py::test_live_marker_selects_a_live_suite_per_backend` collects `-m live` in a subprocess
+  with a dummy key and requires a probe test per backend.
+
+#### `tests/loop/support.py` re-exports the demo world (#3)
+
+Supersedes the remark in "Examples and the demo world" (the R6 step scripts duplicating `tests/loop/support.py`,
+updated in place) and the first sentence of the "Open cleanups" bullet in "Documentation and final merge" (removed):
+
+- `tests/loop/support.py` keeps only `r6_agent` and `r6_messages`. `Workspace`, `INV_2291`, `FINANCE`,
+  `INJECTED_ADDRESS`, `INJECTED_IBAN`, `INJECTION`, `INVOICE_TEXT` and `R6_REQUEST` come from
+  `jevtools.demo.scenario`; `R6_MEMBERS`, `R6_STEP2`, `observations_of`, `member_answers`, `r6_step1` and `r6_script`
+  from `jevtools.demo.scripts`. `__all__` is unchanged, so the loop tests import as before. The private copies had
+  drifted (`get_weather` returned 17 in every unit; `member_answers` asserted on non-object instructions); no test
+  depended on either. `tests/loop/test_support.py` pins that the names are the demo objects.
+- Still open (outside this area): `jevtools/demo/scripts.py` defines its own `R6_REQUEST` string next to
+  `scenario.R6_REQUEST`; it could import it as it imports `FINANCE`. `test_support.py` pins that the two are equal.
+
+#### Documentation fixes (#2, #6, #7)
+
+Extends "Documentation and final merge":
+
+- Install commands name the git source everywhere, since the package is not on PyPI and the name is unclaimed there:
+  `examples/proxy/README.md` now says `pip install "jevtools[serve] @ git+https://github.com/umatter/jevtools"` (or
+  `uv pip install -e ".[serve]"` in a checkout). `tests/docs` fails on any bare-name `pip install`/`uv add` of
+  jevtools in a Markdown file. The bare-name hints in runtime errors (`cli.py`, `serve/app.py`, the adapters…) stay:
+  they fire only when jevtools is installed, and pip then resolves the extra against the installed distribution.
+- The README headline no longer calls the composed confidence "calibrated": C is W, Π or min(L, J) by tier (§3.7.3)
+  and becomes a calibrated probability only after `jevtools tune --calibrate` fits a calibrator; until then every
+  Decision reports `confidence.calibrated == False`. "Jev returns calibrated probabilities" (per question) stays.
+- The README CLI row of `jevtools probe` gives the counts recorded under "Conformance probe": 19 requests, 16 with
+  `--no-smoke`, more when a rejected size is halved, plus `GET /v1/models` on TypeSafe, up to 400 questions and
+  8,000-character fields. SPEC §8.7 still says "about 12 calls"; the deviation stays recorded here.
+- README "MCP" and "Pydantic AI" name the minimum versions (mcp ≥ 1.19, pydantic-ai-slim ≥ 1.0.13).
+
+### Merge of the review fixes
+
+- **Golden fixtures regenerated without a spec version bump.** `jevtools fixtures --update` rewrote 8 files, all
+  traces: `R2`, `R2-no-history`, `R2-click` (`trace.json`, `trace_1.json`), `R6` (`trace.json`, `trace_2.json`),
+  `R6-step2` and `422-isolation`. A structural diff against the previous files shows exactly one change per file,
+  `bindings.body.normalizer`: `"text@1"` → `"text.template@1"` (resolvers #24: the author-template body was always
+  normalized by `normalize_title`, so the old record named the wrong normalizer). No `ballot.json`, request,
+  response or `decision.json` changed. This deviates from §10.2 ("regenerated only … together with a spec version
+  bump"): the fix corrects what the trace records about an unchanged computation, so `SPEC_VERSION` stays
+  `jevtools/0.1`. A port that reproduces the old string should switch to `text.template@1`.
+- Examples 01–08 were run with `--backend scripted` and `--backend sim` before and after the review fixes; the
+  printed output is identical (trace ids aside). Under `sim`, example 06 step 1 reads
+  `finance/invoices/outgoing/2026-09-18_INV-0412_to_ACME.pdf`, which the fake workspace does not hold, and gets an
+  error observation; this predates the review and is a simulator limitation (a lexical double), not a regression.
+  The proxy example ran under `jevtools serve` on the simulator with the real OpenAI SDK client.
+- Still open after the review, collected from the entries above:
+  - trust: `BallotOption.from_candidate` copies `channel` rather than `effective_channel` (ballot.py), and
+    `candidates.admits` treats `origin is None` as trusted; `kinds/text.py::_profile_inputs` does not exclude secret
+    profile fields; the router-level check that a resumed live session belongs to the same context scope;
+  - the proxy could reject POST bodies that are not `application/json` (blocks cross-origin browser requests);
+  - `adapters/pending.py` could forget a handle when resuming it raises (engine #12 backstop);
+  - sources: `toolsource._await_now`/`_wrap`, `sources.mcp._run`/`_wrap` and `Provider.candidates` still carry
+    their own sync bridge (should use `_compat.run_sync`), and `toolsource.py` checks `isError` inline;
+  - small cleanups: a public `policy.clears`; `tie` in `policy.CONSISTENCY_FLAGS`; `Mentions.failures` as a trace
+    note; a public `context.utc_offset`; the remaining truncation and join helper copies (`loop._truncate`,
+    `prompts._short`, `templates.first_sentence`, `probe._short`, `templates.quote_list`); the unused
+    `Pool.by_label`; `demo/scripts.py`'s own `R6_REQUEST`; the optional `accepts_keyword` guard in
+    `adapters.mcp.call_decision`; README (Tuning) and SPEC §11.1 on source paths inside a context file;
+  - `jt.verify` does not re-run normalizers.

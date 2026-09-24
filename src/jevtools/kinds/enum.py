@@ -15,12 +15,10 @@ This is the reference implementation of the :class:`~jevtools.kinds.base.Resolve
 
 from __future__ import annotations
 
-import json
 import re
 import zoneinfo
 from collections.abc import Iterable, Mapping, Sequence
 from functools import cache
-from importlib import resources
 
 from jevtools.ballot import BallotQuestion
 from jevtools.candidates import (
@@ -33,16 +31,13 @@ from jevtools.candidates import (
     display_value,
     value_key,
 )
+from jevtools.extract.catalogs import load_data
 from jevtools.kinds.base import (
     ResolveContext,
     SlotResult,
-    decode_choice,
-    probe_question,
     register_resolver,
-    resolve_default,
-    slot_question,
-    unasked_result,
 )
+from jevtools.kinds.common import ChoiceResolver
 from jevtools.kinds.widen import (
     BUCKET,
     HIERARCHY,
@@ -91,10 +86,9 @@ def load_catalog(name: str) -> tuple[Member, ...]:
         return CATALOG_DATA[name]
     if name == "iana_tz":
         return tuple(Member(value=tz) for tz in sorted(zoneinfo.available_timezones()))
-    path = resources.files("jevtools").joinpath("extract").joinpath("data").joinpath(f"{name}.json")
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
+        data = load_data(name)  # one parse per file, shared with the extractors (currencies, countries)
+    except LookupError:
         raise LookupError(f"catalog {name!r} is not available (no jevtools/extract/data/{name}.json)") from None
     return tuple(_member(m) for m in data)
 
@@ -125,11 +119,13 @@ def user_text(rc: ResolveContext) -> str:
     return "\n".join(turn.text for turn in rc.ctx.user_turns)
 
 
-class EnumResolver:
-    """Resolver for ``kind: enum`` (enum members and catalogs)."""
+class EnumResolver(ChoiceResolver):
+    """Resolver for ``kind: enum`` (enum members and catalogs): a :class:`ChoiceResolver` with its own pool (members
+    are ``author`` values, anchored by the user's words) and the coverage rounds of a catalog miss."""
 
     kind = "enum"
     normalizer = NORMALIZER
+    closed = True
 
     def members(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> tuple[list[Member], list[str]]:
         """The members to offer and notes: every member of a small enum, else the shortlist."""
@@ -147,13 +143,19 @@ class EnumResolver:
         note = f"shortlist {len(chosen)} of {len(all_members)} ({slot.catalog or 'enum'})"
         return chosen[:MAX_REAL_OPTIONS], [note]
 
-    def pool(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> Pool:
+    def candidates(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
+        return self._candidates(tool, slot, rc)[0]
+
+    def _candidates(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> tuple[list[Candidate], list[str]]:
         members, notes = self.members(tool, slot, rc)
         valid = [m for m in members if is_valid(m.value, slot.json_schema)]
         if len(valid) < len(members):
             notes.append(f"dropped {len(members) - len(valid)} schema-invalid member(s)")
         text = user_text(rc)
-        candidates = [self.candidate(slot, m, anchor=mention_of(m, text)) for m in valid]
+        return [self.candidate(slot, m, anchor=mention_of(m, text)) for m in valid], notes
+
+    def pool(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> Pool:
+        candidates, notes = self._candidates(tool, slot, rc)
         admitted, blocked = apply_allow_list(candidates, slot.channels)
         labelled = assign_labels(admitted, slot=slot.name, label_max=rc.limits.label_max)
         return Pool(
@@ -161,7 +163,7 @@ class EnumResolver:
             path=slot.path,
             kind=self.kind,
             candidates=canonical_order(labelled),
-            closed=True,
+            closed=self.closed,
             evidence_backed=any("anchor" in c.prov for c in candidates),
             blocked=blocked,
             notes=notes,
@@ -196,28 +198,14 @@ class EnumResolver:
             return hierarchy_stage(tool, slot, rc, rest, kind=self.kind, group_of=group_of)
         return pool, []
 
-    def questions(self, tool: ToolSpec, slot: SlotSpec, pool: Pool, rc: ResolveContext) -> list[BallotQuestion]:
-        default = resolve_default(tool, slot, rc.ctx)
-        if pool.candidates:
-            return [slot_question(tool, slot, pool.candidates, default)]
-        if default is not None and not default.omit:
-            return [probe_question(tool, slot, default)]
-        return []
-
     def decode(
         self, tool: ToolSpec, slot: SlotSpec, pool: Pool, answers: Mapping[str, Answer], rc: ResolveContext
     ) -> SlotResult:
+        """A bucket round decodes its buckets; otherwise the slot (or hierarchy) Choice, as every Choice kind:
+        the first ``slot``/``probe`` question, never a merged bucket or group question (§4.6)."""
         if is_bucket_stage(rc.slot_questions(tool, slot)):
-            return decode_buckets(tool, slot, answers, rc, NORMALIZER)
-        questions = rc.slot_questions(tool, slot) or self.questions(tool, slot, pool, rc)
-        if not questions:
-            return unasked_result(slot, resolve_default(tool, slot, rc.ctx))
-        question = questions[0]
-        attrs = {c.label: c.attrs for c in pool.candidates}
-        result = decode_choice(
-            slot, question, answers.get(question.qid), out_of_pool=rc.policy.shapes.out_of_pool, attrs=attrs
-        )
-        return result.with_(normalizer=NORMALIZER)
+            return decode_buckets(tool, slot, answers, rc, self.normalizer)
+        return super().decode(tool, slot, pool, answers, rc)
 
 
 def _region(candidate: Candidate) -> str | None:

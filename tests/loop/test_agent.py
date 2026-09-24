@@ -364,3 +364,90 @@ def test_a_pending_can_be_resumed_by_another_agent() -> None:
     later = Agent(router, ws.executors()).resume(first.pending, selection="ok")  # e.g. after a process restart
     assert later.outcome is Outcome.DONE and len(ws.sent) == 1
     assert later.notes == [f"resumed {first.pending.pending_id} without its paused run"]
+
+
+async def test_concurrent_aresumes_of_one_pending_execute_once() -> None:
+    """A double-clicked Confirm: the second resume waits for the first and replays it (review-edges #3)."""
+    sent: list[tuple[str, str | None]] = []
+
+    async def send_email(to: str, subject: str, body: str, idempotency_key: str | None = None) -> dict[str, Any]:
+        await asyncio.sleep(0.02)
+        sent.append((to, idempotency_key))
+        return {"status": "sent", "to": to}
+
+    router, _ = scenario_router({**scripts.R2, "*.done_after": 0.9}, context=scenario_context(history=True))
+    agent = Agent(router, {"send_email": send_email})
+    first = await agent.arun(scenario_messages(scripts.R2_REQUEST, history=True))
+    assert first.pending is not None
+    one, two = await asyncio.gather(agent.aresume(first.pending, selection="ok"),
+                                    agent.aresume(first.pending, selection="ok"))  # fmt: skip
+    assert len(sent) == 1 and one.outcome is two.outcome is Outcome.DONE
+    assert sum(f"replayed resume of {first.pending.pending_id}" in r.notes for r in (one, two)) == 1
+
+
+def test_concurrent_resumes_from_threads_execute_once() -> None:
+    import threading
+    import time
+
+    sent: list[str] = []
+
+    def send_email(to: str, subject: str, body: str) -> dict[str, Any]:
+        time.sleep(0.02)
+        sent.append(to)
+        return {"status": "sent", "to": to}
+
+    router, _ = scenario_router({**scripts.R2, "*.done_after": 0.9}, context=scenario_context(history=True))
+    agent = Agent(router, {"send_email": send_email})
+    first = agent.run(scenario_messages(scripts.R2_REQUEST, history=True))
+    assert first.pending is not None
+    pending = first.pending
+    results: list[Any] = []
+    threads = [threading.Thread(target=lambda: results.append(agent.resume(pending, selection="ok")))
+               for _ in range(2)]  # fmt: skip
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(sent) == 1 and [r.outcome for r in results] == [Outcome.DONE, Outcome.DONE]
+
+
+async def test_a_key_running_in_another_run_is_not_executed_again() -> None:
+    ws = Workspace()
+    router, _ = scenario_router(weather_script(done_after=0.9))
+    agent = Agent(router, ws.executors())
+    call = (await agent.arun(WEATHER)).executed[0].model_copy(update={"idempotency_key": "idem_shared"})
+    gate = asyncio.Event()
+    calls: list[str] = []
+
+    async def slow(c: ToolCall) -> dict[str, Any]:
+        calls.append(c.idempotency_key)
+        await gate.wait()
+        return {"city": "Zurich"}
+
+    agent.executors = slow
+    first = asyncio.ensure_future(agent.aexecute(call))
+    second = asyncio.ensure_future(agent.aexecute(call))
+    await asyncio.sleep(0.01)
+    gate.set()
+    a, b = await asyncio.gather(first, second)
+    assert calls == ["idem_shared"] and a is b
+
+
+def test_the_agent_uses_the_shared_sync_bridge() -> None:
+    """One implementation of "run an awaitable from sync code, refuse inside a running loop" (#17)."""
+    from jevtools import _compat, loop
+
+    assert loop.run_sync is _compat.run_sync
+
+    async def seven() -> int:
+        return 7
+
+    assert _compat.run_sync(5, "hint") == 5 and _compat.run_sync(seven(), "hint") == 7
+
+    async def inside() -> None:
+        pending = seven()
+        with pytest.raises(RuntimeError, match="use the async API"):
+            _compat.run_sync(pending, "use the async API")
+        assert pending.cr_frame is None  # closed, never left un-awaited
+
+    asyncio.run(inside())

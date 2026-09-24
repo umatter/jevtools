@@ -24,12 +24,12 @@ dependencies = [
 [project.optional-dependencies]
 serve = ["starlette", "uvicorn"]
 langchain = ["langchain-core>=0.3"]
-pydantic-ai = ["pydantic-ai-slim>=1.0,<2"]
-mcp = ["mcp>=1.10"]
+pydantic-ai = ["pydantic-ai-slim>=1.0.13,<2"]
+mcp = ["mcp>=1.19"]
 yaml = ["pyyaml"]
 jsonschema = ["jsonschema>=4"]
 all = ["jevtools[serve,langchain,pydantic-ai,mcp,yaml,jsonschema]"]
-dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+dev = ["pytest", "pytest-asyncio", "ruff", "mypy", "openai"]
 
 [project.scripts]
 jevtools = "jevtools.cli:main"

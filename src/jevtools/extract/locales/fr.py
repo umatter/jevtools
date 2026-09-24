@@ -48,7 +48,14 @@ FR = Locale(
         "cinquante": 50,
         "soixante": 60,
     },
-    scale_words={"cent": 100, "mille": 1000},
+    scale_words={
+        "cent": 100,
+        "mille": 1000,
+        "million": 10**6,
+        "millions": 10**6,
+        "milliard": 10**9,
+        "milliards": 10**9,
+    },
     fraction_words={"demi": "0.5", "demie": "0.5", "quart": "0.25"},
     weekdays={
         "lundi": 0,

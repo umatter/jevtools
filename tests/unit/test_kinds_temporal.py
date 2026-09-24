@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from jevtools.candidates import NONE_OF_THESE, NOT_STATED, Bottom
+from jevtools.context import Context
 from jevtools.kinds import temporal as temporal_kind
+from jevtools.spec.catalog import Catalog
 from tests.kinds_support import choice, custom, decode, resolve, scenario
+from tests.support import SCENARIO_NOW
 
 R5 = "Book a 45 min sync with Bob and Carol next Tuesday at 3pm"
 COMING, FOLLOWING = "Tue 2026-09-29 15:00 (Europe/Zurich)", "Tue 2026-10-06 15:00 (Europe/Zurich)"
@@ -139,3 +144,55 @@ def test_range_coupled_slots() -> None:
     end = decode(tool, tool.slot("end"), end_pool, answer, rc)
     assert start.value == "2026-09-25T14:00:00+02:00" and end.value == "2026-09-25T16:00:00+02:00"
     assert start.factor == end.factor == pytest.approx(0.9)
+
+
+# -- review regression: a factorized slot with a default ---------------------------------------------------------------
+
+_DEFAULTED = {
+    "start": {"type": "string", "format": "date-time", "default": "2026-10-01T09:00:00+02:00"},
+    "title": {"type": "string", "enum": ["sync", "review"]},
+}
+
+
+def _defaulted_factorized() -> tuple[Any, Any, Any, Any, Any, Any]:
+    tool, rc = custom("book_room", _DEFAULTED, "Book the room next Tuesday", required=["title"])
+    slot = tool.slot("start")
+    pool, (dq, tq) = resolve(tool, slot, rc)
+    assert pool.meta["mode"] == "factorized" and tq.labels == [NOT_STATED, NONE_OF_THESE]
+    return tool, rc, slot, pool, dq, tq
+
+
+def test_factorized_default_is_never_a_date_or_time_part() -> None:
+    tool, rc, slot, pool, dq, tq = _defaulted_factorized()
+    for date_probs, time_probs in (
+        ({"Tue 2026-09-29": 1.0}, {NONE_OF_THESE: 1.0}),
+        ({"Tue 2026-09-29": 0.9, NOT_STATED: 0.1}, {NOT_STATED: 0.95, NONE_OF_THESE: 0.05}),
+    ):
+        result = decode(tool, slot, pool, {dq.qid: choice(dq, date_probs), tq.qid: choice(tq, time_probs)}, rc)
+        assert result.shape in ("missing", "out_of_pool")  # a date without a time is incomplete: clarify
+
+
+def test_factorized_default_applies_when_both_parts_are_not_stated() -> None:
+    tool, rc, slot, pool, dq, tq = _defaulted_factorized()
+    answers = {dq.qid: choice(dq, {NOT_STATED: 0.97}), tq.qid: choice(tq, {NOT_STATED: 0.97})}
+    result = decode(tool, slot, pool, answers, rc)
+    assert (result.value, result.shape) == ("2026-10-01T09:00:00+02:00", "ok")
+    assert result.factor == pytest.approx(0.97 * 0.97)
+
+
+def test_factorized_default_end_to_end_fails_closed() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    catalog = Catalog.from_openai([{"type": "function", "function": {
+        "name": "book_room", "description": "Book a meeting room.",
+        "parameters": {"type": "object", "properties": _DEFAULTED, "required": ["title"]}}}])  # fmt: skip
+    script = {"tool": {"book_room": 0.97, "NO_TOOL": 0.03}, "book_room.authorized": 0.97,
+              "book_room.title": {"sync": 0.97, "NOT_STATED": 0.03},
+              "book_room.start.date": {"Tue 2026-09-29": 0.9, "NOT_STATED": 0.1},
+              "book_room.start.time": {"NOT_STATED": 0.95, "NONE_OF_THESE": 0.05}}  # fmt: skip
+    ctx = Context(messages="Book the room for a sync next Tuesday", now=SCENARIO_NOW, locale="en-CH")
+    decision = Router(catalog, backend=ScriptedBackend(script), context=ctx).decide(
+        "Book the room for a sync next Tuesday"
+    )
+    assert decision.outcome != "execute"

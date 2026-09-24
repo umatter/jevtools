@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import sys
 from enum import Enum
 from typing import Any, cast
@@ -30,4 +32,23 @@ def load_toml(text: str) -> dict[str, Any]:
     return cast("dict[str, Any]", tomli.loads(text))  # pragma: no cover
 
 
-__all__ = ["StrEnum", "load_toml"]
+async def _await(value: Any) -> Any:
+    return await value
+
+
+def run_sync(value: Any, hint: str) -> Any:
+    """Resolve a possibly awaitable ``value`` from sync code: a non-awaitable is returned unchanged; an awaitable
+    runs on a fresh event loop (:func:`asyncio.run`). Inside a running loop that is refused: a coroutine is closed
+    (never left un-awaited) and ``RuntimeError(hint)`` is raised (``hint`` names the async API to use instead)."""
+    if not inspect.isawaitable(value):
+        return value
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_await(value))
+    if inspect.iscoroutine(value):
+        value.close()
+    raise RuntimeError(hint)
+
+
+__all__ = ["StrEnum", "load_toml", "run_sync"]

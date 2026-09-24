@@ -16,7 +16,7 @@ generated from `jevtools.demo` by `examples/fixtures/regenerate.py`.
 ## 1. Run the proxy
 
 ```bash
-pip install 'jevtools[serve]'
+pip install "jevtools[serve] @ git+https://github.com/umatter/jevtools"   # not on PyPI; in a checkout: uv pip install -e ".[serve]"
 export OPENROUTER_API_KEY=...        # or TYPESAFE_API_KEY=...
 jevtools serve --config examples/proxy/jevtools.toml --host 127.0.0.1 --port 8787
 ```

@@ -501,9 +501,17 @@ def _p3(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
     return None
 
 
+def _authorized_missing(inp: PolicyInput) -> bool:
+    """A speculated tool of tier ≥ write without an ``authorized`` answer: the planner always asks it there, so a
+    missing value is a failed answer (I5: it can never lead to execute)."""
+    return inp.authorized is None and inp.speculated and inp.tier is not None and inp.tier >= Tier.WRITE
+
+
 def _p4(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
     if inp.chosen_is_tool and inp.authorized is not None and inp.authorized < 0.5:
         return PolicyResult(outcome=Outcome.ABSTAIN, rule=RULE_NOT_AUTHORIZED, reason="not_requested")
+    if inp.chosen_is_tool and _authorized_missing(inp):
+        return PolicyResult(outcome=Outcome.ABSTAIN, rule=RULE_NOT_AUTHORIZED, reason="authorized_missing")
     return None
 
 
@@ -571,7 +579,8 @@ def _caps(inp: PolicyInput, policy: Policy, tier: Tier) -> list[str]:
     """Everything that limits the call to at most CONFIRM (§3.8.2 P9 caps, §3.8.3 gates)."""
     tp = policy.tier(tier)
     caps: list[str] = []
-    if tp.authorized is not None and inp.authorized is not None and inp.authorized < tp.authorized:
+    if tp.authorized is not None and (_authorized_missing(inp) if inp.authorized is None
+                                      else inp.authorized < tp.authorized):  # fmt: skip
         caps.append("authorized")
     channels = {s.channel for s in inp.slots if s.channel is not None}
     if tier >= Tier.EXTERNAL and channels & UNTRUSTED_CHANNELS:

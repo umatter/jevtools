@@ -21,9 +21,11 @@ GET  /healthz
   diffuse tool or slot) — is forwarded unchanged to it with ``x-jev`` stripped; the answer is marked
   ``x_jev.outcome = "fallback"``.
 - **Error mapping** without a fallback (§7.2.4, :func:`jevtools.adapters.openai.error_response`): bad tool 400
-  ``jevtools_bad_tool``; Jev 400/422 → 502 ``jev_invalid_request``; 401/403 → 502 ``jev_auth`` (never the key);
-  429 → 429 with ``Retry-After``; 5xx/timeout → 503 ``jev_unavailable``. A tool call is never produced on an error
-  path.
+  ``jevtools_bad_tool``; messages that do not parse 400 ``invalid_messages``; an unsupported ``tool_choice`` 400
+  ``jevtools_bad_tool_choice``; a non-object ``jevtools.context`` 400 ``jevtools_bad_context``; Jev 400/422 → 502
+  ``jev_invalid_request``; 401/403 → 502 ``jev_auth`` (never the key); 429 → 429 with ``Retry-After``; a Jev
+  answer that does not decode → 502 ``jev_protocol_error``; 5xx/timeout → 503 ``jev_unavailable``. A tool call is
+  never produced on an error path.
 - ``stream: true`` is answered as server-sent events: one chunk with the whole message, one with the finish reason.
 """
 
@@ -59,8 +61,10 @@ from jevtools.backends.base import Backend
 from jevtools.backends.errors import BackendError
 from jevtools.canonical import jsonable, sha256_of
 from jevtools.confidence import IsotonicCalibrator
+from jevtools.context import parse_messages
 from jevtools.decision import Decision
 from jevtools.fallback import Escalator, Filler, TextLLM
+from jevtools.plan import parse_tool_choice
 from jevtools.policy import RULE_FAIL_CLOSED, RULE_UNSUPPORTED, Outcome, Policy
 from jevtools.router import Router
 from jevtools.serve.config import ServeConfig, request_sources
@@ -288,11 +292,15 @@ async def chat_completions(request: Request) -> Response:
         ctx = merge_context(router.context, extras.get("context"))
     except (ValueError, TypeError) as exc:
         return _error_json(api_error(400, "invalid_request_error", "jevtools_bad_context", str(exc)))
+    bad = _bad_input(router, body)
+    if bad is not None:
+        return await _degrade(state, body, bad, reason="bad_request", stream=stream)
+    tool_choice = body.get("tool_choice") or "auto"
     captured: list[BackendError] = []
     token = _CAPTURED.set(captured)
     try:
         decision = await adecide_turn(
-            router, body["messages"], context=ctx, tool_choice=body.get("tool_choice") or "auto",
+            router, body["messages"], context=ctx, tool_choice=tool_choice,
             parallel_tool_calls=bool(body.get("parallel_tool_calls")), store=state.store,
             pending_id=extras.get("pending_id"),
         )  # fmt: skip
@@ -309,6 +317,21 @@ async def chat_completions(request: Request) -> Response:
         if failure is not None:
             return _error_json(failure)
     return _respond(chat_completion(decision, model=str(body.get("model") or state.config.model_name)), stream=stream)
+
+
+def _bad_input(router: Router, body: Mapping[str, Any]) -> ErrorResponse | None:
+    """The 400 for request input jevtools cannot serve, checked before any Jev call: messages that do not parse
+    (a non-object message, an unknown role such as the legacy ``function``) or an unsupported ``tool_choice``."""
+    try:
+        parse_messages(body["messages"])
+    except (ValueError, TypeError, AttributeError) as exc:
+        return api_error(400, "invalid_request_error", "invalid_messages", f"`messages`: {type(exc).__name__}: "
+                         f"{str(exc)[:300]}")  # fmt: skip
+    try:
+        parse_tool_choice(body.get("tool_choice") or "auto", router.catalog)
+    except (ValueError, TypeError) as exc:
+        return api_error(400, "invalid_request_error", "jevtools_bad_tool_choice", str(exc)[:300])
+    return None
 
 
 def _reason(decision: Decision) -> str:

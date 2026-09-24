@@ -60,7 +60,7 @@ def test_the_tuned_policy_reproduces_the_evaluated_set() -> None:
     assert isinstance(ext.execute, float)
     for r in records:
         inp = PolicyInput(tools={"t": 1.0}, chosen="t", tier=Tier.EXTERNAL, C=r.score(ext.composition),  # type: ignore[arg-type]
-                          slots=[SlotState(name="x", factor=0.99)])  # fmt: skip
+                          authorized=1.0, slots=[SlotState(name="x", factor=0.99)])  # fmt: skip
         executes = evaluate(inp, result.policy).outcome is Outcome.EXECUTE
         assert executes == (r in kept(records, ext.composition, ext.execute, result.hysteresis))
 
@@ -172,3 +172,12 @@ def test_tuning_a_scenario_report_yields_a_usable_policy() -> None:
     tuned = Router(router.catalog, backend=router.backend, policy=policy, context=router.context)
     decision = tuned.decide(scenario_messages(scripts.R1_REQUEST))
     assert decision.trace.policy["version"] == policy.version
+
+
+def test_tuning_uses_the_policys_own_hysteresis_test() -> None:
+    """Tuned thresholds are valid only under the runtime rule: tuning calls it instead of a copy (#18)."""
+    from jevtools import policy
+    from jevtools.eval import tuning
+
+    assert tuning.clears is policy._clears and tuning._EPS == policy._EPS
+    assert not hasattr(tuning, "_clears")

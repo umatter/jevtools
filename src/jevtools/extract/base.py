@@ -16,7 +16,7 @@ before a mention mark it ``negated``; the mention stays in pools with a note (Je
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, overload
 
@@ -86,6 +86,12 @@ class Mention:
         return self.claimed_by is None
 
     @property
+    def claims(self) -> bool:
+        """Whether this mention claims the mentions it covers; a weak reading (``attrs["claims"] = False``, e.g. the
+        temporal reading of ``by 5`` with no temporal evidence) leaves them free."""
+        return self.attrs.get("claims", True) is not False
+
+    @property
     def rank(self) -> int:
         """Claiming priority (lower is more specific)."""
         return PRIORITY.get(self.kind, 1_000)
@@ -126,6 +132,8 @@ class Mentions(Sequence[Mention]):
         self._items = tuple(mentions)
         self.texts: dict[str, SourceText] = {t.ref: t for t in texts}
         self.locale = locale
+        self.failures: tuple[str, ...] = ()
+        """Extractors that raised on a text (``"<extractor> on <ref>: <error>"``); they yielded no mentions there."""
 
     @overload
     def __getitem__(self, index: int) -> Mention: ...
@@ -231,7 +239,8 @@ def _leaves(value: Any, path: str) -> Iterator[tuple[str, str]]:
 
 
 def claim(mentions: Sequence[Mention]) -> list[Mention]:
-    """Set ``claimed_by`` on every mention covered by a more specific one in the same text (§4.2.1)."""
+    """Set ``claimed_by`` on every mention covered by a more specific one in the same text (§4.2.1); weak mentions
+    (:attr:`Mention.claims` false) never claim."""
     by_ref: dict[str, list[Mention]] = {}
     for m in mentions:
         if m.kind != "cue":
@@ -242,7 +251,7 @@ def claim(mentions: Sequence[Mention]) -> list[Mention]:
             out.append(m)
             continue
         claimer = min(
-            (o for o in by_ref[m.source_ref] if o.rank < m.rank and covers(o.span, m.span)),
+            (o for o in by_ref[m.source_ref] if o.rank < m.rank and o.claims and covers(o.span, m.span)),
             key=lambda o: o.rank,
             default=None,
         )
@@ -351,22 +360,35 @@ def run_extractors(
     now = ctx.current_time()
     texts = source_texts(ctx)
     found: list[Mention] = []
+    failures: list[str] = []
+
+    def safe(name: str, source: SourceText, run: Callable[..., list[Mention]], *args: Any) -> list[Mention]:
+        # One extractor failing on one text (e.g. untrusted tool output it cannot handle) yields no mentions from
+        # it there, never an exception out of decide(): fewer candidates is the safe failure (§4.2.1).
+        try:
+            return run(source, *args)
+        except Exception as exc:  # noqa: BLE001 - isolation boundary
+            failures.append(f"{name} on {source.ref}: {type(exc).__name__}")
+            return []
+
     for source in texts:
         own: list[Mention] = []
-        own += patterns.extract(source, profile.regexes)
-        nums = numbers.extract(source, primary)
-        own += nums + money.extract(source, primary, nums)
-        own += temporal.extract(source, now, ctx.timezone_name, primary)
-        own += places.extract(source)
-        own += enum_mentions(source, profile.enum_terms)
+        own += safe("patterns", source, patterns.extract, profile.regexes)
+        nums = safe("numbers", source, numbers.extract, primary)
+        own += nums + safe("money", source, money.extract, primary, nums)
+        own += safe("temporal", source, temporal.extract, now, ctx.timezone_name, primary)
+        own += safe("places", source, places.extract)
+        own += safe("enum", source, enum_mentions, profile.enum_terms)
         if source.channel is Channel.USER:
-            own += anchor_mentions(source, ctx.sources.values())
-        own += text.extract(source, primary, own)
-        own += cues.extract(source)
+            own += safe("anchors", source, anchor_mentions, ctx.sources.values())
+        own += safe("text", source, text.extract, primary, list(own))
+        own += safe("cues", source, cues.extract)
         found += own
     claimed = claim(found)
     marked = mark_negations(claimed, {t.ref: t for t in texts}, (primary,) + _others(primary))
-    return Mentions(marked, texts, primary.code)
+    result = Mentions(marked, texts, primary.code)
+    result.failures = tuple(failures)
+    return result
 
 
 def _others(primary: Locale) -> tuple[Locale, ...]:

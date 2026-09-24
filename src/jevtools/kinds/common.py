@@ -3,7 +3,8 @@
 :func:`finalize_pool` is the pool pipeline every resolver runs, in this order:
 
 1. add injected candidates (FILL / Escalator / passthrough, :attr:`ResolveContext.injected`);
-2. dedupe by normalized value (the most trusted channel wins);
+   ``history`` candidates get the origin their trust is inherited from (:func:`trace_history`);
+2. dedupe by normalized value (the most trusted channel wins, a ``history`` copy counting at its origin's trust);
 3. drop schema-invalid values (late-bound candidates are validated after late binding);
 4. drop values violating a unary constraint (``start > now``);
 5. apply the slot's channel allow-list (I2) — blocked candidates are kept in ``Pool.blocked``;
@@ -27,10 +28,14 @@ from jevtools.candidates import (
     apply_allow_list,
     assign_labels,
     canonical_order,
+    display_value,
+    least_trusted,
     truncate,
     value_key,
 )
 from jevtools.extract.base import Mention, Mentions
+from jevtools.extract.coref import iter_entities
+from jevtools.extract.tokens import fold
 from jevtools.kinds.base import (
     ResolveContext,
     SlotResult,
@@ -119,8 +124,62 @@ def violates(constraints: Sequence[Constraint], slot: SlotSpec, value: Any, rc: 
     return any(c.check({slot.name: value}, context) is False for c in constraints)
 
 
+UNTRUSTED_ORIGINS: frozenset[Channel] = frozenset({Channel.TOOL_OUTPUT, Channel.GENERATED})
+
+
+def history_origin(text: str, value: Any, rc: ResolveContext) -> Channel:
+    """Where a value named in an assistant turn came from (§3.4.2: a ``history`` value inherits its origin's trust;
+    §6.6, §11.2 E10: a value planted in tool output or history never reaches an external identity slot).
+
+    An observation that contains it (or a ``tool_output`` entity) → ``tool_output``; else the user's own turns →
+    ``user``; a registry row keyed by it or a trusted entity → that channel; untraceable assistant text is
+    untrusted (``tool_output``): an assistant turn may repeat what a tool output planted.
+    """
+    needle = fold(text).strip()
+    texts = list(rc.get_mentions().texts.values())
+    if needle and any(needle in fold(t.text) for t in texts if t.channel is Channel.TOOL_OUTPUT):
+        return Channel.TOOL_OUTPUT
+    key = value_key(value)
+    origins = [e.origin for e in iter_entities(rc.ctx.entities) if value_key(e.value) == key]
+    if any(o in UNTRUSTED_ORIGINS for o in origins):
+        return Channel.TOOL_OUTPUT
+    if needle and any(needle in fold(t.text) for t in texts if t.channel is Channel.USER):
+        return Channel.USER
+    for source in rc.sources.values():
+        rows, field = getattr(source, "rows", None), getattr(source, "key", None)
+        if isinstance(field, str) and isinstance(rows, list):
+            if any(isinstance(r, Mapping) and value_key(r.get(field)) == key for r in rows):
+                return Channel.REGISTRY
+    trusted = [o for o in origins if o in (Channel.USER, Channel.REGISTRY, Channel.AUTHOR)]
+    return trusted[0] if trusted else Channel.TOOL_OUTPUT
+
+
+def trace_history(candidates: Sequence[Candidate], rc: ResolveContext) -> list[Candidate]:
+    """Give every ``history`` candidate the origin its trust is inherited from: an assistant-turn mention (no
+    origin) is traced with :func:`history_origin`; a history copy of a value that is also in the pool from an
+    untrusted channel (or an untrusted entity) takes that least-trusted provenance, so an assistant turn that
+    echoes a tool output never launders it into a trusted ``history`` value."""
+    untrusted = {value_key(c.value) for c in candidates if c.effective_channel in UNTRUSTED_ORIGINS}
+    untrusted |= {value_key(e.value) for e in iter_entities(rc.ctx.entities) if e.origin in UNTRUSTED_ORIGINS}
+    out: list[Candidate] = []
+    for c in candidates:
+        if c.channel is Channel.HISTORY:
+            origin = c.origin
+            if origin is None:
+                mention = c.prov.get("mention")
+                text = str(mention.get("text")) if isinstance(mention, Mapping) else display_value(c.value)
+                origin = history_origin(text, c.value, rc)
+            if value_key(c.value) in untrusted:
+                origin = least_trusted(origin, Channel.TOOL_OUTPUT)
+            if origin != c.origin:
+                c = c.model_copy(update={"origin": origin})
+        out.append(c)
+    return out
+
+
 def dedupe(candidates: Iterable[Candidate]) -> list[Candidate]:
-    """One candidate per normalized value; the most trusted channel wins, then the first seen."""
+    """One candidate per normalized value; the most trusted (effective) channel wins, then the first seen. A
+    ``history`` copy counts at its origin's trust (:func:`trace_history` runs first in :func:`finalize_pool`)."""
     best: dict[str, Candidate] = {}
     order: list[str] = []
     for candidate in candidates:
@@ -150,7 +209,7 @@ def finalize_pool(
 ) -> Pool:
     """Run the pool pipeline (module docstring) and build the :class:`Pool`."""
     notes = list(notes)
-    pooled = dedupe([*candidates, *rc.injected.get(rc.slot_key(tool, slot), ())])
+    pooled = dedupe(trace_history([*candidates, *rc.injected.get(rc.slot_key(tool, slot), ())], rc))
     if validate:
         valid = [c for c in pooled if c.late is not None or is_valid(c.value, slot.json_schema)]
         if len(valid) < len(pooled):

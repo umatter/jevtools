@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict
 
 from jevtools.ballot import Ballot, BallotQuestion, IdMode
+from jevtools.budget import tokens_for_chars
 from jevtools.candidates import is_reserved, is_valid_label, label_key
 from jevtools.canonical import canonical_str
 from jevtools.errors import BallotError
@@ -37,7 +38,11 @@ from jevtools.spec.schema import validate as validate_value
 from jevtools.wire import DecisionRequest
 
 if TYPE_CHECKING:
+    from jevtools.policy import BudgetPolicy
     from jevtools.spec.catalog import Catalog
+
+_BUDGET_FIELDS = (("max_tokens", "max_tokens_per_call"), ("max_questions", "max_questions_per_call"),
+                  ("max_state_tokens", "max_state_tokens"), ("chars_per_token", "chars_per_token"))  # fmt: skip
 
 
 class Limits(BaseModel):
@@ -72,11 +77,29 @@ class Limits(BaseModel):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return cls.model_validate({k: v for k, v in data.items() if k in cls.model_fields})
 
+    def tokens_for_chars(self, chars: int) -> int:
+        """The §5.5 estimate for ``chars`` characters: ``⌈chars × token_ratio / chars_per_token⌉`` — the one formula
+        the planner (splits, state cuts) and the pre-send check share, so they never disagree by a rounding."""
+        return tokens_for_chars(chars, chars_per_token=self.chars_per_token, ratio=self.token_ratio)
+
     def estimate_tokens(self, request: DecisionRequest | dict[str, Any]) -> int:
         """``chars(canonical JSON) / chars_per_token × token_ratio`` (§5.5), rounded up."""
         body = request.to_wire() if isinstance(request, DecisionRequest) else request
-        chars = len(canonical_str(body))
-        return int(-(-chars * self.token_ratio // self.chars_per_token))
+        return self.tokens_for_chars(len(canonical_str(body)))
+
+    def within_budget(self, budget: BudgetPolicy) -> Limits:
+        """These limits under a policy's ``[budget]`` (Appendix B, §5.5): every budget setting the policy changes
+        from its default caps the matching limit (``max_tokens_per_call`` → ``max_tokens``,
+        ``max_questions_per_call`` → ``max_questions``, ``max_state_tokens``, ``chars_per_token``), taking the
+        smaller value — a tighter budget takes effect, a looser one never exceeds what the backend supports (probed
+        or explicit limits). A default budget leaves the limits unchanged."""
+        defaults = type(budget)()
+        update: dict[str, Any] = {}
+        for field, setting in _BUDGET_FIELDS:
+            value = getattr(budget, setting)
+            if value != getattr(defaults, setting) and value < getattr(self, field):
+                update[field] = value
+        return self.model_copy(update=update) if update else self
 
 
 def cache_dir() -> Path:

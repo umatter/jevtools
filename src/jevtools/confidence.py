@@ -210,20 +210,24 @@ class IsotonicCalibrator:
     def fit(
         self, xs: Sequence[float], ys: Sequence[float | bool], weights: Sequence[float] | None = None
     ) -> IsotonicCalibrator:
-        """Fit on predictions ``xs`` and outcomes ``ys`` (booleans or rates in [0, 1])."""
+        """Fit on predictions ``xs`` and outcomes ``ys`` (booleans or rates in [0, 1]).
+
+        Tied predictions are pooled first (one point per distinct ``x``, the secondary tie approach): a calibration
+        map is a function of ``x``, so every observation at one ``x`` must end in the same block."""
         if len(xs) != len(ys):
             raise ValueError("xs and ys must have the same length")
         w = list(weights) if weights is not None else [1.0] * len(xs)
-        points = sorted(zip((float(x) for x in xs), (float(y) for y in ys), w, strict=True))
+        pooled: dict[float, list[float]] = {}  # x → [sum_wy, sum_w]
+        for x, y, weight in zip((float(x) for x in xs), (float(y) for y in ys), w, strict=True):
+            point = pooled.setdefault(x, [0.0, 0.0])
+            point[0] += weight * y
+            point[1] += weight
         blocks: list[list[float]] = []  # [sum_wx, sum_wy, sum_w]
-        for x, y, weight in points:
-            if blocks and blocks[-1][2] > 0 and x == blocks[-1][0] / blocks[-1][2]:
-                block = blocks[-1]
-                block[0] += weight * x
-                block[1] += weight * y
-                block[2] += weight
-            else:
-                blocks.append([weight * x, weight * y, weight])
+        for x in sorted(pooled):
+            sum_wy, sum_w = pooled[x]
+            if sum_w <= 0:
+                continue
+            blocks.append([sum_w * x, sum_wy, sum_w])
             while len(blocks) > 1 and blocks[-2][1] / blocks[-2][2] >= blocks[-1][1] / blocks[-1][2]:
                 last = blocks.pop()
                 for i in range(3):

@@ -381,7 +381,13 @@ def member_result(
     normalizer: str,
 ) -> SlotResult:
     """Superlative decoding (§3.6 member row, §3.7.1): ``M = {q > 0.5}``, the extreme of M by the order attribute,
-    factor ``q_chosen · ∏_{j beyond chosen} (1 − q_j)``; an empty M is ``out_of_pool``."""
+    factor ``q_chosen · ∏_{j beyond chosen} (1 − q_j) · ∏_{j tied with chosen} (1 − q_j)``; an empty M is
+    ``out_of_pool``.
+
+    Items tied with the chosen one on the order attribute (two invoices of the same day) are competitors too: "i
+    is the extreme member" needs them out of M, so a tie at the extreme gives a low factor (flag ``tie``: the
+    policy clarifies instead of picking by retrieval order) and the distribution stays ≤ 1. Among tied items the
+    pick is deterministic (value order), never the pool order."""
     members = [(c, q, order) for c, q, order in items if q > 0.5 and order is not None]
     uncovered_mass = math.prod(1 - q for _, q, _ in items)
     if not members:
@@ -400,15 +406,22 @@ def member_result(
         )
     reverse = direction == "max"
 
-    def beyond(order: Any) -> list[float]:
-        return [q for _, q, o in items if o is not None and (o > order if reverse else o < order)]
+    def rivals(candidate: Candidate, order: Any) -> list[float]:
+        """Items beyond ``order`` or tied with it (other than ``candidate`` itself)."""
+        return [
+            q
+            for c, q, o in items
+            if o is not None and c is not candidate and (o == order or (o > order if reverse else o < order))
+        ]
 
-    def factor_of(q: float, order: Any) -> float:
-        return q * math.prod(1 - other for other in beyond(order))
+    def factor_of(candidate: Candidate, q: float, order: Any) -> float:
+        return q * math.prod(1 - other for other in rivals(candidate, order))
 
-    ranked = sorted(members, key=lambda m: m[2], reverse=reverse)
+    by_value = sorted(members, key=lambda m: value_key(m[0].value))
+    ranked = sorted(by_value, key=lambda m: m[2], reverse=reverse)  # stable: ties keep value order
     chosen, q_chosen, order_chosen = ranked[0]
-    dist = {value_key(c.value): factor_of(q, o) for c, q, o in ranked}
+    tied = [c for c, _, o in members if o == order_chosen]
+    dist = {value_key(c.value): factor_of(c, q, o) for c, q, o in ranked}
     dist[Bottom.UNCOVERED.value] = uncovered_mass
     entries = {
         value_key(c.value): ValueEntry(
@@ -439,7 +452,9 @@ def member_result(
         qids=qids,
         normalizer=normalizer,
         entries=entries,
-        notes=(f"picked the {direction} of {len(members)} matching item(s) by order attribute ({order_chosen})",),
+        flags=("tie",) if len(tied) > 1 else (),
+        notes=(f"picked the {direction} of {len(members)} matching item(s) by order attribute ({order_chosen})",)
+        + ((f"{len(tied)} matching items tie at {order_chosen}",) if len(tied) > 1 else ()),
     )
 
 

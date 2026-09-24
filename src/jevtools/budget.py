@@ -22,6 +22,12 @@ RATIO_MAX = 1.6
 Key = tuple[str, str]
 
 
+def tokens_for_chars(chars: int, *, chars_per_token: float, ratio: float = 1.0) -> int:
+    """The §5.5 estimate ``⌈chars × r / chars_per_token⌉`` — the single formula behind the planner's splits and state
+    cuts, the pre-send check (:meth:`jevtools.validate.Limits.tokens_for_chars`) and :meth:`TokenEstimator.est`."""
+    return math.ceil(chars * ratio / chars_per_token)
+
+
 class TokenEstimator:
     """Estimates request tokens and learns the tokenizer ratio per backend and model (thread-safe)."""
 
@@ -58,8 +64,10 @@ class TokenEstimator:
         return len(canonical_str(body)) / self.chars_per_token
 
     def est(self, request: DecisionRequest | Mapping[str, Any], *, backend: str = "", model: str = "") -> int:
-        """Corrected estimate ``ceil(raw × r)``."""
-        return math.ceil(self.raw(request) * self.ratio(backend, model))
+        """Corrected estimate ``⌈chars × r / chars_per_token⌉`` (:func:`tokens_for_chars`)."""
+        body = request.to_wire() if isinstance(request, DecisionRequest) else request
+        return tokens_for_chars(len(canonical_str(body)), chars_per_token=self.chars_per_token,
+                                ratio=self.ratio(backend, model))  # fmt: skip
 
     def observe(
         self, request: DecisionRequest | Mapping[str, Any], usage: Usage | None, *, backend: str = "", model: str = ""
@@ -82,4 +90,4 @@ class TokenEstimator:
             return updated
 
 
-__all__ = ["EMA_ALPHA", "RATIO_MAX", "RATIO_MIN", "TokenEstimator"]
+__all__ = ["EMA_ALPHA", "RATIO_MAX", "RATIO_MIN", "TokenEstimator", "tokens_for_chars"]

@@ -8,7 +8,9 @@ or ``mcp`` objects; only *explicitly present* annotation hints count, §3.3.2) a
   executed decision (duck-typed over any object shaped like ``mcp.ClientSession``; no ``mcp`` dependency);
 - :func:`result_content` / :func:`to_observation`: a ``CallToolResult`` as the content of a loop observation
   (§6.3, through :func:`jevtools.loop.ingest_observation`), so the next decision can bind values found in it
-  (``tool_output`` channel). The Agent's MCP executor path shares the same helpers and ``_meta`` key.
+  (``tool_output`` channel). The Agent's MCP executor path shares the same helpers (``result_content`` *is* the
+  observation's content, :func:`jevtools.sources.toolsource.result_data`; ``is_error`` is the loop's error test)
+  and ``_meta`` key.
 """
 
 from __future__ import annotations
@@ -18,8 +20,8 @@ from typing import Any
 
 from jevtools.canonical import jsonable
 from jevtools.decision import Decision, ToolCall
-from jevtools.loop import IDEMPOTENCY_META_KEY, LoopObservation, ingest_observation
-from jevtools.sources.toolsource import get_any
+from jevtools.loop import IDEMPOTENCY_META_KEY, LoopObservation, ingest_observation, mcp_is_error
+from jevtools.sources.toolsource import result_data
 
 
 def _call(decision: Decision, index: int) -> ToolCall:
@@ -50,25 +52,15 @@ async def call_decision(session: Any, decision: Decision, *, index: int = 0) -> 
 
 
 def result_content(result: Any) -> Any:
-    """The useful content of a ``CallToolResult`` (dict or ``mcp`` object): ``structuredContent`` when present,
-    else the text blocks joined by newlines (other blocks as their JSON)."""
-    structured = get_any(result, "structuredContent", "structured_content")
-    if structured is not None:
-        return jsonable(structured)
-    parts: list[str] = []
-    for block in get_any(result, "content") or ():
-        kind = get_any(block, "type")
-        if kind == "text":
-            parts.append(str(get_any(block, "text") or ""))
-        else:
-            dump = getattr(block, "model_dump", None)
-            parts.append(str(jsonable(dump(by_alias=True, exclude_none=True) if callable(dump) else block)))
-    return "\n".join(parts)
+    """The useful content of a ``CallToolResult`` (dict or ``mcp`` object), exactly as a loop observation holds it:
+    ``structuredContent`` when present, else the text blocks joined by newlines, parsed as JSON when they are JSON
+    (:func:`jevtools.sources.toolsource.result_data`; non-text blocks are left out)."""
+    return result_data(result)
 
 
 def is_error(result: Any) -> bool:
-    """``isError`` of a ``CallToolResult``."""
-    return bool(get_any(result, "isError", "is_error"))
+    """``isError`` of a ``CallToolResult`` (:func:`jevtools.loop.mcp_is_error`)."""
+    return mcp_is_error(result)
 
 
 def to_observation(decision: Decision, result: Any, *, step: int, index: int = 0, **kw: Any) -> LoopObservation:

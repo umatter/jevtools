@@ -5,14 +5,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
 from jevtools.adapters import mcp as jm
+from jevtools.backends.scripted import ScriptedBackend
+from jevtools.loop import IDEMPOTENCY_META_KEY
 from jevtools.policy import Tier
+from jevtools.router import Router
 from jevtools.spec.catalog import Catalog
-from tests.adapters.support import WEATHER_REQUEST, weather_router
+from tests.adapters.support import WEATHER, WEATHER_REQUEST, weather_context, weather_router
 from tests.scenario import scripts
 from tests.scenario.fixtures import scenario_messages, scenario_router
 
@@ -101,6 +104,36 @@ async def test_call_decision_on_a_real_client_session_signature() -> None:
     assert "meta" in inspect.signature(mcp.ClientSession.call_tool).parameters
 
 
+async def test_call_decision_on_a_real_in_memory_server() -> None:
+    """The README MCP snippet end to end on a real ``ClientSession`` (mcp 2.x in-memory ``Client``), not a fake: the
+    key reaches the server in ``_meta`` (the declared lower bound, mcp>=1.19, is pinned in ``test_extras.py``)."""
+    servers = pytest.importorskip("mcp.server.mcpserver")
+    client_module = pytest.importorskip("mcp.client")
+    server = servers.MCPServer("weather")
+    received: list[Any] = []
+
+    def get_weather(city: str, ctx: Any, unit: str = "celsius") -> str:
+        """Get the current weather for a city."""
+        received.append(getattr(ctx.request_context, "meta", None))
+        return f"61 degrees in {city}"
+
+    # evaluated annotations (this module postpones them; the server resolves ``Context`` by type)
+    get_weather.__annotations__ = {"city": str, "ctx": servers.Context, "unit": Literal["celsius", "fahrenheit"],
+                                   "return": str}  # fmt: skip
+    server.tool()(get_weather)
+
+    async with client_module.Client(server) as client:
+        session = client.session
+        catalog = await Catalog.afrom_mcp_session(session)
+        router = Router(catalog, backend=ScriptedBackend(WEATHER), context=weather_context())
+        decision = await router.adecide(WEATHER_REQUEST)
+        assert decision.outcome == "execute"
+        result = await jm.call_decision(session, decision)
+    assert jm.result_content(result) == {"result": "61 degrees in Zurich"} and not jm.is_error(result)
+    (meta,) = received
+    assert dict(meta or {})[IDEMPOTENCY_META_KEY] == decision.tool_calls[0].idempotency_key
+
+
 def test_result_content_prefers_structured_content_and_reads_mcp_objects() -> None:
     types = pytest.importorskip("mcp.types")
     result = types.CallToolResult.model_validate({"content": [{"type": "text", "text": "x"}],
@@ -109,3 +142,18 @@ def test_result_content_prefers_structured_content_and_reads_mcp_objects() -> No
     plain = types.CallToolResult.model_validate({"content": [{"type": "text", "text": "a"},
                                                              {"type": "text", "text": "b"}]})  # fmt: skip
     assert jm.result_content(plain) == "a\nb"
+
+
+def test_result_content_is_the_observation_content() -> None:
+    """One implementation of MCP result handling: ``result_content`` is what the Agent's observation holds, and
+    ``is_error`` is the loop's error test (#15)."""
+    from jevtools.loop import _normalize_result, ingest_observation
+
+    mixed = {"content": [{"type": "text", "text": '{"temp": 61}'},
+                         {"type": "image", "data": "AAA", "mimeType": "image/png"}], "isError": False}  # fmt: skip
+    json_only = {"content": [{"type": "text", "text": '{"temp": 61}'}], "isError": False}
+    for result in (mixed, json_only):
+        assert jm.result_content(result) == ingest_observation(result, "get_weather", 1).content == {"temp": 61}
+    for result in ({"content": [], "isError": False, "is_error": True}, {"content": [], "isError": True},
+                   {"content": [], "isError": False}):  # fmt: skip
+        assert jm.is_error(result) == (_normalize_result(result, None)[0] == "error")

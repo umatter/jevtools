@@ -118,3 +118,16 @@ def test_call_map_disagreement() -> None:
     assert infeasible.call_map == "search_web" and infeasible.disagrees
     assert infeasible.scores["search_web"] == pytest.approx(0.38)
     assert call_map({"NO_TOOL": 0.9}, {}).call_map is None
+
+
+def test_isotonic_pools_ties_after_a_violator_merge() -> None:
+    """Review #11: tied x values split across blocks once a violator pool moved the centroid (upward bias)."""
+    cal = IsotonicCalibrator().fit([0.8] * 10 + [0.9] * 10, [1] * 10 + [0] * 5 + [1] * 5)
+    assert cal.predict(0.9) == pytest.approx(0.75)
+    assert len(cal.xs) == 1
+    cal2 = IsotonicCalibrator("isotonic.write.PI").fit([0.7] * 5 + [1.0] * 10, [1] * 5 + [0] * 4 + [1] * 6)
+    assert cal2.predict(1.0) == pytest.approx(11 / 15)
+    out = finalize(compose({"a": 1.0, "b": 1.0}), Tier.WRITE, None, {"write": cal2})
+    assert out.C == pytest.approx(11 / 15)
+    weighted = IsotonicCalibrator().fit([0.5, 0.5, 0.6], [1, 0, 1], weights=[0.0, 2.0, 1.0])
+    assert weighted.predict(0.5) == pytest.approx(0.0) and weighted.predict(0.6) == pytest.approx(1.0)

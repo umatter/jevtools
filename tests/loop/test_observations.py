@@ -181,6 +181,20 @@ def test_text_entities(text: str, expected: list[tuple[str, str]]) -> None:
     assert [(kind, value) for kind, value, _, _ in text_entities(text)] == expected
 
 
+def test_text_entities_share_the_request_side_pattern_rules() -> None:
+    """Observation entities use the request-side pattern extractor (IPv4 validation, URL trailing punctuation and
+    span) and the ISO 4217 currency catalog (#16)."""
+    text = "ping 999.300.1.2 or 10.0.0.1, see https://x.example/a). Pay CZK 1'200 or ₣ 40 or TOP 10 now"
+    found = text_entities(text)
+    assert [(k, v) for k, v, _, _ in found] == [
+        ("ipv4", "10.0.0.1"), ("url", "https://x.example/a"), ("money", "1200.00 CZK"), ("money", "40.00 CHF"),
+    ]  # fmt: skip
+    url = next(entry for entry in found if entry[0] == "url")
+    assert text[url[3][0] : url[3][1]] == url[2] == "https://x.example/a"
+    obs = ingest_observation("Server at 999.300.1.2 is down.", "status", 1)
+    assert not [i for i in obs.items if i.type == "ipv4"]
+
+
 def test_chunks_and_preview_helpers() -> None:
     chunks = chunk_text("One. Two! Three?\nFour", size=10)
     assert chunks == ["One. Two!", "Three?", "Four"]

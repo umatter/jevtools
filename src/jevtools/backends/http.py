@@ -1,9 +1,14 @@
 """HTTP backends for the three Jev endpoints (spec §8.2; same request/response contract, only URL and model differ).
 
-- One reused :class:`httpx.Client` (and one :class:`httpx.AsyncClient` per event loop) per backend, so split calls
-  share connections.
+- One reused :class:`httpx.Client` (created once, under a lock, even when split calls start together) and one
+  :class:`httpx.AsyncClient` per live event loop per backend, so split calls share connections. The client of a
+  loop that was closed (each ``asyncio.run``) is dropped at the next async call; :meth:`HTTPBackend.aclose` closes
+  the running loop's client and never awaits a client of a closed loop.
 - Typed errors (:mod:`jevtools.backends.errors`); retries on ``{408, 429, 500, 502, 503, 504}`` and transport
-  errors, honouring ``retry-after-ms`` / ``retry-after``, else exponential backoff ``0.5·2ⁿ s`` (≤ 5 s).
+  errors, honouring ``retry-after-ms`` / ``retry-after``, else exponential backoff ``0.5·2ⁿ s`` (≤ 5 s). A hint
+  that is not a finite number is ignored (backoff); a hint above ``max_retry_wait`` (default 10 s) is not waited
+  in-process: the call fails now and the hint travels on the error (``JevRateLimited.retry_after``), so the router
+  fails closed (P0) and the caller decides whether to wait.
 - ``usage.cost``, ``id`` and ``provider`` (OpenRouter Decisions) are parsed into the response.
 - Optional OpenRouter attribution headers ``HTTP-Referer`` and ``X-Title``.
 - ``JEVTOOLS_MODEL`` overrides the default model id when no model is passed.
@@ -12,7 +17,9 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
+import threading
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
@@ -32,6 +39,8 @@ from jevtools.wire import DecisionRequest, DecisionResponse
 RETRY_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 2
+DEFAULT_MAX_RETRY_WAIT = 10.0
+"""Longest server retry hint (seconds) waited in-process; a longer one fails the call with the hint attached."""
 TYPESAFE_MODEL = "jev-latest"
 OPENROUTER_MODEL = "~typesafe/jev-latest"
 OPENROUTER_SYSTEMONE_URL = "https://openrouter.ai/api/v1/systemone"
@@ -43,7 +52,7 @@ class HTTPBackend:
 
     Prefer the constructors :meth:`typesafe`, :meth:`openrouter` and :meth:`openrouter_decisions`. ``transport`` /
     ``async_transport`` replace the network (``httpx.MockTransport`` in tests); ``sleep`` / ``asleep`` replace the
-    backoff sleeps.
+    backoff sleeps. ``max_retry_wait`` caps the server retry hint waited before a retry.
     """
 
     def __init__(
@@ -55,6 +64,7 @@ class HTTPBackend:
         name: str = "http",
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        max_retry_wait: float = DEFAULT_MAX_RETRY_WAIT,
         headers: Mapping[str, str] | None = None,
         referer: str | None = None,
         title: str | None = None,
@@ -70,6 +80,7 @@ class HTTPBackend:
         self.name = name
         self.timeout = timeout
         self.max_retries = max_retries
+        self.max_retry_wait = max_retry_wait
         attribution = {"HTTP-Referer": referer, "X-Title": title}
         self._headers = {
             "Authorization": f"Bearer {api_key}",
@@ -83,7 +94,9 @@ class HTTPBackend:
         self._sleep = sleep or time.sleep
         self._asleep = asleep or asyncio.sleep
         self._client: httpx.Client | None = None
-        self._aclients: dict[int, httpx.AsyncClient] = {}
+        self._aclients: dict[int, tuple[asyncio.AbstractEventLoop, httpx.AsyncClient]] = {}
+        """The async client of each live event loop, keyed by the loop's id (the loop is kept to detect closure)."""
+        self._lock = threading.Lock()
 
     # -- constructors -------------------------------------------------------------------------------------------
 
@@ -113,32 +126,55 @@ class HTTPBackend:
 
     @property
     def client(self) -> httpx.Client:
-        """The reused synchronous client."""
-        if self._client is None:
-            self._client = httpx.Client(timeout=self.timeout, transport=self._transport)
-        return self._client
+        """The reused synchronous client (created once, even when concurrent split calls ask for it together)."""
+        client = self._client
+        if client is None:
+            with self._lock:
+                if self._client is None:
+                    self._client = httpx.Client(timeout=self.timeout, transport=self._transport)
+                client = self._client
+        return client
 
     def _aclient(self) -> httpx.AsyncClient:
-        """The reused async client of the running event loop (connection pools are loop-bound)."""
-        key = id(asyncio.get_running_loop())
-        client = self._aclients.get(key)
-        if client is None:
+        """The reused async client of the running event loop (connection pools are loop-bound). Clients of loops
+        that were closed since are dropped first: their connections died with their loop."""
+        loop = asyncio.get_running_loop()
+        with self._lock:
+            self._drop_closed_loops()
+            entry = self._aclients.get(id(loop))
+            if entry is not None and entry[0] is loop:
+                return entry[1]
             client = httpx.AsyncClient(timeout=self.timeout, transport=self._async_transport)
-            self._aclients[key] = client
-        return client
+            self._aclients[id(loop)] = (loop, client)
+            return client
+
+    def _drop_closed_loops(self) -> None:
+        """Forget the async clients of closed loops (called with the lock held). They cannot be closed any more
+        (closing a connection needs its loop); their sockets are released when they are garbage-collected."""
+        for key, (loop, _) in list(self._aclients.items()):
+            if loop.is_closed():
+                del self._aclients[key]
 
     def close(self) -> None:
         """Close the synchronous client (async clients are closed by :meth:`aclose`)."""
-        if self._client is not None:
-            self._client.close()
-            self._client = None
+        with self._lock:
+            client, self._client = self._client, None
+            self._drop_closed_loops()
+        if client is not None:
+            client.close()
 
     async def aclose(self) -> None:
-        """Close every client."""
+        """Close the synchronous client and the running loop's async client. Clients of closed loops are dropped;
+        a client of another loop that is still running (another thread) is left to that loop."""
         self.close()
-        clients, self._aclients = list(self._aclients.values()), {}
-        for client in clients:
-            await client.aclose()
+        loop = asyncio.get_running_loop()
+        with self._lock:
+            entry = self._aclients.get(id(loop))
+            mine = entry[1] if entry is not None and entry[0] is loop else None
+            self._aclients = {k: (other, c) for k, (other, c) in self._aclients.items()
+                              if other is not loop and other.is_running()}  # fmt: skip
+        if mine is not None:
+            await mine.aclose()
 
     def __enter__(self) -> HTTPBackend:
         return self
@@ -168,6 +204,8 @@ class HTTPBackend:
             except httpx.TransportError as exc:
                 self._sleep(self._transport_retry(exc, attempt))
                 continue
+            except httpx.HTTPError as exc:  # e.g. a DecodingError: a malformed body, not retried
+                raise JevProtocolError(f"{self.url}: {type(exc).__name__}: {exc}") from exc
             delay = self._retry_delay(response, attempt)
             if delay is None:
                 return self._parse(response)
@@ -182,6 +220,8 @@ class HTTPBackend:
             except httpx.TransportError as exc:
                 await self._asleep(self._transport_retry(exc, attempt))
                 continue
+            except httpx.HTTPError as exc:  # e.g. a DecodingError: a malformed body, not retried
+                raise JevProtocolError(f"{self.url}: {type(exc).__name__}: {exc}") from exc
             delay = self._retry_delay(response, attempt)
             if delay is None:
                 return self._parse(response)
@@ -196,10 +236,15 @@ class HTTPBackend:
         return backoff(attempt)
 
     def _retry_delay(self, response: httpx.Response, attempt: int) -> float | None:
-        """``None`` to parse this response now, else the delay before retrying a retryable status."""
+        """``None`` to parse this response now, else the delay before retrying a retryable status: the server's
+        hint (a hint above ``max_retry_wait`` is not waited: the response is parsed now, and its typed error
+        carries the hint), else exponential backoff."""
         if response.status_code not in RETRY_STATUSES or attempt >= self.max_retries:
             return None
-        return retry_after(response) or backoff(attempt)
+        hint = retry_after(response)
+        if not hint:
+            return backoff(attempt)
+        return hint if hint <= self.max_retry_wait else None
 
     def _parse(self, response: httpx.Response) -> DecisionResponse:
         try:
@@ -247,15 +292,18 @@ def backoff(attempt: int) -> float:
 
 
 def retry_after(response: httpx.Response) -> float | None:
-    """The server's retry hint in seconds: ``retry-after-ms`` first, then ``retry-after``."""
+    """The server's retry hint in seconds: ``retry-after-ms`` first, then ``retry-after``. A value that is not a
+    finite number (``inf``, ``1e400``, ``nan``) is no hint."""
     for header, scale in (("retry-after-ms", 1000.0), ("retry-after", 1.0)):
         raw = response.headers.get(header)
         if raw is None:
             continue
         try:
-            return max(0.0, float(raw) / scale)
+            value = float(raw) / scale
         except ValueError:
             continue
+        if math.isfinite(value):
+            return max(0.0, value)
     return None
 
 
@@ -285,6 +333,7 @@ def _message(payload: Any, response: httpx.Response) -> str:
 
 
 __all__ = [
+    "DEFAULT_MAX_RETRY_WAIT",
     "OPENROUTER_DECISIONS_URL",
     "OPENROUTER_MODEL",
     "OPENROUTER_SYSTEMONE_URL",

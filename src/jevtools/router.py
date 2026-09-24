@@ -22,6 +22,7 @@ import warnings
 from collections.abc import Callable, Generator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import Any
 
 from jevtools.backends.base import Backend
@@ -54,6 +55,7 @@ from jevtools.decode import (
     decode_answers,
     decode_reply,
     policy_input,
+    value_origin,
     with_decision,
     with_tool,
 )
@@ -104,7 +106,8 @@ from jevtools.wire import Answer, DecisionRequest, DecisionResponse
 Revalidator = Callable[[ToolDecode, Context], list[str]]
 """TOCTOU hook: problems that forbid executing a delayed call (empty list = still valid)."""
 LIVE_MAX = 256
-"""Pending decisions kept in memory for click resumes."""
+"""Pending decisions (handles and click-resume state) kept in memory: expired ones are dropped on every insert, the
+oldest beyond this bound are evicted (a handle no longer held is safely recompiled on resume)."""
 REPLY_PREFIXES = ("say ", "tell her ", "tell him ", "tell them ")
 WIDEN_STAGES = ("bucket", "hierarchy")
 """Coverage-round stages (§4.6): ranking pages plus a group Choice, then the items of the top groups."""
@@ -188,7 +191,9 @@ class _Session:
     fills: int = 0
     respeculated: bool = False
     escalated: bool = False
-    confirmed: bool = False
+    confirmed_call: tuple[str, str] | None = None
+    """The call the user confirmed (``ok``, or a complete-call option): ``(tool, canonical arguments digest)``. It
+    confirms only a decoded call equal to it (§3.8.5: the option showed the whole resulting call)."""
     bindings: dict[str, tuple[Any, float, str | None]] = field(default_factory=dict)
     """User bindings (clicks, reply picks, passthrough) applied after every decode: slot → (value, p, label)."""
     tool_pick: tuple[str, float] | None = None
@@ -275,7 +280,7 @@ class Router:
         self.filler = filler
         self.escalator = escalator
         self.text_llm = text_llm
-        self.limits = limits if limits is not None else _probed_limits(backend)
+        self.limits = (limits if limits is not None else _probed_limits(backend)).within_budget(self.policy.budget)
         self.trace_store = trace_store
         self.estimator = estimator or TokenEstimator(self.limits.chars_per_token)
         self.calibrators = dict(calibrators or {})
@@ -535,7 +540,11 @@ class Router:
         limits = self.round_limits()
         new_requests = trimmed.to_requests(self.model, id_mode=limits.id_mode,
                                            object_instructions=limits.instructions_as_object)  # fmt: skip
-        resend = [j for j, i in enumerate(kept_calls) if i in failed]
+        # A kept call is re-sent when it failed, or when its wire ids changed (opaque ids renumber over the trimmed
+        # Ballot, so an old response would be keyed by ids the trimmed Ballot no longer sends).
+        old_ids, new_ids = ballot.wire_ids(limits.id_mode), trimmed.wire_ids(limits.id_mode)
+        resend = [j for j, i in enumerate(kept_calls)
+                  if i in failed or any(old_ids[q] != new_ids[q] for q in calls[i])]  # fmt: skip
         again: list[CallResult] = (yield _Ask([new_requests[j] for j in resend])) if resend else []
         s.usage.jev_calls += len(resend)
         merged = [results[i] for i in kept_calls]
@@ -548,7 +557,10 @@ class Router:
 
     @staticmethod
     def _droppable(ballot: Ballot, errors: Sequence[BaseException | None]) -> set[str] | None:
-        """The qids to drop (whole slot families), or ``None`` when the failure cannot be isolated."""
+        """The qids to drop (whole slot families), or ``None`` when the failure cannot be isolated: only slot
+        questions (a tool and a path) are isolatable. Tool-level questions — ``tool``, ``reply``, and the gates
+        ``T.authorized``, ``T.joint[.G]``, ``T.done_after`` — fail closed (P0): dropping a gate would remove a check
+        instead of failing it (I5)."""
         wire_to_qid = {w: q for q, w in ballot.wire_ids("dotted").items()}
         wire_to_qid.update({w: q for q, w in ballot.wire_ids("opaque").items()})
         named: set[str] = set()
@@ -557,13 +569,12 @@ class Router:
                 return None
             named |= {wire_to_qid.get(w, w) for w in error.qids()}
         by_qid = ballot.by_qid
-        if not named <= set(by_qid) or named & {"tool", "reply"}:
+        if not named <= set(by_qid) or any(not (by_qid[q].tool and by_qid[q].path) for q in named):
             return None
         drop = set(named)
         for qid in named:
             question = by_qid[qid]
-            if question.tool and question.path:
-                drop |= {q.qid for q in ballot.questions if q.tool == question.tool and q.path == question.path}
+            drop |= {q.qid for q in ballot.questions if q.tool == question.tool and q.path == question.path}
         return drop
 
     def _record(
@@ -616,6 +627,7 @@ class Router:
             decoded = state.decoded
             if self._speculation_miss(s, decoded):
                 s.respeculated = True
+                s.confirmed_call = None  # the re-plan elects another tool: nothing shown on the card applies
                 s.notes.append(f"speculation miss: {decoded.chosen} ({decoded.viability(decoded.chosen or '')[0]})")
                 plan = self._compile(s, tool_choice=s.tool_choice, speculate_only=[decoded.chosen])
                 state = yield from self._round(s, plan)
@@ -655,8 +667,9 @@ class Router:
                     widen_ok.append(slot.name)
                 if self._fillable(s, slot):
                     fill_ok.append(slot.name)
+        confirmed = td is not None and s.confirmed_call is not None and _decode_key(td) == s.confirmed_call
         return policy_input(decoded, comp, escalator=self._can_escalate(s), widen_ok=widen_ok, fill_ok=fill_ok,
-                            confirmed=s.confirmed, loop=s.in_loop)  # fmt: skip
+                            confirmed=confirmed, loop=s.in_loop)  # fmt: skip
 
     def _fillable(self, s: _Session, slot: SlotSpec) -> bool:
         if self.filler is None or s.fills >= 1 or Channel.GENERATED not in slot.channels:
@@ -700,7 +713,7 @@ class Router:
         slot = td.tool.slot(slot_name)
         request = FillRequest(
             tool=td.tool.name, tool_description=td.tool.description, request=s.ctx.request, history=s.ctx.history,
-            frozen={k: v for k, v in td.arguments.items() if k != slot_name},
+            frozen=_frozen_arguments(td, slot_name),
             slots={slot_name: strip_xjev(slot.json_schema)},
             observations=[ObservationPreview.of(o) for o in s.ctx.all_observations()],
         )  # fmt: skip
@@ -788,10 +801,13 @@ class Router:
             selection = parse_short_reply(reply, handle.state.get("options", []))
         live = self._live.get(handle.pending_id)
         loop = bool(handle.state.get("loop"))
-        if handle.expired() or (selection is not None and live is None):
+        tool = handle.state.get("tool")
+        unknown = bool(tool) and str(tool) not in self.catalog  # resumed on a router serving another tool list
+        if handle.expired() or unknown or (selection is not None and live is None):
             s = _Session(ctx=ctx if reply is None else _with_reply(ctx, handle, reply), mode="loop" if loop else "turn",
                          tool_choice="auto", resumed_from=handle.pending_id)  # fmt: skip
-            s.notes.append("pending expired or not in memory: recompiled")
+            s.notes.append(f"pending tool {tool!r} is not in the tool list: recompiled" if unknown
+                           else "pending expired or not in memory: recompiled")  # fmt: skip
             return (yield from self._flow(s))
         if selection is not None:
             assert live is not None
@@ -812,7 +828,7 @@ class Router:
         except KeyError:
             raise ValueError(f"{selection!r} is not an option of {handle.pending_id}") from None
         s = replace(live.session, ctx=ctx, rounds=[], usage=_Usage(), notes=[], resumed_from=handle.pending_id,
-                    bindings=dict(live.session.bindings))  # fmt: skip
+                    bindings=dict(live.session.bindings), confirmed_call=None)  # fmt: skip
         state = replace(live.state, decoded=live.state.decoded)
         if action.action == "cancel":
             result = PolicyResult(outcome=Outcome.ABSTAIN, rule=RULE_NO_TOOL, reason="cancelled")
@@ -826,15 +842,20 @@ class Router:
         pending_tool = live.tool or handle.state.get("tool")
         if action.action == "bind" and pending_tool and not _decided(state, str(pending_tool), action.slot):
             return (yield from self._bind_unspeculated(handle, live, str(pending_tool), action, ctx))
+        complete_call = False
         if action.action == "confirm":
-            s.confirmed = True
+            s.confirmed_call = _call_key(handle.call) if handle.call is not None else None
         else:
             s.bindings[str(action.slot)] = (action.value, 1.0, action.label)
-            complete_call = selection.startswith(("pick:", "alt:"))
-            s.confirmed = complete_call and live.tool is not None and self.catalog.get(live.tool).tier >= Tier.EXTERNAL
+            complete_call = selection.startswith(("pick:", "alt:")) and live.tool is not None \
+                and self.catalog.get(live.tool).tier >= Tier.EXTERNAL  # fmt: skip
+            s.confirmed_call = None
         rc = replace(state.plan.rc, questions=state.ballot.by_qid)
         assert state.decoded is not None
         state.decoded = self._apply_bindings(s, state.decoded, rc)
+        td = state.decoded.decision
+        if complete_call and td is not None and td.tool.name == live.tool:
+            s.confirmed_call = _decode_key(td)  # the option showed this complete call
         inp = self._policy_input(s, state.decoded)
         result = evaluate(inp, self.policy)
         return (yield from self._finish(s, state, result, inp, delayed=True))
@@ -877,8 +898,8 @@ class Router:
             action = pending.options[choice]
             if action.action == "bind" and action.slot:
                 s.bindings[action.slot] = (action.value, p, action.label)
-            elif action.action == "confirm":
-                s.confirmed = True
+            elif action.action == "confirm" and pending.call is not None:
+                s.confirmed_call = _call_key(pending.call)  # confirms the card's call only (re-checked per decode)
             elif action.action == "tool" and action.tool:
                 s.tool_pick = (action.tool, p)
         rc = replace(state.plan.rc, questions=state.ballot.by_qid)
@@ -906,15 +927,16 @@ class Router:
     # -- TOCTOU -------------------------------------------------------------------------------------------------
 
     def default_revalidate(self, td: ToolDecode, ctx: Context) -> list[str]:
-        """TOCTOU (§3.8.5): registry-bound values still exist with the same label, constraints and ``@checks``
-        hold with fresh attributes and the current time, and the arguments still validate."""
+        """TOCTOU (§3.8.5): registry-bound values — including registry values the user clicked or picked (channel
+        ``user``, origin ``registry``) — still exist with the same label, constraints and ``@checks`` hold with fresh
+        attributes and the current time, and the arguments still validate."""
         rc = ResolveContext(ctx=ctx, catalog=self.catalog, policy=self.policy, limits=self.limits)
         problems: list[str] = []
         attrs: dict[str, Mapping[str, Any]] = {}
         for slot in td.tool.slots:
             result = td.slots[slot.name]
             attrs[slot.name] = result.attrs
-            if result.is_bottom or result.channel is not Channel.REGISTRY or result.prov.get("default"):
+            if result.is_bottom or value_origin(result) is not Channel.REGISTRY or result.prov.get("default"):
                 continue
             pool = get_resolver(slot.kind).pool(td.tool, slot, rc)
             fresh = _membership(pool, result.value, result.label)
@@ -988,21 +1010,31 @@ class Router:
             content=content, trace=trace,
         )  # fmt: skip
         if pending is not None and state is not None:
-            self.pendings[pending.pending_id] = pending
-            self._remember(pending.pending_id, _Live(session=s, state=state, tool=td.tool.name if td else None))
+            self._remember(pending, _Live(session=s, state=state, tool=td.tool.name if td else None))
         return decision
 
     def _ids(self, s: _Session) -> DecisionIds:
         parts = [self.policy.sha256, s.ctx.sha256, s.resumed_from or ""]
         parts += [c.request_sha256 + (c.response_sha256 or "") for r in s.rounds for c in r.calls]
         parts += [f"{k}={value_key(v[0])}" for k, v in sorted(s.bindings.items())]
-        parts.append("confirmed" if s.confirmed else "")
+        parts.append("confirmed" if s.confirmed_call is not None else "")
         return DecisionIds.derive(*parts)
 
-    def _remember(self, pending_id: str, live: _Live) -> None:
-        self._live[pending_id] = live
-        while len(self._live) > LIVE_MAX:
-            self._live.pop(next(iter(self._live)))
+    def _remember(self, pending: Pending, live: _Live) -> None:
+        """Hold a pending handle and its click-resume state: expired handles are dropped, then the oldest beyond
+        :data:`LIVE_MAX` (bounded memory for long-running routers)."""
+        now = datetime.now(timezone.utc)
+        for pending_id in [k for k, p in self.pendings.items() if p.expired(now)]:
+            self._forget(pending_id)
+        self._forget(pending.pending_id)
+        self.pendings[pending.pending_id] = pending
+        self._live[pending.pending_id] = live
+        while len(self.pendings) > LIVE_MAX:
+            self._forget(next(iter(self.pendings)))
+
+    def _forget(self, pending_id: str) -> None:
+        self.pendings.pop(pending_id, None)
+        self._live.pop(pending_id, None)
 
     def _confidence(self, td: ToolDecode | None, comp: Composition | None) -> Confidence | None:
         if td is None or comp is None or comp.C is None:
@@ -1217,6 +1249,14 @@ def _group_mass(state: _State, tool: str, path: tuple[str, ...]) -> dict[str, fl
     return mass
 
 
+def _frozen_arguments(td: ToolDecode, slot_name: str) -> dict[str, Any]:
+    """The decided arguments shown to the Filler, never a secret (§14: secrets are never sent; the Filler must not
+    change frozen arguments, so it gains nothing from one)."""
+    return {name: value for name, value in td.arguments.items()
+            if name != slot_name and td.tool.slot(name).kind != "secret"
+            and not (name in td.slots and td.slots[name].prov.get("secret"))}  # fmt: skip
+
+
 def _same_question(old: BallotQuestion | None, new: BallotQuestion) -> bool:
     return old is not None and old.to_wire() == new.to_wire()
 
@@ -1238,6 +1278,16 @@ def _membership(pool: Pool, value: Any, label: str | None) -> Mapping[str, Any] 
             return f"label changed to {match.label!r}"
         return dict(match.attrs)
     return None
+
+
+def _call_key(call: ToolCall) -> tuple[str, str]:
+    """``(tool, canonical arguments digest)`` of a call shown to the user."""
+    return call.name, sha256_of(jsonable(call.arguments))
+
+
+def _decode_key(td: ToolDecode) -> tuple[str, str]:
+    """The same key for a decoded call (what :meth:`Router._build` would emit)."""
+    return td.tool.name, sha256_of(jsonable(td.arguments))
 
 
 def _bindings(td: ToolDecode) -> dict[str, Binding]:

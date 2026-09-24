@@ -47,6 +47,7 @@ from jevtools.extract.tokens import words
 from jevtools.kinds.base import Alternative, ResolveContext, SlotResult, ValueEntry, register_resolver
 from jevtools.kinds.common import finalize_pool, mention_prov
 from jevtools.kinds.normalize import normalize_query, normalize_text, normalize_title
+from jevtools.prompts import join_and
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.wire import Answer, NoulAnswer
 
@@ -71,8 +72,12 @@ def text_role(slot: SlotSpec) -> str:
     return "body" if slot.stakes == "content" else "title"
 
 
-def normalizer_name(slot: SlotSpec) -> str:
-    return {"query": "text.query@1", "title": "text.title@1"}.get(text_role(slot), "text@1")
+def normalizer_name(slot: SlotSpec, *, template: bool = False) -> str:
+    """The ``name@version`` of :func:`normalize_for` (an author template renders as written: ``text.template@1``)."""
+    role = text_role(slot)
+    if role in ("query", "title"):
+        return f"text.{role}@1"
+    return "text.template@1" if template else "text@1"
 
 
 def normalize_for(slot: SlotSpec, raw: str, *, template: bool = False) -> str:
@@ -128,13 +133,6 @@ def recipient_like(slot: SlotSpec, rc: ResolveContext) -> bool:
     return slot.format == "email" or bool(provides & PEOPLE_TAGS)
 
 
-def join_names(names: Sequence[str]) -> str:
-    """``Bob and Carol`` / ``Ann, Bob and Carol``."""
-    if len(names) <= 1:
-        return "".join(names)
-    return ", ".join(names[:-1]) + " and " + names[-1]
-
-
 def handle_text(observation: Observation) -> str:
     """``⟨full text of the file read in step 1⟩`` (the late-bound content handle of an observation, §6.3)."""
     parts = observation.tool.replace("-", "_").split("_")
@@ -187,7 +185,7 @@ def _request_inputs(inputs: TemplateInputs, tool: ToolSpec, rc: ResolveContext, 
     if people is not None and people.item is not None:
         names = [m.text for n in people.item.source_names for m in mentions.anchors(n) if m.in_request]
         if names:
-            inputs.early["attendee_names"] = (join_names(names), Channel.USER)
+            inputs.early["attendee_names"] = (join_and(names), Channel.USER)
 
 
 def _profile_inputs(inputs: TemplateInputs, rc: ResolveContext) -> None:
@@ -307,10 +305,31 @@ def extracted_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
     return canonical_order(out, key=lambda c: str(c.value))
 
 
+_NOT_A_PERSON = frozenset({"place", "temporal", "enum", "money", "quantity"})
+
+
+def _third_parties(mentions: Any, clause: Mention) -> bool:
+    """Whether the clause names someone besides the recipient (a proper noun or a registry anchor that is not a
+    place, date or enum value): its pronouns may then be theirs ("Tom is sick and he can't come")."""
+    request = mentions.of(source_ref="request")
+    other = [m.span for m in request if m.kind in _NOT_A_PERSON]
+    return any(
+        m.kind in ("proper_noun", "anchor")
+        and clause.span[0] <= m.span[0]
+        and m.span[1] <= clause.span[1]
+        and not any(a < m.span[1] and m.span[0] < b for a, b in other)
+        for m in request
+    )
+
+
 def perspective_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
-    """Rung 3: ``rewrite:perspective`` variants of the request's message clauses (content slots)."""
+    """Rung 3: ``rewrite:perspective`` variants of the request's message clauses (content slots), only for clauses
+    that name no one but the recipient: a third party's he/she/his is never rewritten to "you"."""
     out: list[Candidate] = []
-    for m in rc.get_mentions().of("clause", source_ref="request"):
+    mentions = rc.get_mentions()
+    for m in mentions.of("clause", source_ref="request"):
+        if _third_parties(mentions, m):
+            continue
         variant = perspective_variant(m.text)
         if variant is not None:
             value = normalize_for(slot, variant)
@@ -481,6 +500,7 @@ def accept_result(
     )
     if best is not None and top >= floor:
         chosen = scored[best][0]
+        normalizer = normalizer_name(slot, template=True) if "template" in chosen.prov else normalizer
         alternatives = tuple(
             Alternative(display=str(c.value), p=n, value=c.value)
             for c, n in sorted(scored, key=lambda cn: -cn[1])
@@ -495,6 +515,7 @@ def accept_result(
             channel=chosen.channel,
             prov=chosen.prov,
             late=chosen.late,
+            normalizer=normalizer,
         )
     template = next((c for c, _ in scored if "template" in c.prov), None)
     if not content and template is not None:
@@ -505,6 +526,7 @@ def accept_result(
             channel=template.channel,
             prov={**template.prov, "below_floor": True},
             late=template.late,
+            normalizer=normalizer_name(slot, template=True),
             notes=("no candidate reached the cosmetic floor; first author template used",),
         )
     if not content and not slot.required:

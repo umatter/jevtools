@@ -338,6 +338,15 @@ class WrappedClient:
         return self._client
 
 
+def _is_async_create(completions: Any) -> bool:
+    """Whether ``completions.create`` is async: a coroutine function under its decorators, or an ``Async…``
+    resource class (openai's ``AsyncCompletions``)."""
+    create = getattr(completions, "create", None)
+    if create is None:
+        return False
+    return inspect.iscoroutinefunction(inspect.unwrap(create)) or type(completions).__name__.startswith("Async")
+
+
 def wrap(
     client: Any,
     router: Router,
@@ -350,13 +359,15 @@ def wrap(
     """Wrap an OpenAI (or OpenAI-compatible) client: ``client.chat.completions.create(model=model_name, …)`` is
     answered by ``router`` (spec §7.2.1); any other model goes to the wrapped client unchanged.
 
-    Async clients are detected from ``chat.completions.create`` being a coroutine function (``is_async``
-    overrides). Per-request context: ``extra_body={"jevtools": {"context": {...}, "pending_id": "…"}}``.
+    Async clients are detected from ``chat.completions.create`` being a coroutine function once its decorators are
+    unwrapped (the SDK's ``AsyncCompletions.create`` sits under a sync ``functools.wraps`` wrapper), or from the
+    completions resource's class name starting with ``Async`` (``is_async`` overrides). Per-request context:
+    ``extra_body={"jevtools": {"context": {...}, "pending_id": "…"}}``.
     ``stream=True`` yields two chunks (the whole message, then the finish reason).
     """
     completions = client.chat.completions
     if is_async is None:
-        is_async = inspect.iscoroutinefunction(getattr(completions, "create", None))
+        is_async = _is_async_create(completions)
     interceptor = _Interceptor(router=router, model_name=model_name,
                                store=store if store is not None else default_store(router),
                                context=context)  # fmt: skip
@@ -460,11 +471,16 @@ def decision_error(decision: Decision) -> ErrorResponse | None:
     """The §7.2.4 error for a fail-closed decision (rule ``P0.backend.fail_closed``), else ``None``.
 
     The router records backend failures as text in the trace's call records; the HTTP status is read back from
-    it (``… HTTP 401 …``); a failure without one (transport error, timeout) maps to ``jev_unavailable``.
+    it (``… HTTP 401 …``); a failure without one (transport error, timeout) maps to ``jev_unavailable``. When every
+    call of the decision was answered and none failed, the answers themselves did not decode (a missing answer, a
+    wrong type, a Noul outside [0, 1]): ``jev_protocol_error`` (502).
     """
     if decision.rule != RULE_FAIL_CLOSED:
         return None
-    errors = [c.error for r in getattr(decision.trace, "rounds", []) for c in r.calls if c.error]
+    calls = [c for r in getattr(decision.trace, "rounds", []) for c in r.calls]
+    errors = [c.error for c in calls if c.error]
+    if not errors and calls and all(c.response_sha256 for c in calls):
+        return error_response(JevProtocolError("Jev answered, but its answers could not be decoded"))
     text = errors[0] if errors else "Jev call failed"
     found = _STATUS.search(text)
     status = int(found.group(1)) if found else None

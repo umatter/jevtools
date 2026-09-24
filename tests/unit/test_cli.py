@@ -280,3 +280,17 @@ def test_usage_errors() -> None:
     assert run()[0] == 2
     code, _, err = run("lint", "/does/not/exist.json")
     assert code == 1 and "FileNotFoundError" in err
+
+
+@pytest.mark.parametrize("doc", [[1, 2], 5, "trace", None])
+def test_explain_and_verify_reject_a_non_object_trace_cleanly(tmp_path: Path, doc: Any) -> None:
+    """A trace or context file that is not a JSON object is a usage message and exit 1, never a traceback."""
+    path = _write(tmp_path / "doc.json", doc)
+    for command in ("explain", "verify"):
+        code, _, err = run(command, path)
+        assert code == 1 and err.startswith(f"jevtools {command}:") and "expected a trace object" in err
+    from jevtools.cli import load_context
+    from jevtools.errors import JevtoolsError
+
+    with pytest.raises(JevtoolsError, match="expected a context object"):
+        load_context(path)

@@ -8,9 +8,11 @@ calibrated probabilities and no text. That makes it good at picking a tool and u
 jevtools removes the need to write them. For every parameter, code builds a finite pool of candidates: spans of the
 user's words, rows of your registries, enum members, every reading of "next Tuesday", fields of earlier tool outputs.
 Jev elects one per slot ("bind, don't write"). The tool question and the questions for every argument of every
-plausible tool go out as one fan-out request, so most requests cost one Jev call. The answers compose into a
-calibrated call confidence, and a risk-tiered policy turns it into execute, confirm, clarify, escalate, abstain or
-refuse, with a trace you can replay.
+plausible tool go out as one fan-out request, so most requests cost one Jev call. The answers compose into a call
+confidence C (W, Π or min(L, J), by risk tier), and a risk-tiered policy turns it into execute, confirm, clarify,
+escalate, abstain or refuse, with a trace you can replay. C is a bound, a product or a joint mass built from Jev's
+per-question probabilities, not itself a calibrated probability. It becomes one only after you fit a calibrator on
+labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
 > **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green, but **nothing has been measured
 > against live Jev yet**. Every number in this README comes from the scripted backend or the offline
@@ -323,8 +325,8 @@ ai = JevChatModel(router=router).bind_tools([get_weather]).invoke("What's the we
 print(ai.tool_calls)   # [{'name': 'get_weather', 'args': {'city': 'Zurich', 'unit': 'celsius'}, …}]
 ```
 
-**Pydantic AI.** `JevModel` implements the `Model` interface. Output tools such as `final_result` are elected like
-any other tool.
+**Pydantic AI.** `JevModel` implements the `Model` interface (pydantic-ai-slim ≥ 1.0.13, as the extra requires).
+Output tools such as `final_result` are elected like any other tool.
 
 ```python
 from typing import Literal
@@ -340,7 +342,8 @@ agent = Agent(JevModel(jt.Router([get_weather], backend=jt.backends.LexicalSimul
 print(agent.run_sync("What's the weather like in Zurich in Fahrenheit?").output)   # 61 degrees in Zurich
 ```
 
-**MCP.** jevtools decides and the MCP client executes. `call_decision` passes the idempotency key in `_meta`.
+**MCP.** jevtools decides and the MCP client executes. `call_decision` passes the idempotency key in `_meta`,
+which needs mcp ≥ 1.19 (older `ClientSession.call_tool` takes no `meta`); the `mcp` extra requires it.
 
 ```python
 import jevtools as jt
@@ -477,7 +480,7 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools lint CATALOG [--sidecar F] [--sources F] [--filler] [--strict]` | one line per tool and slot: tier, kind, candidate source, `OK`/`WEAK`/`WARN`/`ERROR` |
 | `jevtools explain TRACE [--policy F]` | a readable account of a decision: bindings, alternatives, sentinels, factors, thresholds, rounds |
 | `jevtools verify TRACE [--catalog F --sources F --context F --policy F]` | replay a trace without the model; exit 1 on any failed check |
-| `jevtools probe [--backend auto] [--no-smoke]` | about 12 live calls that measure undocumented wire limits and cache them for the validator |
+| `jevtools probe [--backend auto] [--no-smoke]` | 19 live requests (16 with `--no-smoke`; more when a rejected size is halved; plus `GET /v1/models` on TypeSafe), of up to 400 questions and 8,000-character fields, that measure undocumented wire limits and cache them for the validator |
 | `jevtools serve --config jevtools.toml [--host H --port P]` | the OpenAI-compatible proxy (extra `serve`) |
 | `jevtools eval DATASET [--backend B] [--replays N] [--out report.json]` | run a labelled dataset and report the SPEC §11.2 metrics |
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
@@ -539,7 +542,7 @@ src/jevtools/        the package (module map: docs/ARCHITECTURE.md)
   plan.py decode.py confidence.py policy.py router.py trace.py   the decision pipeline
   adapters/ serve/ eval/ backends/ demo/   integrations, proxy, evaluation, Jev backends, synthetic demo world
 examples/            01–08 runnable scripts (offline by default; --backend scripted|sim|live), proxy/
-tests/               1,000+ offline tests; tests/golden/ holds the conformance fixtures
+tests/               1,000+ offline tests; tests/golden/ holds the conformance fixtures, tests/live/ the live smoke suite
 docs/SPEC.md         the normative protocol (jevtools/0.1)
 docs/DECISIONS.md    where the implementation resolved ambiguities in, or deviates from, the spec
 docs/ARCHITECTURE.md module map and data flow
@@ -550,6 +553,8 @@ docs/ARCHITECTURE.md module map and data flow
 - **Ports.** Everything from the Ballot onward is byte-specified. `tests/golden/<case>/` stores the Ballot, every
   Jev request and response, and the Decision and Trace for 16 cases. A port (R first) conforms when it reproduces
   those bytes. See [tests/golden/README.md](tests/golden/README.md).
-- **Development.** `python -m pytest -q`, `ruff check .`, `ruff format --check .`, `mypy --strict src/jevtools`. Live
-  tests (`-m live`) are skipped without a key.
+- **Development.** `python -m pytest -q`, `ruff check .`, `ruff format --check .`, `mypy --strict src/jevtools`. The
+  live smoke suite in `tests/live` (SPEC §10.7) is skipped without a key. `python -m pytest -m live` runs it against
+  every HTTP backend whose key is set: the conformance probe, R1–R7 and a cassette round trip, asserting only the
+  invariants (I1–I5, schema-valid calls, no unconfirmed critical call), never probabilities.
 - **License.** None has been chosen yet: there is no `LICENSE` file, and the package metadata declares none.

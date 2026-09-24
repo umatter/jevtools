@@ -45,6 +45,7 @@ from jevtools.prompts import Binding, render_call
 from jevtools.qid import TOOL_QID
 from jevtools.spec.catalog import Catalog
 from jevtools.spec.constraints import ConstraintContext
+from jevtools.spec.infer import SECRET_NAMES
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.validate import Limits, preflight
 
@@ -134,9 +135,10 @@ def compile_round(
       resolver that needs them (:meth:`~jevtools.kinds.base.ResolveContext.get_mentions`).
     """
     policy = policy or Policy()
-    limits = limits or Limits()
+    limits = (limits or Limits()).within_budget(policy.budget)
     choice, named = parse_tool_choice(tool_choice, catalog)
-    state, notes = cut_state(build_state(ctx, mode), limits, keep=pinned_mentions(ctx))
+    state, notes = cut_state(build_state(ctx, mode, secret_fields=secret_user_fields(catalog, ctx)), limits,
+                             keep=pinned_mentions(ctx))  # fmt: skip
     rc = ResolveContext(
         ctx=ctx, catalog=catalog, policy=policy, limits=limits, mode=mode, state=state, round=round,
         has_filler=has_filler, preferred={}, widen={}, injected=injected_by_slot(catalog, extra_candidates or {}),
@@ -205,7 +207,7 @@ def parse_tool_choice(tool_choice: ToolChoice | None, catalog: Catalog) -> tuple
 
 def state_tokens(state: Any, limits: Limits) -> int:
     """Estimated tokens of the state alone."""
-    return math.ceil(len(canonical_str(state)) * limits.token_ratio / limits.chars_per_token)
+    return limits.tokens_for_chars(len(canonical_str(state)))
 
 
 def cut_state(
@@ -522,6 +524,20 @@ class _Builder:
         return questions
 
 
+def secret_user_fields(catalog: Catalog, ctx: Context) -> frozenset[str]:
+    """Profile fields never sent to Jev (§3.5.1, §14 "secrets are never sent"), shareable or not: every top-level
+    ``user`` field a ``secret`` slot reads through ``default_from: user.<field>…``, and every field whose name is a
+    secret name (``password``, ``token``, ``api_key``…, the §3.3.1 row-1 names)."""
+    fields = {key for key in ctx.user if key.lower() in SECRET_NAMES}
+    for tool in catalog:
+        for top in tool.slots:
+            for slot in top.walk():
+                head, _, rest = (slot.default_from or "").partition(".")
+                if slot.kind == "secret" and head == "user" and rest:
+                    fields.add(rest.split(".", 1)[0])
+    return frozenset(fields)
+
+
 def sibling_source(tool: ToolSpec, slot: SlotSpec) -> tuple[str, str] | None:
     """``(sibling, attr)`` of a ``default_from`` that names another slot of the tool."""
     if not slot.default_from:
@@ -535,12 +551,19 @@ def sibling_source(tool: ToolSpec, slot: SlotSpec) -> tuple[str, str] | None:
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def _question_chars(question: BallotQuestion) -> int:
-    return len(canonical_str(question.qid)) + len(canonical_str(question.to_wire().to_wire())) + 2
+OPAQUE_ID_CHARS = 5
+"""Length of an opaque wire id (``q0001``…, :func:`jevtools.qid.opaque_ids`) for up to 9,999 questions."""
+
+
+def _question_chars(question: BallotQuestion, limits: Limits) -> int:
+    """Characters of one question in a request body: its wire id (the dotted qid, or at least an opaque id's
+    length), the question and the separators — never fewer than the sent request carries."""
+    qid = question.qid if limits.id_mode == "dotted" else question.qid.ljust(OPAQUE_ID_CHARS)
+    return len(canonical_str(qid)) + len(canonical_str(question.to_wire().to_wire())) + 2
 
 
 def _tokens(chars: int, limits: Limits) -> int:
-    return math.ceil(chars * limits.token_ratio / limits.chars_per_token)
+    return limits.tokens_for_chars(chars)
 
 
 def _base_chars(state: Any) -> int:
@@ -548,7 +571,7 @@ def _base_chars(state: Any) -> int:
 
 
 def _over_budget(questions: Sequence[BallotQuestion], state: Any, limits: Limits) -> bool:
-    chars = _base_chars(state) + sum(_question_chars(q) for q in questions)
+    chars = _base_chars(state) + sum(_question_chars(q, limits) for q in questions)
     return len(questions) > limits.max_questions or _tokens(chars, limits) > limits.max_tokens
 
 
@@ -621,7 +644,7 @@ def split_calls(questions: Sequence[BallotQuestion], state: Any, limits: Limits)
     calls: list[list[str]] = []
     count = chars = 0
     for unit in family_units(questions):
-        unit_chars = sum(_question_chars(q) for q in unit)
+        unit_chars = sum(_question_chars(q, limits) for q in unit)
         fits = calls and count + len(unit) <= limits.max_questions and \
             _tokens(base + chars + unit_chars, limits) <= limits.max_tokens  # fmt: skip
         if not fits:
@@ -653,6 +676,7 @@ __all__ = [
     "parse_tool_choice",
     "plan_round",
     "reply_question",
+    "secret_user_fields",
     "sibling_source",
     "split_calls",
     "state_tokens",

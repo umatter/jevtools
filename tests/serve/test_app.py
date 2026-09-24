@@ -154,6 +154,57 @@ def test_expired_pending_compiles_a_fresh_turn() -> None:
     assert reply["x_jev"]["trace_id"] != card["x_jev"]["trace_id"]
 
 
+def test_pending_prefix_key_is_scoped_to_the_requester() -> None:
+    """Two users with the same history and the same (summarising) card text: user A's plain-echo 'yes' resumes
+    A's own pending, never the one user B's request stored in between (review-edges #1)."""
+    tools = scenario_tools()
+    for tool in tools:
+        if tool["function"]["name"] == "send_email":
+            tool["function"].setdefault("x-jev", {})["confirm_template"] = "Send this email to {to.label}?"
+    c, backend = client(scripts.R2)
+    history = scenario_messages(scripts.R2_REQUEST, history=True)
+
+    def ask(messages: list[dict[str, Any]], name: str) -> dict[str, Any]:
+        return message(
+            c.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "jevtools",
+                    "messages": messages,
+                    "tools": tools,
+                    "jevtools": {"context": {"user": {"name": name}}},
+                },
+            )
+        )
+
+    card_a = ask(history, "Sam Muster")
+    card_b = ask(history, "Bob Evil")
+    assert card_a["content"] == card_b["content"]  # the card hides the per-user body
+    assert card_a["x_jev"]["pending_id"] != card_b["x_jev"]["pending_id"]
+    reply = [*history, {"role": "assistant", "content": card_a["content"]}, {"role": "user", "content": "yes"}]
+    done = ask(reply, "Sam Muster")
+    assert done["x_jev"]["outcome"] == "execute" and len(backend.requests) == 2  # a click: no Jev call
+    assert json.loads(done["tool_calls"][0]["function"]["arguments"])["body"].endswith("Sam")
+    done_b = ask(reply, "Bob Evil")  # B's handle survived A's resume
+    assert json.loads(done_b["tool_calls"][0]["function"]["arguments"])["body"].endswith("Bob")
+    assert len(backend.requests) == 2
+    # a pending id echoed by another requester is a miss (recompiled), never a resume of the other's call
+    c2, backend2 = client(scripts.R2)
+    card = message(chat(c2, history, jevtools={"context": {"user": {"name": "Sam Muster"}}}))
+    other = message(
+        chat(
+            c2,
+            [
+                *history,
+                {"role": "assistant", "content": "(card)", "x_jev": card["x_jev"]},
+                {"role": "user", "content": "yes"},
+            ],
+            jevtools={"context": {"user": {"name": "Bob"}}},
+        )
+    )
+    assert len(backend2.requests) == 2 and "Sam" not in json.dumps(other)
+
+
 def error_of(response: httpx.Response) -> dict[str, Any]:
     body = response.json()
     assert "choices" not in body  # a tool call is never produced on an error path
@@ -206,6 +257,43 @@ def test_bad_tools_and_bad_requests() -> None:
     assert bad_src.status_code == 400 and error_of(bad_src)["code"] == "jevtools_bad_sources"
     assert chat(c, scenario_messages("hi"), jevtools=[1]).json()["error"]["code"] == "jevtools_bad_extra"
     assert backend.requests == []
+
+
+@pytest.mark.parametrize(
+    ("body", "code"),
+    [
+        ({"tool_choice": {"type": "function", "function": {"name": "nope"}}}, "jevtools_bad_tool_choice"),
+        ({"tool_choice": "bogus"}, "jevtools_bad_tool_choice"),
+        ({"tool_choice": {"type": "allowed_tools", "allowed_tools": {"mode": "auto", "tools": []}}},
+         "jevtools_bad_tool_choice"),
+        ({"messages": ["hello"]}, "invalid_messages"),
+        ({"messages": [{"role": "function", "name": "f", "content": "x"}]}, "invalid_messages"),
+        ({"jevtools": {"context": [1]}}, "jevtools_bad_context"),
+        ({"jevtools": {"context": "Sam"}}, "jevtools_bad_context"),
+    ],
+)  # fmt: skip
+def test_client_input_errors_are_400(body: dict[str, Any], code: str) -> None:
+    """Client mistakes are OpenAI 400s, never a 5xx or a plain-text error (review-edges #11)."""
+    c, backend = client()
+    messages = body.pop("messages", None) or scenario_messages(scripts.R1_REQUEST)
+    response = chat(c, messages, **body)
+    assert response.status_code == 400, response.text
+    error = error_of(response)
+    assert error["type"] == "invalid_request_error" and error["code"] == code
+    assert backend.requests == []
+
+
+def test_a_malformed_jev_answer_is_a_502_protocol_error() -> None:
+    class Missing(ScriptedBackend):
+        def decide(self, request: DecisionRequest) -> DecisionResponse:
+            response = super().decide(request)
+            answers = dict(response.answers)
+            answers.pop(next(iter(answers)))
+            return DecisionResponse(model=response.model, answers=answers, usage=response.usage)
+
+    c, _ = client(backend=Missing(scripts.R1, model=MODEL))
+    response = chat(c, scenario_messages(scripts.R1_REQUEST))
+    assert response.status_code == 502 and error_of(response)["code"] == "jev_protocol_error"
 
 
 def test_fallback_on_jev_failure_strips_x_jev() -> None:

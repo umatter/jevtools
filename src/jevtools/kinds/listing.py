@@ -424,6 +424,11 @@ class ListResolver:
             shapes.append("missing")
         factor = math.prod(factors)
         key = value_key(records)
+        # Like a nested record (record.assemble): the leaves' consistency flags (presence_conflict,
+        # order_sensitive, no_answer) and least-trusted channel reach P8/P9 through the list result.
+        flags = [f for r in parts.values() for f in r.flags] + (["more"] if more >= 0.5 else [])
+        channels = [r.channel for r in parts.values() if r.channel is not None and not r.is_bottom]
+        qids = [q.qid for q in rc.slot_questions(tool, slot)] + [q for r in parts.values() for q in r.qids]
         return SlotResult(
             path=slot.path,
             kind=slot.kind,
@@ -435,9 +440,10 @@ class ListResolver:
             factor=factor,
             parts=parts,
             normalizer=self.normalizer,
-            flags=("more",) if more >= 0.5 else (),
+            flags=tuple(dict.fromkeys(flags)),
+            channel=least_trusted(*channels) if channels else None,
             probes={"more": more},
-            qids=tuple(q.qid for q in rc.slot_questions(tool, slot)),
+            qids=tuple(dict.fromkeys(qids)),
         )
 
 

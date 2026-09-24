@@ -81,7 +81,7 @@ EN = Locale(
     clause_markers=(("that",), ("saying",), ("to", "say"), (":",)),
     tell_verbs=_fs("tell let"),
     number_words=_NUMBER_WORDS,
-    scale_words={"hundred": 100, "thousand": 1000, "million": 1_000_000},
+    scale_words={"hundred": 100, "thousand": 1000, "million": 1_000_000, "billion": 1_000_000_000},
     fraction_words={"half": "0.5", "quarter": "0.25"},
     weekdays={
         "monday": 0,

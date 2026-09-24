@@ -29,6 +29,21 @@ MAX_DERIVED = 64
 CONTEXT_FIELDS = (*SETTING_FIELDS, "observations")
 """Context fields a request may override (``extra_body.jevtools.context``, ``configurable.jev_context``…)."""
 
+OUTPUT_TOOL_XJEV: dict[str, Any] = {"risk": "read"}
+"""Tool-level ``x-jev`` of output tools (Pydantic AI ``final_result``, a LangChain ``with_structured_output``
+schema): returning the run's result has no side effect."""
+
+
+def as_output_tool(tool: Mapping[str, Any]) -> dict[str, Any]:
+    """An OpenAI function tool marked as an output tool (:data:`OUTPUT_TOOL_XJEV`), unless its definition already
+    declares a ``risk`` (in the function's or the parameters' ``x-jev``)."""
+    function = dict(tool.get("function") or {})
+    declared = [function.get("x-jev"), tool.get("x-jev"), (function.get("parameters") or {}).get("x-jev")]
+    if any(isinstance(x, Mapping) and "risk" in x for x in declared):
+        return dict(tool)
+    function["x-jev"] = {**dict(function.get("x-jev") or {}), **OUTPUT_TOOL_XJEV}
+    return {**tool, "function": function}
+
 
 def _raw_doc(raw: RawTool) -> dict[str, Any]:
     return {"name": raw.name, "description": raw.description, "parameters": jsonable(raw.parameters),
@@ -93,6 +108,8 @@ def merge_context(base: Context | None, override: Context | Mapping[str, Any] | 
         return base
     if isinstance(override, Context):
         return override
+    if not isinstance(override, Mapping):
+        raise TypeError(f"a context override must be an object, not {type(override).__name__}")
     fields = {k: v for k, v in override.items() if k in CONTEXT_FIELDS}
     unknown = sorted(set(override) - set(CONTEXT_FIELDS))
     if unknown:
@@ -102,4 +119,12 @@ def merge_context(base: Context | None, override: Context | Mapping[str, Any] | 
     return (base or Context()).model_copy(update=update)
 
 
-__all__ = ["CONTEXT_FIELDS", "MAX_DERIVED", "derive_router", "merge_context", "router_for"]
+__all__ = [
+    "CONTEXT_FIELDS",
+    "MAX_DERIVED",
+    "OUTPUT_TOOL_XJEV",
+    "as_output_tool",
+    "derive_router",
+    "merge_context",
+    "router_for",
+]
