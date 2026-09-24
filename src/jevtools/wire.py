@@ -12,11 +12,11 @@ carries one typed answer per question. Jev never returns text.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-JSONContent = Union[str, dict[str, Any], list[Any]]
+JSONContent = str | dict[str, Any] | list[Any]
 """State, instructions and criteria may each be text, a JSON object, or a JSON array."""
 
 MAX_CHOICE_OPTIONS = 255
@@ -68,7 +68,7 @@ class ScoreQuestion(_Wire):
     criteria: list[JSONContent] = Field(min_length=1)
 
 
-Question = Annotated[Union[ChoiceQuestion, NoulQuestion, ScoreQuestion], Field(discriminator="type")]
+Question = Annotated[ChoiceQuestion | NoulQuestion | ScoreQuestion, Field(discriminator="type")]
 
 
 class ChoiceAnswer(BaseModel):
@@ -97,7 +97,7 @@ class ScoreAnswer(BaseModel):
     probabilities: dict[int, float] = Field(default_factory=dict)
 
 
-Answer = Annotated[Union[ChoiceAnswer, NoulAnswer, ScoreAnswer], Field(discriminator="type")]
+Answer = Annotated[ChoiceAnswer | NoulAnswer | ScoreAnswer, Field(discriminator="type")]
 
 
 class Usage(BaseModel):

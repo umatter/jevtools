@@ -1,0 +1,113 @@
+"""French lexicon: numbers, money markers, weekdays, relative days, clock times, negation."""
+
+from __future__ import annotations
+
+from jevtools.extract.locales import Locale
+
+
+def _fs(text: str) -> frozenset[str]:
+    return frozenset(text.split())
+
+
+FR = Locale(
+    code="fr",
+    decimal=",",
+    stopwords=_fs(
+        "le la les l' un une des du de d' et ou mais avec pour a au aux en dans sur par est sont je tu il elle nous "
+        "vous ils elles me te se lui leur moi toi ne pas plus que qui s'il svp stp"
+    ),
+    articles=_fs("le la les un une des du"),
+    determiners=_fs("le la les un une des du mon ma mes ton ta tes son sa ses ce cet cette ces"),
+    prepositions=_fs("avec pour a au aux en dans sur par de"),
+    conjunctions=_fs("et ou"),
+    object_pronouns=_fs("me moi lui leur nous vous les la le"),
+    subject_pronouns=_fs("je tu il elle nous vous ils elles"),
+    command_verbs=_fs("envoie envoyez reserve reservez cree creez trouve trouvez ouvre ouvrez lis montre"),
+    politeness=(("s'il", "te", "plait"), ("s'il", "vous", "plait"), ("svp",), ("stp",), ("peux", "tu")),
+    clause_markers=(("que",), (":",)),
+    tell_verbs=_fs("dis dites"),
+    number_words={
+        "zero": 0,
+        "un": 1,
+        "une": 1,
+        "deux": 2,
+        "trois": 3,
+        "quatre": 4,
+        "cinq": 5,
+        "six": 6,
+        "sept": 7,
+        "huit": 8,
+        "neuf": 9,
+        "dix": 10,
+        "onze": 11,
+        "douze": 12,
+        "quinze": 15,
+        "vingt": 20,
+        "trente": 30,
+        "quarante": 40,
+        "cinquante": 50,
+        "soixante": 60,
+    },
+    scale_words={"cent": 100, "mille": 1000},
+    fraction_words={"demi": "0.5", "demie": "0.5", "quart": "0.25"},
+    weekdays={
+        "lundi": 0,
+        "mardi": 1,
+        "mercredi": 2,
+        "jeudi": 3,
+        "vendredi": 4,
+        "samedi": 5,
+        "dimanche": 6,
+    },
+    months={
+        "janvier": 1,
+        "fevrier": 2,
+        "mars": 3,
+        "avril": 4,
+        "mai": 5,
+        "juin": 6,
+        "juillet": 7,
+        "aout": 8,
+        "septembre": 9,
+        "octobre": 10,
+        "novembre": 11,
+        "decembre": 12,
+    },
+    relative_days={("aujourd'hui",): 0, ("demain",): 1, ("apres-demain",): 2, ("apres", "demain"): 2, ("hier",): -1},
+    next_after=_fs("prochain prochaine"),
+    this_words=_fs("ce cet cette"),
+    last_words=_fs("dernier derniere"),
+    in_words=_fs("dans"),
+    at_words=_fs("a"),
+    duration_units={
+        "seconde": "second",
+        "secondes": "second",
+        "minute": "minute",
+        "minutes": "minute",
+        "min": "minute",
+        "heure": "hour",
+        "heures": "hour",
+        "h": "hour",
+        "jour": "day",
+        "jours": "day",
+        "semaine": "week",
+        "semaines": "week",
+        "mois": "month",
+        "an": "year",
+        "ans": "year",
+    },
+    clock_words=_fs("heures heure"),
+    noon=_fs("midi"),
+    midnight=_fs("minuit"),
+    end_of_day=(("fin", "de", "journee"), ("fin", "de", "la", "journee")),
+    day_parts={"matin": (8, 12), "apres-midi": (12, 17), "soir": (17, 21)},
+    week_words=_fs("semaine"),
+    between_words=_fs("entre"),
+    after_words=_fs("apres"),
+    before_words=_fs("avant"),
+    and_words=_fs("et -"),
+    currency_words={"franc": "CHF", "francs": "CHF", "fr": "CHF", "chf": "CHF", "euro": "EUR", "euros": "EUR"},
+    negations=_fs("pas sauf sans ne excepte"),
+)
+
+__all__ = ["FR"]

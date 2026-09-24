@@ -1,0 +1,64 @@
+{
+  "_doc": "Template pack for calendar tools (spec §3.3). Same entry format as email.json.",
+  "title": [
+    {
+      "when": [
+        "lunch"
+      ],
+      "templates": [
+        "Lunch with {attendee_names}"
+      ]
+    },
+    {
+      "when": [
+        "coffee"
+      ],
+      "templates": [
+        "Coffee with {attendee_names}"
+      ]
+    },
+    {
+      "when": [
+        "dinner"
+      ],
+      "templates": [
+        "Dinner with {attendee_names}"
+      ]
+    },
+    {
+      "when": [
+        "call"
+      ],
+      "templates": [
+        "Call with {attendee_names}"
+      ]
+    },
+    {
+      "when": [
+        "1:1",
+        "one-on-one",
+        "1on1"
+      ],
+      "templates": [
+        "1:1 with {attendee_names}"
+      ]
+    },
+    {
+      "when": [
+        "interview"
+      ],
+      "templates": [
+        "Interview with {attendee_names}"
+      ]
+    },
+    {
+      "when": [
+        "standup",
+        "stand-up"
+      ],
+      "templates": [
+        "Stand-up"
+      ]
+    }
+  ]
+}

@@ -40,10 +40,13 @@ class ScriptedBackend:
     silently confident guess. Every request is kept in :attr:`requests`.
     """
 
-    def __init__(self, script: Script | None = None, *, p_top: float = 0.92, model: str = "scripted") -> None:
+    def __init__(
+        self, script: Script | None = None, *, p_top: float = 0.92, model: str = "scripted", name: str = "scripted"
+    ) -> None:
         self.script = script or {}
         self.p_top = p_top
         self.model = model
+        self.name = name
         self.requests: list[DecisionRequest] = []
 
     def decide(self, request: DecisionRequest) -> DecisionResponse:
@@ -54,7 +57,9 @@ class ScriptedBackend:
             spec = _lookup(script, qid)
             answers[qid] = _answer(question, spec, self.p_top)
         tokens = len(str(request.to_wire())) // 4
-        return DecisionResponse(model=self.model, answers=answers, usage=Usage(input_tokens=tokens, output_tokens=len(answers)))
+        return DecisionResponse(
+            model=self.model, answers=answers, usage=Usage(input_tokens=tokens, output_tokens=len(answers))
+        )
 
     async def adecide(self, request: DecisionRequest) -> DecisionResponse:
         return self.decide(request)
@@ -118,7 +123,9 @@ def score_answer(levels: list[Any], spec: Any, p_top: float = 0.92) -> ScoreAnsw
     probs = {i: v / total for i, v in raw.items()}
     expected = sum(i * p for i, p in probs.items())
     legend = {i: level for i, level in enumerate(levels)}
-    return ScoreAnswer(score=expected, confidence=concentration(list(probs.values())), legend=legend, probabilities=probs)
+    return ScoreAnswer(
+        score=expected, confidence=concentration(list(probs.values())), legend=legend, probabilities=probs
+    )
 
 
 def concentration(probs: list[float]) -> float:

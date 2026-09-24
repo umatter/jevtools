@@ -1,0 +1,85 @@
+{
+  "_doc": "Template pack for email tools (spec §3.3, §4.2.11). Each entry: when (cue words in the user's words; absent = always), requires (early inputs that must exist), templates. Placeholders: {message} {duration} {object} {topic} {attendee_names} {observation_title} {user.<field>} {user.first_name} (early-bound); {recipient.first_name} {observation} (late-bound, shown as ⟨…⟩).",
+  "subject": [
+    {
+      "when": [
+        "late"
+      ],
+      "templates": [
+        "Running {duration} late",
+        "Running late"
+      ]
+    },
+    {
+      "when": [
+        "forward",
+        "fwd"
+      ],
+      "requires": [
+        "observation"
+      ],
+      "templates": [
+        "Fwd: {observation_title}"
+      ]
+    },
+    {
+      "when": [
+        "thanks",
+        "thank"
+      ],
+      "templates": [
+        "Thank you"
+      ]
+    },
+    {
+      "when": [
+        "sick",
+        "ill"
+      ],
+      "templates": [
+        "Out sick today"
+      ]
+    },
+    {
+      "when": [
+        "reschedule",
+        "postpone"
+      ],
+      "templates": [
+        "Rescheduling {object}"
+      ]
+    },
+    {
+      "when": [
+        "cancel"
+      ],
+      "templates": [
+        "Cancelled: {object}"
+      ]
+    }
+  ],
+  "body": [
+    {
+      "requires": [
+        "message"
+      ],
+      "templates": [
+        "Hi {recipient.first_name},\n\n{message}\n\nBest,\n{user.first_name}"
+      ]
+    }
+  ],
+  "forward": [
+    {
+      "when": [
+        "forward",
+        "fwd"
+      ],
+      "requires": [
+        "observation"
+      ],
+      "templates": [
+        "Hi,\n\nForwarding {object} below.\n\n{observation}\n\nBest,\n{user.first_name}"
+      ]
+    }
+  ]
+}
