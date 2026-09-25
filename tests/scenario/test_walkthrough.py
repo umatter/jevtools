@@ -64,7 +64,7 @@ def test_r2_request_is_the_spec_request() -> None:
     assert qids(backend) == R2_QIDS
     assert ordered_json(backend.requests[0].to_wire()) == ordered_json(load_fixture("spec_r2_request.json"))
     compact = json.dumps(backend.requests[0].to_wire(), ensure_ascii=False, separators=(",", ":"))
-    assert len(compact) == 5888  # "13 questions, 5,888 characters" (§13.4)
+    assert len(compact) == 5856  # "13 questions, 5,856 characters" (§13.4)
     tools = {t.name: t for t in router.compile(scenario_messages(scripts.R2_REQUEST, history=True)).tools}
     assert not any(tools[name].speculated for name in ("create_event", "transfer_funds", "read_file"))
 
@@ -98,7 +98,7 @@ def test_r2_without_history_clarifies_then_a_click_executes() -> None:
     assert d.confidence is not None and round(d.confidence.PI, 2) == 0.39
     assert d.bottleneck is not None and (d.bottleneck.slot, d.bottleneck.shape) == ("to", "ambiguous")
     assert d.prompt is not None and d.prompt.kind == "menu"
-    assert d.prompt.text == "Which recipient's email address did you mean?"
+    assert d.prompt.text == "Which recipient did you mean?"
     assert [o.id for o in d.prompt.options] == ["pick:to:0", "pick:to:1", "pick:to:2", "other"]
     for option, label in zip(d.prompt.options, (scripts.KELLER, scripts.ROSSI, scripts.FREY), strict=False):
         assert label in option.text and option.text.startswith("Send an email")  # complete calls

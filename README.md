@@ -18,10 +18,12 @@ escalate, abstain or refuse, with a trace you can replay. C is a bound, a produc
 per-question probabilities, not itself a calibrated probability. It becomes one only after you fit a calibrator on
 labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
-> **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green, but **nothing has been measured
-> against live Jev yet**. Every number in this README comes from the scripted backend, the offline
-> `LexicalSimulator` or the benchmark oracle. Those numbers show what jevtools can produce and are never evidence
-> about Jev's accuracy.
+> **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green. **Live Jev has been measured once**:
+> one run of the app-domain benchmark (99 cases, OpenRouter, 2026-09-25) scored 80% correct against a 99% ceiling,
+> with no planted value reaching a call ([Benchmarks](#benchmarks)). That is a single unreplicated run, not a
+> calibration. Every other number in this README (probabilities, confidences, token counts in examples and
+> fixtures) comes from the scripted backend, the offline `LexicalSimulator` or the benchmark oracle, and is never
+> evidence about Jev's accuracy.
 
 ## Where it fits
 
@@ -307,7 +309,7 @@ from jevtools.demo import scenario, scripts
 
 router, _ = scenario.scenario_router(scripts.R2_NO_HISTORY)
 d = router.decide("Email Anna that I'll be 10 minutes late")
-print(d.outcome, d.rule, d.prompt.text)   # clarify P9.external.ambiguous Which recipient's email address did you mean?
+print(d.outcome, d.rule, d.prompt.text)   # clarify P9.external.ambiguous Which recipient did you mean?
 for option in d.prompt.options:           # external tier: every option is the complete resulting call
     print(option.id, option.text)         # pick:to:0 Send an email to Anna Keller <anna.keller@acme.com> — …
 d = router.resume(d.pending_id, selection="pick:to:0")
@@ -544,8 +546,12 @@ with balance constraints, coreference and six injections planted in observations
 |---|---:|---:|---:|---:|---:|---:|---:|
 | cases | 20 | 17 | 16 | 15 | 16 | 15 | 99 |
 | ceiling (oracle, not Jev) | 95% | 100% | 100% | 100% | 100% | 100% | 99% |
+| live Jev, one run (2026-09-25) | 60% | 94% | 88% | 73% | 69% | 100% | 80% |
 
-The oracle makes no wrong executions and lets no planted value reach a call. The one miss names a contact by a role
+The oracle makes no wrong executions and lets no planted value reach a call. Live Jev let no planted value reach a
+call either. Its 3 wrong executions were all the read-only `search_files` chosen instead of opening a file, and most
+of its other misses are clarify menus where the right call was bound but fell below the tier's prior thresholds
+(untuned). One run per case, so a single domain moves by ±10 points between runs. The one miss names a contact by a role
 that the app's data does not expose to matching. The cases use the §11.1 format, so the same files are `jevtools
 eval` datasets. `--dir` runs your own domains, which is the fastest way to see what jevtools can do on your tools and
 data before the first API call.
@@ -577,8 +583,9 @@ leads to execute. For cassettes, give the `Context` a fixed `now`, because the s
 
 These are condensed from SPEC §14.
 
-- **No live measurements yet.** Every probability, token count and cost in the docs, examples and fixtures is
-  illustrative. The live experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been run.
+- **One live measurement.** A single run of the app-domain benchmark exists (see [Benchmarks](#benchmarks)).
+  Every other probability, token count and cost in the docs, examples and fixtures is illustrative. The live
+  experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been run.
 - **Thresholds are priors.** They mean something only after `jevtools eval` + `tune` on your own labelled traffic,
   and they do not transfer across datasets.
 - **Coverage is the ceiling.** Jev cannot elect a value that code did not nominate. Over an app's own data the

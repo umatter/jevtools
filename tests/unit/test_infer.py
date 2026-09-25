@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from jevtools.policy import Tier
-from jevtools.spec.infer import infer_kind, infer_slot, infer_tier, unwrap_nullable, with_channels
+from jevtools.spec.infer import infer_kind, infer_slot, infer_tier, ref_noun, unwrap_nullable, with_channels
 from jevtools.spec.models import SlotSpec
 from jevtools.spec.xjev import ParamXJev
 from tests.support import SCENARIO_SOURCES
@@ -84,8 +84,11 @@ def test_infer_slot_defaults() -> None:
     to = infer_slot(
         "to", {"type": "string", "format": "email", "description": "The recipient's email address"}, sources=S
     )
-    assert to.source == "contacts" and to.noun == "the recipient's email address"
+    assert to.source == "contacts" and to.noun == "the recipient"
     assert infer_slot("x", {"type": "string"}).noun == "the x"
+    # a ref's noun names the entity, not the key's format
+    assert infer_slot("to", {"type": "string", "format": "email", "description": "The recipient email address"},
+                      sources=S).noun == "the recipient"  # fmt: skip
     assert infer_slot("x", {"type": "string", "description": "Name of the city."}).noun == "the name of the city"
     body = infer_slot("body", {"type": "string"}, tool_name="send_email")
     assert body.stakes == "content" and body.packs == ("email.body", "email.forward")
@@ -180,3 +183,30 @@ def test_invitee_rule() -> None:
     assert infer_tier("add_task", slots=[owner], sources=S)[0] is Tier.EXTERNAL
     assert infer_tier("add_task", slots=[owner])[0] is Tier.WRITE  # contacts not registered: not known to be people
     assert infer_tier("create_event", risk="write", slots=[attendees])[0] is Tier.WRITE
+
+
+@pytest.mark.parametrize(
+    ("noun", "expected"),
+    [
+        ("the recipient's email address", "the recipient"),
+        ("the new owner's email address", "the new owner"),
+        ("the email address of the person to share with", "the person to share with"),
+        ("the workspace path of the file to move", "the file to move"),
+        ("the project path of the report or notebook", "the report or notebook"),
+        ("the ticket id", "the ticket"),
+        ("the file path", "the file"),
+        ("the workspace-relative file path", "the workspace-relative file"),
+        # already an entity, or nothing left once the format is dropped: unchanged
+        ("the account the money goes to", "the account the money goes to"),
+        ("the calendar event to cancel", "the calendar event to cancel"),
+        ("the email address", "the email address"),
+        ("the path", "the path"),
+    ],
+)
+def test_ref_noun_names_the_entity(noun: str, expected: str) -> None:
+    assert ref_noun(noun) == expected
+
+
+def test_ref_noun_applies_only_to_ref_slots() -> None:
+    span = infer_slot("code", {"type": "string", "description": "The file path"})
+    assert span.kind != "ref" and span.noun == "the file path"

@@ -77,8 +77,7 @@ def test_clarify_menu_complete_calls(scenario_catalog: Catalog) -> None:
                Binding.of_value("anna.rossi@gmail.com", display="Anna Rossi <anna.rossi@gmail.com>")]  # fmt: skip
     prompt, actions = clarify_menu(email, to, choices, bindings={"subject": Binding.of_value("Late")},
                                    complete_call=True)  # fmt: skip
-    assert prompt.text == "Which recipient's email address did you mean?" and noun_short(to) == (
-        "recipient's email address")  # fmt: skip
+    assert prompt.text == "Which recipient did you mean?" and noun_short(to) == "recipient"
     assert [o.id for o in prompt.options] == ["pick:to:0", "pick:to:1", "other"]
     assert prompt.options[1].text.startswith("Send an email") and "Anna Rossi" in prompt.options[1].text
     assert actions["pick:to:1"].value == "anna.rossi@gmail.com" and actions["other"].action == "open"
@@ -262,3 +261,10 @@ def _slot(schema: dict[str, Any]) -> Any:
         ]
     )
     return catalog["t"].slot("p")
+
+
+def test_open_question_keeps_the_typed_format_of_a_ref(scenario_catalog: Catalog) -> None:
+    # Jev is asked about the entity (the recipient); a user who must type the value is asked for its format
+    to = {s.name: s for s in scenario_catalog["send_email"].slots}["to"]
+    assert to.noun == "the recipient"
+    assert open_question(to)[0].text == "What should the recipient's email address be?"

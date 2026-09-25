@@ -97,7 +97,7 @@ def test_r2_with_history_elects_anna_keller() -> None:
 
 def test_r2_without_history_clarifies_between_the_annas() -> None:
     _, d, _ = simulate(scripts.R2_REQUEST)
-    assert d.prompt is not None and d.prompt.text == "Which recipient's email address did you mean?"
+    assert d.prompt is not None and d.prompt.text == "Which recipient did you mean?"
     menu = [o.text for o in d.prompt.options]
     for name in ("Anna Keller <anna.keller@acme.com>", "Anna Rossi <anna.rossi@gmail.com>"):
         assert any(o.startswith(f"Send an email to {name} — ") for o in menu)  # complete calls (external tier)

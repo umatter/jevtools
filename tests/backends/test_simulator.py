@@ -386,7 +386,7 @@ def test_guarantee_two_annas_clarify() -> None:
     _, d = sim_decide("Email Anna that I'll be late")  # Anna Keller, Anna Rossi (and Annabel Frey) match
     assert d.outcome is Outcome.CLARIFY and d.call is not None and d.call.name == "send_email"
     assert d.bottleneck is not None and d.bottleneck.slot == "to" and d.prompt is not None
-    assert d.prompt.text == "Which recipient's email address did you mean?"
+    assert d.prompt.text == "Which recipient did you mean?"
     menu = " ".join(o.text for o in d.prompt.options)
     assert "Anna Keller <anna.keller@acme.com>" in menu and "Anna Rossi <anna.rossi@gmail.com>" in menu
     two = [row for row in SCENARIO_CONTACTS if row["name"] in ("Anna Keller", "Anna Rossi")]

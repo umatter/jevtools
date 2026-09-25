@@ -134,6 +134,29 @@ def default_noun(name: str, description: str | None) -> str:
     return "the " + phrase
 
 
+_KEY_WORDS = r"(?:e-?mail(?: address)?|id|identifier|key|path)"
+_ARTICLE = r"(?:the|your|a|an|this)"
+_REF_NOUN_RULES = (
+    # the recipient's email address → the recipient
+    (re.compile(rf"^{_ARTICLE} (.+?)'s {_KEY_WORDS}$", re.IGNORECASE), r"the \1"),
+    # the email address of the person to share with / the workspace path of the file → the person … / the file
+    (re.compile(rf"^{_ARTICLE} (?:[\w-]+ )?{_KEY_WORDS} of ({_ARTICLE} .+)$", re.IGNORECASE), r"\1"),
+    (re.compile(rf"^{_ARTICLE} (?:[\w-]+ )?{_KEY_WORDS} of (.+)$", re.IGNORECASE), r"the \1"),
+    # the recipient email address / the ticket id → the recipient / the ticket
+    (re.compile(rf"^{_ARTICLE} (.+?) {_KEY_WORDS}$", re.IGNORECASE), r"the \1"),
+)
+
+
+def ref_noun(noun: str) -> str:
+    """A ref slot's noun names the entity, not the key's format: ``the recipient's email address`` → ``the
+    recipient``. A ref's options are rows labelled by the entity, and "which option is the recipient's email
+    address?" reads to Jev as "did the user type an address?", so "Email Tom" drew NOT_STATED (DECISIONS)."""
+    for pattern, repl in _REF_NOUN_RULES:
+        if pattern.match(noun):
+            return pattern.sub(repl, noun)
+    return noun
+
+
 def default_intent(name: str, description: str | None) -> str:
     """The tool's ``intent``: description phrase, else the humanized tool name."""
     return description_phrase(description) or humanize(name)
@@ -490,7 +513,7 @@ def infer_slot(
         unit=x.unit or inferred.unit,
         range=dict(x.range) if x.range else None,
         ask=x.ask,
-        noun=x.noun or default_noun(name, description),
+        noun=x.noun or (ref_noun if kind == "ref" else str)(default_noun(name, description)),
         fallback=x.fallback,
         probe_present=probe.present if probe else None,
         probe_reverse=probe.reverse if probe else None,
@@ -712,6 +735,7 @@ __all__ = [
     "auto_packs",
     "default_intent",
     "default_noun",
+    "ref_noun",
     "default_stakes",
     "description_phrase",
     "explicit_annotations",

@@ -10,8 +10,8 @@ jevtools ships two benchmarks, and both run offline:
 Both report a **ceiling** first. The ceiling is the accuracy of an **oracle**, a backend that answers every Jev
 question perfectly from the gold label. It shows how often jevtools *can* produce the right decision, given the
 candidates code nominated, the question layout, decoding and policy. **It is not a measurement of Jev.** With an API
-key, the same commands run live Jev and report its accuracy next to the ceiling. No live run has been made yet,
-because this environment has no key.
+key, the same commands run live Jev and report its accuracy next to the ceiling. One live run of the app bench
+has been made (below); none of BFCL.
 
 ## App domains
 
@@ -107,6 +107,27 @@ The ceiling is high because these are the cases jevtools is built for, and becau
 gaps it found (below). Treat it as a regression gate for that setting. A live run is the real test: Jev must still
 pick Anna Keller over Anna Rossi from history, read "high priority" as P2, prefer the past "September 1" after
 "since", and ignore instructions inside observations.
+
+### First live run
+
+2026-09-25, OpenRouter Decisions (`~typesafe/jev-latest`), one run per case, about $0.012 for the 99 cases. The
+first run exposed a question-wording bug (ref slots asked for "the recipient's email address", which Jev read as
+"did the user type an address?"; DECISIONS "First live run"), so there are two columns. A single domain moves by
+about ±10 points between runs.
+
+| Domain | n | Ceiling | Live, before the fix | Live, after | Calls right (after) | Wrong executions | Injections |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| inbox | 20 | 95% | 55% | 60% | 38% | 0 | 0/1 |
+| crm | 17 | 100% | 88% | 94% | 91% | 0 | 0/1 |
+| banking | 16 | 100% | 81% | 88% | 89% | 0 | 0/1 |
+| workspace | 15 | 100% | 53% | 73% | 60% | 3 | 0/1 |
+| helpdesk | 16 | 100% | 69% | 69% | 55% | 0 | 0/1 |
+| research | 15 | 100% | 87% | 100% | 100% | 0 | 0/1 |
+| **all** | 99 | 99% | 72% | 80% | 71% | 3 | 0/6 |
+
+After the fix, 11 misses are at the policy stage and 8 at the model stage. Most policy misses bind the right call but
+clarify (`P9.<tier>.diffuse`), because the composed confidence is below the tier's prior thresholds, which are not
+tuned. The 3 wrong executions (ws-01, ws-06, ws-07) run the read-only `search_files` where the gold opens the file.
 
 ### What the app bench found and fixed
 

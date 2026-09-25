@@ -220,7 +220,7 @@ Unknown `x-jev` keys are an error, raised by `jevtools lint` and at `Catalog` co
 | `unit` | string | `minute hour second day percent byte money …` | from name suffix or description |
 | `range` | `{"min": p, "max": p}` | Couples two quantity or temporal slots | none |
 | `ask` | string | Slot question tail. Also used as the open clarify question. | `"Which option is {noun}?"` |
-| `noun` | string | Noun phrase ("the recipient's email address") | `"the " + description` (first letter lowercased, trailing period removed), else humanized name |
+| `noun` | string | Noun phrase ("the recipient") | `"the " + description` (first letter lowercased, trailing period removed), else humanized name. For `ref` slots, a key format is dropped so the noun names the entity: "the recipient's email address" → "the recipient", "the workspace path of the file" → "the file" |
 | `fallback` | `"ask"\|"fill"\|"passthrough"\|"default"\|"fail"` | What happens when the slot cannot be bound | content text: `fill` if a Filler is configured, else `ask`; others: `ask` |
 | `probe` | `{"present": bool, "reverse": bool}` | Force a probe on or off | §3.5.3 |
 | `speculate` | bool | Force the slot question on or off | `true` |
@@ -2094,7 +2094,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
 
 ### 13.4 Full request JSON: R2 (OpenRouter Decisions backend; TypeSafe direct would send `"model": "jev-latest"`)
 
-13 questions, 5,888 characters, **≈1.7k tokens [I]**, ≈ $0.00007.
+13 questions, 5,856 characters, **≈1.7k tokens [I]**, ≈ $0.00007.
 
 ```json
 {
@@ -2159,7 +2159,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
     },
     "send_email.to": {
       "type": "choice",
-      "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Which option is the recipient's email address?",
+      "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Which option is the recipient?",
       "criteria": {
         "Anna Keller <anna.keller@acme.com>": "Contact matching \"Anna\": Account Manager at ACME; last emailed 2 days ago.",
         "Anna Rossi <anna.rossi@gmail.com>": "Contact matching \"Anna\": personal contact; last emailed 3 weeks ago.",
@@ -2170,7 +2170,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
     },
     "send_email.to.present": {
       "type": "noul",
-      "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Does the user say or clearly imply the recipient's email address?",
+      "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Does the user say or clearly imply the recipient?",
       "criteria": {
         "true": "Yes, stated or clearly implied, possibly through `history`.",
         "false": "No; it would have to be guessed."

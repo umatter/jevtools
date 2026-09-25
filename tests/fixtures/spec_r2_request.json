@@ -75,7 +75,7 @@
   },
   "send_email.to": {
    "type": "choice",
-   "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Which option is the recipient's email address?",
+   "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Which option is the recipient?",
    "criteria": {
     "Anna Keller <anna.keller@acme.com>": "Contact matching \"Anna\": Account Manager at ACME; last emailed 2 days ago.",
     "Anna Rossi <anna.rossi@gmail.com>": "Contact matching \"Anna\": personal contact; last emailed 3 weeks ago.",
@@ -86,7 +86,7 @@
   },
   "send_email.to.present": {
    "type": "noul",
-   "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Does the user say or clearly imply the recipient's email address?",
+   "instructions": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Does the user say or clearly imply the recipient?",
    "criteria": {
     "true": "Yes, stated or clearly implied, possibly through `history`.",
     "false": "No; it would have to be guessed."

@@ -1703,3 +1703,27 @@ Extends "Documentation and final merge":
 - Remaining ceiling miss, kept on purpose: inbox-17 "Email the head of legal…". The role is only in the contact's
   `notes`, which is not a `match` field, so `send_email` is not speculated (P6). An app would add a `role` field to
   `match`; the case shows that the ceiling depends on how the app describes its data.
+
+## First live run: ref nouns name the entity
+
+- Live evidence (2026-09-25, OpenRouter Decisions, `~typesafe/jev-latest`, one run per case; the first numbers from
+  live Jev, and noisy: n = 99, no replays). `jevtools bench app` scored 72% correct against a 99% ceiling. In inbox,
+  most misses were `send_email.to` electing `NOT_STATED` even with the right contact ranked first, e.g. "Email Tom
+  that…" with Thomas Becker (alias Tom) as the only candidate gave `NOT_STATED` 0.92, and `to.present` 0.11.
+- Cause: the slot noun came from the schema description, "The recipient's email address", so Jev was asked "Which
+  option is the recipient's email address?" and "Does the user say or clearly imply the recipient's email address?".
+  A user who names a person has not stated an address, and Jev answered that literally. With only the wording
+  changed to "Which option is the recipient?", the right contact went from 0.07–0.33 to 0.47–0.85 on four cases.
+- §3.2 `noun` default for `ref` slots → `spec.infer.ref_noun` drops a key format from the inferred noun, so it names
+  the entity whose rows are the options: `X's email address|e-mail|id|identifier|key|path` → `the X`; `the
+  [qualifier] <format> of Y` → `Y`; `the X <format>` → `the X`. A noun with nothing left (`the email address`) is
+  unchanged, and `x-jev.noun` still wins. Other kinds are untouched: for a span, the format is what is extracted.
+  The spec's `noun` row and the §13 R2 request were updated with it (5,888 → 5,856 characters). Templates are
+  unchanged, so this is not a spec version bump, but the bytes of every Ballot with such a slot change; the golden
+  fixtures were regenerated with no outcome or rule changed.
+- The open question keeps the format (`prompts._typed_noun`): when nothing matched, the user types the value
+  itself, so "What should the recipient's email address be?" stays. Menus use the entity noun ("Which recipient did
+  you mean?").
+- After: 80% correct (calls right 59% → 71%), 8 cases fixed and none broken, oracle ceiling unchanged (99%). The
+  inbox cases it targeted now bind the right recipient, but several end as `P9.external.diffuse` clarifies: the
+  composed Π is below the external tier's prior thresholds, which are uncalibrated until `tune`.

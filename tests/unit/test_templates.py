@@ -40,7 +40,7 @@ def test_slot_probe_present_and_auth() -> None:
     assert t.probe_not_stated_text(gloss) == city["criteria"]["NOT_STATED"]
     assert t.PROBE_NONE_OF_THESE_TEXT == city["criteria"]["NONE_OF_THESE"]
     present = R2["send_email.to.present"]
-    assert t.present_instructions(SEND, "the recipient's email address") == present["instructions"]
+    assert t.present_instructions(SEND, "the recipient") == present["instructions"]
     assert t.PRESENT_CRITERIA == present["criteria"]
     auth = R2["send_email.authorized"]
     assert t.auth_instructions(SEND) == auth["instructions"]

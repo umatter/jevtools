@@ -32,6 +32,7 @@ from jevtools.canonical import nfc
 from jevtools.decision import PendingAction, Prompt, PromptOption
 from jevtools.extract.numbers import canonical_unit
 from jevtools.policy import Tier
+from jevtools.spec.infer import default_noun, ref_noun
 from jevtools.spec.models import SlotSpec, ToolSpec
 
 CLARIFY_OPEN_TOOL = "What would you like me to do?"
@@ -358,7 +359,7 @@ def confirm_card(
 
 
 def noun_short(slot: SlotSpec) -> str:
-    """The slot noun without a leading article (``the recipient's email address`` → ``recipient's email address``)."""
+    """The slot noun without a leading article (``the calendar event to move`` → ``calendar event to move``)."""
     return re.sub(r"^(the|a|an)\s+", "", slot.noun, flags=re.IGNORECASE)
 
 
@@ -451,8 +452,18 @@ def open_question(slot: SlotSpec | None) -> tuple[Prompt, Actions]:
     """``x-jev.ask`` or ``What should {noun} be?``; without a slot, ``What would you like me to do?``."""
     if slot is None:
         return Prompt(kind="open", text=CLARIFY_OPEN_TOOL), {}
-    text = slot.ask or templates.render(templates.CLARIFY_OPEN, noun=slot.noun)
+    text = slot.ask or templates.render(templates.CLARIFY_OPEN, noun=_typed_noun(slot))
     return Prompt(kind="open", text=text), {}
+
+
+def _typed_noun(slot: SlotSpec) -> str:
+    """The noun for a value the user types: an inferred ref noun names the entity for Jev (``the recipient``), but
+    the user types its key, so the open question keeps the format (``the recipient's email address``)."""
+    if slot.kind == "ref":
+        described = default_noun(slot.name, slot.description)
+        if slot.noun == ref_noun(described):
+            return described
+    return slot.noun
 
 
 def refuse_notice(tool: ToolSpec, source: str) -> Prompt:
