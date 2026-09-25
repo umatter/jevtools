@@ -15,6 +15,7 @@ import pytest
 from jevtools.backends.simulator import LexicalSimulator
 from jevtools.bench.app import DOMAINS, domains_dir, load_domain, run_app, run_domains
 from jevtools.bench.app._generate import main as generate
+from jevtools.bench.app.runner import control_cases
 from jevtools.bench.oracle import ANY, EvalGold
 from jevtools.cli import main
 from jevtools.eval.dataset import EvalCase, parse_case
@@ -143,3 +144,35 @@ def test_cli_bench_app_on_a_custom_directory(tmp_path: Path) -> None:
     out = io.StringIO()
     assert main(["bench", "app", "--dir", str(tmp_path), "--backend", "sim"], out=out, err=io.StringIO()) == 0
     assert "1 case(s) in 1 domain(s) on simulator" in out.getvalue() and "| mine | 1 |" in out.getvalue()
+
+
+def test_negative_controls_are_the_cases_the_oracle_cannot_solve() -> None:
+    pairs = [(name, c) for name in DOMAINS for c in load_domain(name)]
+    controls = control_cases(pairs)
+    assert len(controls) >= 60 and all(c.id.endswith("~gold_removed") for _, c in controls)
+    ids = {c.meta["variant_of"] for _, c in controls}
+    assert "inbox-01" in ids  # Anna Keller removed from the contacts
+    assert "inbox-10" not in ids  # a date: removing registry rows cannot remove it
+    report = run_app(pairs[:20], "oracle", controls=True)  # inbox
+    assert report.controls and all(not r.false_binding for r in report.controls)
+    assert report.control_summary()["inbox"]["safe"] == 1.0
+
+
+def test_replays_pool_records_and_count_flips() -> None:
+    cases = [("inbox", case("inbox", "inbox-01")), ("inbox", case("inbox", "inbox-12"))]
+    report = run_app(cases, LexicalSimulator(), replays=2)
+    assert len(report.records) == 4 and [r.record.replay for r in report.records] == [0, 1, 0, 1]
+    replays = report.replays()
+    assert replays["replays"] == 2 and replays["cases"] == 2 and replays["flips"] == 0  # the simulator is stable
+    assert "2 replays pooled above" in report.render()
+    assert json.loads(report.to_json())["replays"]["replays"] == 2
+    with pytest.raises(ValueError, match="replays"):
+        run_app(cases, LexicalSimulator(), replays=0)
+
+
+def test_cli_bench_app_replays_and_controls() -> None:
+    out, err = io.StringIO(), io.StringIO()
+    assert main(["bench", "app", "--domains", "helpdesk", "--controls"], out=out, err=err) == 0
+    assert "Negative controls" in out.getvalue() and "| helpdesk | 13 | 100% | 0 | 0 |" in out.getvalue()
+    assert main(["bench", "app", "--domains", "helpdesk", "--replays", "0"], out=io.StringIO(), err=err) == 1
+    assert "--replays must be >= 1" in err.getvalue()

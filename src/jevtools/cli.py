@@ -15,7 +15,8 @@
     jevtools fixtures [--update] [--dir tests/golden] [--case NAME …]
     jevtools bench bfcl [--data DIR] [--download [--ref main]] [--categories c1,c2 | all] [--limit N]
                         [--backend oracle|sim|auto|typesafe|openrouter_decisions|…] [--risk read|infer] [--out F]
-    jevtools bench app [--domains inbox,crm,…] [--dir DIR] [--backend oracle|sim|auto|…] [--tags] [--out F]
+    jevtools bench app [--domains inbox,crm,…] [--dir DIR] [--backend oracle|sim|auto|…] [--tags] [--replays N]
+                       [--controls] [--out F]
 
 ``lint`` prints one line per tool and per slot (``name  description  stakes  STATUS  note``) plus the description
 overlap check, and exits 1 when any check is an ERROR (``--strict``: also WARN/WEAK). ``explain`` renders a trace
@@ -881,6 +882,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", default=None, help="app: a directory of domains (<name>/cases.jsonl) instead of the "
                                                "bundled ones")  # fmt: skip
     p.add_argument("--tags", action="store_true", help="app: also print the per-tag table")
+    p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
+    p.add_argument("--controls", action="store_true",
+                   help="app: also run the negative controls (gold rows removed; counts false bindings)")  # fmt: skip
     p.add_argument("--data", default=None, help="BFCL data directory (default: <cache>/bfcl)")
     p.add_argument("--download", action="store_true", help="fetch the BFCL data files from GitHub into --data")
     p.add_argument("--ref", default="main", help="BFCL repository branch, tag or commit to download (default: main)")
@@ -945,7 +949,11 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
         return 1
     if args.limit is not None:
         cases = [c for name in names for c in [x for x in cases if x[0] == name][: args.limit]]
-    report = run_app(cases, backend, meta={"domains": list(names), "dir": args.dir})
+    if args.replays < 1:
+        print("jevtools bench: --replays must be >= 1", file=err)
+        return 1
+    report = run_app(cases, backend, replays=args.replays, controls=args.controls,
+                     meta={"domains": list(names), "dir": args.dir, "replays": args.replays})  # fmt: skip
     print(f"app bench: {len(cases)} case(s) in {len(names)} domain(s) on {report.mode}", file=out)
     print(report.render(tags=args.tags), file=out)
     if report.mode == "oracle":

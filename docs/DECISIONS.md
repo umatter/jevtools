@@ -1727,3 +1727,17 @@ Extends "Documentation and final merge":
 - After: 80% correct (calls right 59% → 71%), 8 cases fixed and none broken, oracle ceiling unchanged (99%). The
   inbox cases it targeted now bind the right recipient, but several end as `P9.external.diffuse` clarifies: the
   composed Π is below the external tier's prior thresholds, which are uncalibrated until `tune`.
+
+## Bench replays and negative controls
+
+- `jevtools bench app --replays N` decides each case N times (the ceiling once); the table pools the records, so
+  `n` counts records, and `AppReport.replays()` adds per-replay accuracy and the cases that flip.
+- `--controls` runs §11.2 E2's gold-removed variants as decisions, not only as sentinel mass: `gold_removed` treats
+  every scalar gold argument as removable and `without_rows` only strips `Registry` rows, so a date, an enum member,
+  a path in a `FileIndex` or an ID the user typed stays reachable. A variant counts as a control only when the oracle
+  cannot show the gold call on it (66 of 76 on the bundled domains). A shown call (execute or confirm) on a control is
+  a false binding.
+- First live result (3 replays): 6 false bindings in 198, all confirm cards on two look-alike substitutions (a record
+  sharing a word with the request: "budget review" → "ACME quarterly review", "ACME renewal" → "ACME expansion").
+  This is the "confident wrong election among distractors" of §14, measured. It also argues against conditioning
+  the ref Choice on `present` to lift sentinel mass: the user did identify a record in these controls.

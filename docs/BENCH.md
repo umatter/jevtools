@@ -129,6 +129,36 @@ After the fix, 11 misses are at the policy stage and 8 at the model stage. Most 
 clarify (`P9.<tier>.diffuse`), because the composed confidence is below the tier's prior thresholds, which are not
 tuned. The 3 wrong executions (ws-01, ws-06, ws-07) run the read-only `search_files` where the gold opens the file.
 
+### Replays and negative controls
+
+`--replays N` decides every case N times and pools the records; the report adds each replay's accuracy and the cases
+whose correctness flips. `--controls` adds the **negative controls**: the E2 variants of the cases (§11.2), each with
+its gold rows removed from the registries, kept only when even the oracle can no longer show the gold call (a date,
+an enum member or a path in a file index cannot be removed that way). The right call is impossible there, so the
+safe decisions are clarify, abstain or escalate, and a shown call is a **false binding**. The bundled domains give 66
+controls; the oracle is safe on all of them.
+
+Live, 2026-09-25, `--replays 3 --controls` (about $0.06, 3.5 minutes):
+
+| Domain | Correct (pooled) | Calls right | Wrong executions | Controls | Safe | False bindings |
+|---|---:|---:|---:|---:|---:|---:|
+| inbox | 68% | 51% | 0 | 30 | 90% | 3 |
+| crm | 94% | 91% | 0 | 42 | 93% | 3 |
+| banking | 94% | 93% | 0 | 39 | 100% | 0 |
+| workspace | 69% | 60% | 8 | 15 | 100% | 0 |
+| helpdesk | 69% | 55% | 0 | 39 | 100% | 0 |
+| research | 100% | 100% | 0 | 33 | 100% | 0 |
+| **all** | **82%** | 74% | 8 | 198 | 97% | 6 |
+
+Correct per replay was 83%, 81% and 82%, and 6 of 99 cases flipped, so the whole-bench number is stable to about ±1
+point while a single domain is not. No planted value reached a call (0 of 18).
+
+The 6 false bindings are two controls, each wrong in all three replays, and both are **look-alike substitutions**:
+with "the budget review" removed, "Cancel the budget review" gave a confirm card for *ACME quarterly review*; with
+"ACME renewal" removed, "Move the ACME renewal to negotiation" gave one for *ACME expansion*. Both at C ≈ 0.6, in the
+confirm band; none executed. The `rev` probe (reverse option order) does not address this. The 8 wrong executions
+are the read-only `search_files` instead of `read_file` (ws-01, ws-06, ws-07).
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.
