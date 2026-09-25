@@ -607,18 +607,18 @@ These are condensed from SPEC §14.
 
 ## Project layout
 
-```
-src/jevtools/        the package (module map: docs/ARCHITECTURE.md)
-  spec/ sources/ extract/ kinds/     ingest, candidate sources, extractors, one resolver per slot kind
-  plan.py decode.py confidence.py policy.py router.py trace.py   the decision pipeline
-  adapters/ serve/ eval/ backends/ demo/   integrations, proxy, evaluation, Jev backends, synthetic demo world
-  bench/               benchmarks: app domains (bench/app, 6 bundled domains) and BFCL; oracle, runners (docs/BENCH.md)
-examples/            01–08 runnable scripts (offline by default; --backend scripted|sim|live), proxy/
-tests/               1,000+ offline tests; tests/golden/ holds the conformance fixtures, tests/live/ the live smoke suite
-docs/SPEC.md         the normative protocol (jevtools/0.1)
-docs/DECISIONS.md    where the implementation resolved ambiguities in, or deviates from, the spec
-docs/ARCHITECTURE.md module map and data flow
-```
+| Path | Contents |
+|---|---|
+| `src/jevtools/` | the package; module map in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| `src/jevtools/{spec,sources,extract,kinds}/` | ingest, candidate sources, extractors, one resolver per slot kind |
+| `src/jevtools/{plan,decode,confidence,policy,router,trace}.py` | the decision pipeline |
+| `src/jevtools/{adapters,serve,eval,backends,demo}/` | integrations, proxy, evaluation, Jev backends, synthetic demo world |
+| `src/jevtools/bench/` | benchmarks: app domains (`bench/app`, 6 bundled domains) and BFCL; oracle, runners ([docs/BENCH.md](docs/BENCH.md)) |
+| `examples/` | 01–08 runnable scripts (offline by default; `--backend scripted\|sim\|live`), `proxy/` |
+| `tests/` | 1,000+ offline tests; `tests/golden/` holds the conformance fixtures, `tests/live/` the live smoke suite |
+| [`docs/SPEC.md`](docs/SPEC.md) | the normative protocol (`jevtools/0.1`) |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | where the implementation resolved ambiguities in, or deviates from, the spec |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | module map and data flow |
 
 - **Examples.** `python examples/01_quickstart_weather.py` runs the spec's walk-through (R1–R7) and prints the
   questions, decision, prompt and trace summary. See [examples/README.md](examples/README.md).
