@@ -24,6 +24,7 @@ ambiguous_k = 4
 flag_band = [0.20, 0.80]
 accept_min = 0.50
 cosmetic_floor = 0.50
+verify_min = 0.50
 alt_show_min = 0.10
 
 [tiers.read]
@@ -55,6 +56,7 @@ require_present = 0.80
 [probes]
 present = ["external", "critical"]
 reverse = ["critical"]
+verify = ["write", "external", "critical"]
 
 [widen]
 max_rounds = 2
@@ -69,6 +71,7 @@ mentions_max = 8
 items_max = 60
 members_max = 40
 joint_max = 24
+verify_k = 3
 
 [loop]
 max_steps = 6

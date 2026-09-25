@@ -409,7 +409,7 @@ seg      := "s" DIGIT+ "."                           ; multi-intent segment (ext
 T        := sanitized tool name                      ; lowercase, [^a-z0-9_]→"_", leading digit → "t_", collisions → "_2"
 F        := "authorized" | "joint" ("." G)? | "done_after"
           | P ( "" | ".present" | ".rev" | ".date" | ".time" | ".branch" | ".more" | ".group"
-                  | ".accept." N | ".m" N | ".item." N | ".member." N | ".bucket." N )
+                  | ".accept." N | ".verify." N | ".m" N | ".item." N | ".member." N | ".bucket." N )
 P        := sanitized param path, segments joined by "."; a segment equal to a reserved suffix word gets "_" appended
 ```
 
@@ -426,6 +426,7 @@ P        := sanitized param path, segments joined by "."; a segment equal to a r
 | probe | `T.P` | Choice: `NOT_STATED`, `NONE_OF_THESE` only | pool empty *and* slot has a default | P(default) vs P(stated but uncovered) |
 | present | `T.P.present` | Noul | REF slots of tier external or critical | consistency check (not a factor) |
 | rev | `T.P.rev` | Choice: same options, real candidates in *reverse* canonical order | REF slots with ≥ 2 real candidates in critical tier (config `probes.reverse`) | f = min(fwd, rev); disagreement flag |
+| verify | `T.P.verify.i` | Noul (`T_VERIFY`; the candidate is the record's label and match note) | top-level identity REF slots in tiers `probes.verify` (write, external, critical): the `pools.verify_k` = 3 best-anchored records, except a key the user typed; in a follow-up round, the elected record when the first round did not verify it (§3.8.3) | gate on the elected record (not a factor) |
 | date / time | `T.P.date`, `T.P.time` | Choice each | temporal with > 24 complete readings | f_date · f_time |
 | accept | `T.P.accept.i` | Noul (content or cosmetic template) | TEXT slots: one per candidate (≤ 4 content, ≤ 3 cosmetic) | elected = argmax; f = n(elected) |
 | mention | `T.P.mi` | Choice: matches + `EXCLUDE` + `NONE_OF_THESE` | anchored lists: one per user mention (≤ 8) | per-anchor value |
@@ -469,6 +470,10 @@ T_PROBE       PREMISE + " Does the user indicate {noun}, in `request` or `histor
 T_PRESENT     PREMISE + " Does the user say or clearly imply {noun}?"
   true          Yes, stated or clearly implied, possibly through `history`.
   false         No; it would have to be guessed.
+T_VERIFY      instructions = {"question": PREMISE + " Is the candidate below {noun} that `request` refers to?",
+              "candidate": "<label>. <match note and description>"}
+  true          Yes: `request` names or clearly describes this one.
+  false         No: `request` refers to a different one, even if this one is similar or shares words with it.
 T_AUTH        Is the user asking the assistant to actually {intent} now? Judge `request` together with the user's own
               earlier turns in `history`.
   true          Yes: a direct instruction, or clear agreement to a proposal, to do it now.
@@ -706,6 +711,15 @@ This handles the case "the argmax tool is infeasible but the runner-up is fully 
 - the same menu (reason `margin`) replaces a confirm card when C is in the confirm band but an **identity** slot's top two real values are within `confirm_margin` = 0.20 of each other: a card must not present a coin flip between two people, accounts or records;
 - **missing**: → `clarify(open)`;
 - **diffuse**: otherwise → `escalate` if configured, else `clarify(open)`.
+
+**Look-alike check (`P9.<tier>.unverified`).** A call about to be shown (execute or confirm, not a click the user
+made) in a tier of `probes.verify` needs, for each top-level identity REF slot, a `verify` Noul on its *elected*
+record, unless the user typed that record's key or bound it by a click. The first round asks it for the
+`pools.verify_k` best-anchored records; when Jev elects another one, the router asks it in one same-state follow-up
+round. A verify answer below `shapes.verify_min` = 0.50 turns the call into `clarify(menu)` on that slot (reason
+`verify`). It is a gate, not a factor: C is unchanged. It exists because Jev's slot Choice, with the requested record
+missing, can confidently elect a record that merely shares a word with the request ("Cancel the budget review" →
+"ACME quarterly review"); the Noul, shown the record's match note, rejects that (DECISIONS "look-alike check").
 
 #### 3.8.4 Prompts (no generated text)
 
@@ -1133,6 +1147,8 @@ for t in speculated tools (canonical order):
         slot question | probe | date+time | accept.i… | m_i… + more | item.i… | member.i… | branch
         [ slot.present ]                     if kind=ref and tier ≥ external
         [ slot.rev ]                         if kind=ref, ≥ 2 real candidates, tier = critical, probes.reverse
+        [ slot.verify.i … ]                  if kind=ref, identity, top-level, tier in probes.verify: the
+                                             verify_k best-anchored records, not typed keys (§3.8.3)
     [ t.done_after ]                         if loop mode
 ```
 
@@ -1140,9 +1156,9 @@ Illustrative question counts and token estimates:
 
 | Request | Questions | Est. tokens |
 |---|---|---|
-| R2 | 13 | ~1.7k [I] |
+| R2 | 16 | ~2k [I] |
 | R5 | 14 | ~1.7k [I] |
-| R3 | 15 | ~2.0k [I] |
+| R3 | 21 | ~2.4k [I] |
 | R4 | 6 | ~1.4k [I] (K = 40 paths) |
 
 That is well under the 24k target, and the cost is about $0.00007 per decision.
@@ -2085,8 +2101,8 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
 | Req | Request | Speculated → questions | Decisive answers [I] | Composition | Outcome → call | Jev rounds |
 |---|---|---|---|---|---|---|
 | **R1** | "What's the weather like in Zurich in Fahrenheit?" | get_weather (`city` {Zurich, NOT_STATED→home Zurich, NONE_OF_THESE}; "Fahrenheit" claimed by `unit`), `unit`; search_web (2 accepts). 5 questions. | tool get_weather 0.98; city "Zurich" 0.95 + NOT_STATED 0.02 → **pooled 0.97**; unit fahrenheit 0.97 | read: W = min(.98, .97, .97) = **0.97** | **execute** `get_weather(city="Zurich", unit="fahrenheit")` | 1 |
-| **R2** | "Email Anna that I'll be 10 minutes late" (history mentions a 14:30 review with Anna Keller) | send_email (authorized, `to` over 3 Annas, `to.present`, 3 subject accepts, 2 body accepts); get_weather probes; search_web. 13 questions. create_event, transfer_funds (no money: "10 minutes" is a time) and read_file are non-viable. | tool .96; authorized .95; to Anna Keller .86 / Rossi .07 / Frey .03 / NONE .03; present .97; body template .91 (clause .88); subject "Running 10 minutes late" .93 | external: Π = .96·.95·.86·.91 = **0.714**; W = .86; L = .68 | **confirm**: "Send ‘Running 10 minutes late’ to Anna Keller <anna.keller@acme.com>? [Send] [Anna Rossi instead] [Change…] [Cancel]" → `send_email(to="anna.keller@acme.com", subject="Running 10 minutes late", body="Hi Anna,\n\nI'll be 10 minutes late.\n\nBest,\nSam")`. **Without history:** Keller .47 / Rossi .41 / Frey .06 → Π = 0.39, bottleneck `to` ambiguous (k = 3 covers .94) → **clarify** menu of 3 complete calls + "Someone else". A click → to = 1.0 → Π = 0.83 ≥ confirm 0.50, and the click counts as confirmation → **execute**. | 1 (+0 click; +1 free text) |
-| **R3** | "Move 250 CHF from my savings to checking" | transfer_funds: authorized; joint (6 ordered pairs over the anchored {Savings, Travel savings, Checking} + NONE); from, from.present, from.rev; to, to.present, to.rev; amount {250.00}; currency {CHF, EUR, NOT_STATED→from_account.currency}; get_weather probes; search_web. 15 questions. | tool .98; authorized .98; amount .99; currency CHF .95 + NOT_STATED .02 (→ CHF via Savings) = **.97**; from Savings .95 (rev .96 → min .95; Travel savings .04); to Checking .97; present .97/.98; joint "250.00 CHF: Savings → Checking" **J = .92** = the factorized MAP | critical: L = 1 − (.02+.02+.01+.03+.05+.03) = **0.84**; C = min(L, J) = 0.84 | **confirm** (critical never auto): "Transfer 250.00 CHF from Savings · CHF · CH93…2957 to Checking · CHF · CH56…1180? (Not Travel savings · EUR? p = 0.04) [Confirm] [Change…] [Cancel]". On confirm: TOCTOU (both ids exist, balance ≥ 250.00) → `transfer_funds(from_account="acc_7731", to_account="acc_2210", amount="250.00", currency="CHF")` with its idempotency key | 1 (+0 click) |
+| **R2** | "Email Anna that I'll be 10 minutes late" (history mentions a 14:30 review with Anna Keller) | send_email (authorized, `to` over 3 Annas, `to.present`, 3 `to.verify` (one per anchored Anna, §3.8.3), 3 subject accepts, 2 body accepts); get_weather probes; search_web. 16 questions. create_event, transfer_funds (no money: "10 minutes" is a time) and read_file are non-viable. | tool .96; authorized .95; to Anna Keller .86 / Rossi .07 / Frey .03 / NONE .03; present .97; body template .91 (clause .88); subject "Running 10 minutes late" .93 | external: Π = .96·.95·.86·.91 = **0.714**; W = .86; L = .68 | **confirm**: "Send ‘Running 10 minutes late’ to Anna Keller <anna.keller@acme.com>? [Send] [Anna Rossi instead] [Change…] [Cancel]" → `send_email(to="anna.keller@acme.com", subject="Running 10 minutes late", body="Hi Anna,\n\nI'll be 10 minutes late.\n\nBest,\nSam")`. **Without history:** Keller .47 / Rossi .41 / Frey .06 → Π = 0.39, bottleneck `to` ambiguous (k = 3 covers .94) → **clarify** menu of 3 complete calls + "Someone else". A click → to = 1.0 → Π = 0.83 ≥ confirm 0.50, and the click counts as confirmation → **execute**. | 1 (+0 click; +1 free text) |
+| **R3** | "Move 250 CHF from my savings to checking" | transfer_funds: authorized; joint (6 ordered pairs over the anchored {Savings, Travel savings, Checking} + NONE); from, from.present, from.rev, from.verify ×3; to, to.present, to.rev, to.verify ×3; amount {250.00}; currency {CHF, EUR, NOT_STATED→from_account.currency}; get_weather probes; search_web. 21 questions. | tool .98; authorized .98; amount .99; currency CHF .95 + NOT_STATED .02 (→ CHF via Savings) = **.97**; from Savings .95 (rev .96 → min .95; Travel savings .04); to Checking .97; present .97/.98; joint "250.00 CHF: Savings → Checking" **J = .92** = the factorized MAP | critical: L = 1 − (.02+.02+.01+.03+.05+.03) = **0.84**; C = min(L, J) = 0.84 | **confirm** (critical never auto): "Transfer 250.00 CHF from Savings · CHF · CH93…2957 to Checking · CHF · CH56…1180? (Not Travel savings · EUR? p = 0.04) [Confirm] [Change…] [Cancel]". On confirm: TOCTOU (both ids exist, balance ≥ 250.00) → `transfer_funds(from_account="acc_7731", to_account="acc_2210", amount="250.00", currency="CHF")` with its idempotency key | 1 (+0 click) |
 | **R4** | "Open the config file for the payments service" | read_file: `path` over the BM25 + synonyms top 40 of 3,000; search_web; get_weather probes. 6 questions, ~1.4k tokens. | tool .95; `services/payments/config/app.yaml` .71, `…/config/prod.yaml` .16, NONE .05 | read: W = **0.71** | **execute** `read_file(path="services/payments/config/app.yaml")`; alternatives in `x_jev.slots.path.alternatives`. If NONE ≥ 0.30 → **widen** (round 2: two buckets over results 41–540 + a directory group Choice) → hierarchy (round 3) → clarify(open) | 1 (2–3 on a miss) |
 | **R5** | "Book a 45 min sync with Bob and Carol next Tuesday at 3pm" | create_event (authorized, 3 title accepts, start {Tue 29 Sep 15:00, Tue 6 Oct 15:00}, duration {45}, attendees m0 "Bob", m1 "Carol", more); get_weather; search_web. 14 questions. send_email is non-viable (no message clause), transfer_funds non-viable (no money), read_file non-viable (no hit above floor). | §13.5 | external: Π = **0.550**, W = .786, L = .456 | **confirm** with `[Tue 6 Oct 2026, 15:00 instead]` → `create_event(title="Sync with Bob and Carol", start="2026-09-29T15:00:00+02:00", duration_minutes=45, attendees=["bob.meier@muster.ch","carol.liu@muster.ch"])` | 1 (+0 click) |
 | **R6** | "Find the latest invoice from ACME and forward it to finance" | step 1: read_file member Nouls (9), done_after …; step 2: send_email (to, present, subject, body accepts, done_after) (§6.6) | step 1: path f = .96·(1−.06)·(1−.08) = .830; step 2: .93, .94, .90, .88; done_after .95 | step 1 read W = **0.83**; step 2 external Π = **0.692** (also capped: tool_output content) | **execute** `read_file(path="finance/invoices/acme/2026-09-15_ACME_INV-2291.pdf")` → **confirm** `send_email(to="finance@muster.ch", subject="Fwd: ACME invoice INV-2291", body="Hi,\n\nForwarding the latest ACME invoice (INV-2291) below.\n\n<file text>\n\nBest,\nSam")` → **done**. Injected address and amount are never nominated; `transfer_funds` → refuse. | 2 |
@@ -2094,7 +2110,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
 
 ### 13.4 Full request JSON: R2 (OpenRouter Decisions backend; TypeSafe direct would send `"model": "jev-latest"`)
 
-13 questions, 5,856 characters, **≈1.7k tokens [I]**, ≈ $0.00007.
+16 questions, 7,460 characters, **≈2k tokens [I]**, ≈ $0.00008.
 
 ```json
 {
@@ -2174,6 +2190,30 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
       "criteria": {
         "true": "Yes, stated or clearly implied, possibly through `history`.",
         "false": "No; it would have to be guessed."
+      }
+    },
+    "send_email.to.verify.0": {
+      "type": "noul",
+      "instructions": {"question": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Is the candidate below the recipient that `request` refers to?", "candidate": "Anna Keller <anna.keller@acme.com>. Contact matching \"Anna\": Account Manager at ACME; last emailed 2 days ago."},
+      "criteria": {
+        "true": "Yes: `request` names or clearly describes this one.",
+        "false": "No: `request` refers to a different one, even if this one is similar or shares words with it."
+      }
+    },
+    "send_email.to.verify.1": {
+      "type": "noul",
+      "instructions": {"question": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Is the candidate below the recipient that `request` refers to?", "candidate": "Anna Rossi <anna.rossi@gmail.com>. Contact matching \"Anna\": personal contact; last emailed 3 weeks ago."},
+      "criteria": {
+        "true": "Yes: `request` names or clearly describes this one.",
+        "false": "No: `request` refers to a different one, even if this one is similar or shares words with it."
+      }
+    },
+    "send_email.to.verify.2": {
+      "type": "noul",
+      "instructions": {"question": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Is the candidate below the recipient that `request` refers to?", "candidate": "Annabel Frey <annabel.frey@muster.ch>. Contact similar to \"Anna\": Finance, the user's own company; last emailed 5 months ago."},
+      "criteria": {
+        "true": "Yes: `request` names or clearly describes this one.",
+        "false": "No: `request` refers to a different one, even if this one is similar or shares words with it."
       }
     },
     "send_email.subject.accept.0": {
@@ -2507,6 +2547,7 @@ confirm_margin = 0.20      # identity slot top-2 closer than this in the confirm
 flag_band = [0.20, 0.80]   # Noul dead band → clarify(yes/no)
 accept_min = 0.50          # text uncovered below this
 cosmetic_floor = 0.50
+verify_min = 0.50          # a shown call's elected record doubted below this → clarify(menu) (§3.8.3)
 alt_show_min = 0.10        # runner-ups shown on confirm cards
 
 [tiers.read]
@@ -2538,6 +2579,7 @@ require_present = 0.80     # until E2 passes (§11.2)
 [probes]
 present = ["external", "critical"]   # REF slots
 reverse = ["critical"]               # REF slots with ≥ 2 real candidates
+verify = ["write", "external", "critical"]   # identity REF slots of a shown call (§3.8.3)
 
 [widen]
 max_rounds = 2
@@ -2552,6 +2594,7 @@ mentions_max = 8
 items_max = 60
 members_max = 40
 joint_max = 24
+verify_k = 3                         # first-round verify Nouls per identity REF slot
 
 [loop]
 max_steps = 6

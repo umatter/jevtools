@@ -106,6 +106,9 @@ class ShapePolicy(_Section):
     """Noul dead band: strictly inside it a flag or item is uncertain (``flag_band`` shape)."""
     accept_min: float = 0.50
     cosmetic_floor: float = 0.50
+    verify_min: float = 0.50
+    """A shown call (execute or confirm) whose elected record's ``verify`` Noul is below this gets a menu: the request
+    may name a different record than the look-alike Jev elected (§3.8.3)."""
     alt_show_min: float = 0.10
 
 
@@ -148,10 +151,12 @@ class TiersPolicy(_Section):
 
 
 class ProbePolicy(_Section):
-    """Tiers in which REF slots get ``present`` Nouls and ``rev`` Choices (spec §3.5.3)."""
+    """Tiers in which REF slots get ``present`` Nouls and ``rev`` Choices (spec §3.5.3), and in which a call about
+    to be shown gets a ``verify`` round on its elected identity records (§3.8.3)."""
 
     present: tuple[Tier, ...] = (Tier.EXTERNAL, Tier.CRITICAL)
     reverse: tuple[Tier, ...] = (Tier.CRITICAL,)
+    verify: tuple[Tier, ...] = (Tier.WRITE, Tier.EXTERNAL, Tier.CRITICAL)
 
 
 class WidenPolicy(_Section):
@@ -172,6 +177,8 @@ class PoolPolicy(_Section):
     items_max: int = 60
     members_max: int = 40
     joint_max: int = 24
+    verify_k: int = 3
+    """First-round ``verify`` Nouls per identity REF slot: its best-anchored records (§3.8.3)."""
 
 
 class LoopPolicy(_Section):
@@ -312,6 +319,7 @@ RULE_CONSISTENCY = "P8.consistency"
 RULE_LOOP_DONE = "P10.loop.done"
 TIER_BANDS: tuple[str, ...] = (
     "execute", "confirm_band", "capped", "confirm_always", "confirmed", "ambiguous", "missing", "diffuse",
+    "unverified",
 )  # fmt: skip
 """Bands of rule P9 (``P9.<tier>.<band>``): the tier comparison, its caps, click confirmations and shape routing."""
 RULE_PREFIXES: tuple[str, ...] = ("P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10")
@@ -377,6 +385,8 @@ class PolicyInput(BaseModel):
     call_map: str | None = None
     C: float | None = None
     present: dict[str, float] = Field(default_factory=dict)
+    verify: dict[str, float] = Field(default_factory=dict)
+    """``verify`` Nouls on the elected records of identity REF slots (slot name → P(yes))."""
     loop: bool = False
     escalator: bool = False
     widen_ok: list[str] = Field(default_factory=list)
@@ -609,6 +619,11 @@ def _p9(inp: PolicyInput, policy: Policy) -> PolicyResult:
     caps = _caps(inp, policy, tier)
     if inp.confirmed and _clears(c, confirm_at if confirm_at is not None else execute_at, h):
         return PolicyResult(outcome=Outcome.EXECUTE, rule=tier_rule(tier, "confirmed"), caps=caps)
+    if _clears(c, execute_at, h) or _clears(c, confirm_at, h):
+        doubted = _unverified(inp, policy)
+        if doubted is not None:
+            return PolicyResult(outcome=Outcome.CLARIFY, rule=tier_rule(tier, "unverified"), bottleneck=doubted,
+                                shape="ambiguous", caps=caps, ask="menu", reason="verify")  # fmt: skip
     if _clears(c, execute_at, h):
         if not caps:
             return PolicyResult(outcome=Outcome.EXECUTE, rule=tier_rule(tier, "execute"))
@@ -621,6 +636,11 @@ def _p9(inp: PolicyInput, policy: Policy) -> PolicyResult:
                                 shape="ambiguous", caps=caps, ask="menu", reason="margin")  # fmt: skip
         return PolicyResult(outcome=Outcome.CONFIRM, rule=tier_rule(tier, "confirm_band"), caps=caps, ask="confirm")
     return _shape_routing(inp, policy, tier, caps)
+
+
+def _unverified(inp: PolicyInput, policy: Policy) -> str | None:
+    """The first slot whose elected record the ``verify`` Noul doubts (``None``: none, or none asked)."""
+    return next((name for name, p in inp.verify.items() if p < policy.shapes.verify_min - _EPS), None)
 
 
 def _coin_flip(inp: PolicyInput, policy: Policy) -> SlotState | None:

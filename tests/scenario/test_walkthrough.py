@@ -16,7 +16,8 @@ from tests.support import load_fixture
 
 R2_QIDS = [
     "tool", "get_weather.city", "get_weather.unit", "search_web.query.accept.0", "search_web.query.accept.1",
-    "send_email.authorized", "send_email.to", "send_email.to.present", "send_email.subject.accept.0",
+    "send_email.authorized", "send_email.to", "send_email.to.present", "send_email.to.verify.0",
+    "send_email.to.verify.1", "send_email.to.verify.2", "send_email.subject.accept.0",
     "send_email.subject.accept.1", "send_email.subject.accept.2", "send_email.body.accept.0",
     "send_email.body.accept.1",
 ]  # fmt: skip
@@ -64,7 +65,7 @@ def test_r2_request_is_the_spec_request() -> None:
     assert qids(backend) == R2_QIDS
     assert ordered_json(backend.requests[0].to_wire()) == ordered_json(load_fixture("spec_r2_request.json"))
     compact = json.dumps(backend.requests[0].to_wire(), ensure_ascii=False, separators=(",", ":"))
-    assert len(compact) == 5856  # "13 questions, 5,856 characters" (§13.4)
+    assert len(compact) == 7460  # "16 questions, 7,460 characters" (§13.4)
     tools = {t.name: t for t in router.compile(scenario_messages(scripts.R2_REQUEST, history=True)).tools}
     assert not any(tools[name].speculated for name in ("create_event", "transfer_funds", "read_file"))
 
@@ -139,12 +140,18 @@ def test_r3_transfer_confirms() -> None:
         "transfer_funds.from_account",
         "transfer_funds.from_account.present",
         "transfer_funds.from_account.rev",
+        "transfer_funds.from_account.verify.0",
+        "transfer_funds.from_account.verify.1",
+        "transfer_funds.from_account.verify.2",
         "transfer_funds.to_account",
         "transfer_funds.to_account.present",
         "transfer_funds.to_account.rev",
+        "transfer_funds.to_account.verify.0",
+        "transfer_funds.to_account.verify.1",
+        "transfer_funds.to_account.verify.2",
         "transfer_funds.amount",
         "transfer_funds.currency",
-    ]  # fmt: skip  (15 questions)
+    ]  # fmt: skip  (21 questions: 3 verify Nouls per account slot, §3.8.3)
     joint = criteria(backend, "transfer_funds.joint")  # 6 ordered pairs over the anchored accounts + NONE
     assert len(joint) == 6 + 1 and "250.00 CHF: Savings → Checking" in joint
     assert list(criteria(backend, "transfer_funds.currency"))[:2] == ["CHF", "EUR"]

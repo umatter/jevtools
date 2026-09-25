@@ -22,6 +22,9 @@ Additive extensions (kinds agent; the original contract is unchanged):
   Choices over ranking pages K+1… plus a hierarchy ``group`` Choice; stage ``"hierarchy"`` asks one Choice over
   the items of the top groups (``rc.widen[slot_key]["groups"]`` carries the group distribution of the previous
   stage). Decoding a widen pool goes through the resolver's usual ``decode``.
+- :class:`Verifiable`: the optional look-alike check of §3.8.3, implemented by the ``ref`` resolver:
+  ``verify(tool, slot, option, index) -> BallotQuestion | None``, the ``verify`` Noul the router asks in a follow-up
+  round when a call about to be shown elects a record the first round did not verify (``None``: no check needed).
 - Every resolver also exposes ``normalizer`` (``name@version``, recorded in provenance); late-binding recipes and
   their evaluation live in :mod:`jevtools.kinds.late`.
 """
@@ -625,6 +628,13 @@ class Widenable(Protocol):
     ) -> tuple[Pool, list[BallotQuestion]]: ...
 
 
+class Verifiable(Protocol):
+    """Optional look-alike check (spec §3.8.3), implemented by ``ref``: the ``verify`` Noul on an elected record, or
+    ``None`` when the record needs none (the user typed its key)."""
+
+    def verify(self, tool: ToolSpec, slot: SlotSpec, option: BallotOption, index: int) -> BallotQuestion | None: ...
+
+
 RESOLVERS: dict[str, Resolver] = {}
 """Registered resolvers by kind."""
 
@@ -664,6 +674,7 @@ __all__ = [
     "Shape",
     "SlotResult",
     "ValueEntry",
+    "Verifiable",
     "Widenable",
     "decode_choice",
     "elect",

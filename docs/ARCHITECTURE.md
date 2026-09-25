@@ -37,7 +37,7 @@ messages + tools + Context
 | ask | `Ballot.to_requests(model)` produces the wire requests, and the backend answers them. On a 422, the offending question family is dropped and the call re-sent once. Any other failure fails closed (P0). | `router.py` (`_ask`, `_isolate`), `backends/*`, `wire.py` | §5.6, §8 |
 | decode | Answers become per-slot value distributions: sentinels, pooling of `NOT_STATED` into defaults, and family-specific rules in each resolver. The call is chosen by constrained MAP over cross-slot constraints. Late-bound placeholders (`⟨recipient's first name⟩`, `from_account.currency`) are filled, the result is validated against the schema, and the call MAP is computed across tools. | `decode.py`, `kinds/*` (`decode`), `kinds/late.py`, `kinds/normalize.py`, `spec/constraints.py`, `spec/schema.py` | §3.6, §3.7.4 |
 | compose | Factors combine into W, Π, L and J. The tier's prior composition is applied, then the isotonic calibrator when one is fitted, then the coherence cap `C ≤ W`. | `confidence.py` | §3.7 |
-| decide | Ordered rules P0–P10 run with tier thresholds, gates, hysteresis and caps. `widen` and `fill` are internal actions: the router runs another round and evaluates again. | `policy.py`, `router.py` (`_policy_loop`, `_widen`, `_fill`), `kinds/widen.py`, `fallback.py` | §3.8, §4.6, §4.7 |
+| decide | Ordered rules P0–P10 run with tier thresholds, gates, hysteresis and caps. `widen` and `fill` are internal actions: the router runs another round and evaluates again. A call about to be shown is gated by the `verify` Nouls on its elected records (asked in round 1 for the best-anchored ones, else in one follow-up round); a doubted record becomes a menu (`P9.<tier>.unverified`). | `policy.py`, `router.py` (`_policy_loop`, `_widen`, `_fill`), `kinds/widen.py`, `fallback.py` | §3.8, §4.6, §4.7 |
 | emit | Prompts are templates filled with candidate labels: confirm cards, clarify menus, grid menus, open questions and refuse notices. The `Decision` carries the call, confidence, bottleneck, slots, prompt and `Pending`, and adapters translate it to other ecosystems' formats. | `prompts.py`, `decision.py`, `adapters/*`, `serve/app.py` | §3.8.4, §3.10, §7.2 |
 | record | The `Trace` holds hashes, rounds with request and response bodies, bindings, factors, the composition and the rule that fired. `jt.verify` rebuilds the Ballot, re-decodes and re-applies the policy offline. | `trace.py`, `canonical.py` | §3.1, §3.9 |
 
@@ -52,7 +52,7 @@ parsed values go into the pools with the `tool_output` channel. Entities are rem
 loop stops on `done`/`done_after`, a budget cap, repeat detection or lack of progress.
 
 **Extension point.** Kind-specific logic lives in resolvers (`kinds/base.py`: `Resolver.pool`, `questions` and
-`decode`, plus the optional `widen` and `clarify_values` hooks). `register_resolver(kind, resolver)` replaces or
+`decode`, plus the optional `widen`, `verify` and `clarify_values` hooks). `register_resolver(kind, resolver)` replaces or
 adds one. `plan.py`, `decode.py` and `router.py` go through this interface only.
 
 ## Module map

@@ -21,7 +21,7 @@ from jevtools.canonical import canonical_str, jsonable, sha256_of
 from jevtools.preview import PREVIEW_CHARS, text_preview
 
 Role = Literal["user", "assistant", "system", "tool"]
-Mode = Literal["turn", "loop", "widen", "resume", "fill"]
+Mode = Literal["turn", "loop", "widen", "resume", "fill", "verify"]
 """Round modes recorded in the Ballot (§3.5.7)."""
 
 SETTING_FIELDS: tuple[str, ...] = ("now", "tz", "locale", "user", "shareable", "include_system")

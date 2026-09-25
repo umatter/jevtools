@@ -1741,3 +1741,39 @@ Extends "Documentation and final merge":
   sharing a word with the request: "budget review" → "ACME quarterly review", "ACME renewal" → "ACME expansion").
   This is the "confident wrong election among distractors" of §14, measured. It also argues against conditioning
   the ref Choice on `present` to lift sentinel mass: the user did identify a record in these controls.
+
+## Look-alike check (`verify`)
+
+- Problem (measured): with the requested record missing, live Jev bound a record sharing one word with the request,
+  in every replay: "Cancel the budget review" → *ACME quarterly review*, "Move the ACME renewal…" → *ACME expansion*,
+  both confirm cards at C ≈ 0.6 (6 false bindings in 198 negative controls). The registry reports such a match as
+  `exact` (the shared token), so code-side match quality cannot tell it from a true match, and the `rev` probe only
+  guards against option order.
+- Question wording, measured before building (85 true records vs 461 wrong ones from the controls): a Noul showing
+  only the label ("Is X the event `request` refers to?") said yes (≥ 0.5) to 72% of true records and 0% of wrong
+  ones, but the two groups overlapped at 0.4–0.5, where the look-alikes were. Showing the record's label **and its
+  match note** (`T_VERIFY`, the candidate object form of the accept Nouls) said yes to 99% of true records and 2% of
+  wrong ones; the two look-alikes scored 0.45 and 0.16.
+- §3.5.3 new family `verify` (`T.P.verify.i`, a Noul), §3.8.3 new P9 band `unverified`: a call about to be shown
+  (execute or confirm; not a user's click) whose elected record, in a top-level identity REF slot of a tier in
+  `probes.verify` (write, external, critical by default), gets a verify answer below `shapes.verify_min` = 0.50
+  becomes `clarify(menu)` on that slot, reason `verify`. A gate, not a factor: C is unchanged, so calibration and
+  tuning are unaffected.
+- One call per turn is kept: the first round asks verify on the `pools.verify_k` = 3 best-anchored records (match
+  score, then pool order), which covers collisions ("Anna" → three contacts) and a registry shared by two slots
+  (from/to accounts). Only when Jev elects a record outside those does the router ask one same-state follow-up round,
+  through the resolver's optional `Verifiable.verify` hook (the router never calls `RefResolver` directly), with a
+  fresh index so a qid is never reused within a decision. A key the user typed (an identifier anchor: `INC-1052`,
+  `ticket 1100`) and a slot the user bound by a click get no verify. Nested slots (list items, record leaves) are not
+  covered: the gate reads top-level slots only.
+- The decode keeps a verify answer only while its candidate is the slot's elected value (`ToolDecode.verify`, gate
+  `verify.<slot>`); a stale one after a re-election is dropped.
+- Templates are additive (no existing wording changed), so the protocol stays `jevtools/0.1`, but every Ballot of a
+  write/external/critical tool with an identity REF slot gains questions: the §13.4 R2 request goes from 13 questions
+  and 5,856 characters to 16 and 7,460, and R3 from 15 to 21. Golden fixtures were regenerated with no outcome, rule
+  or round count changed; the demo scripts answer `*.verify.*` with 0.94–0.96.
+- The oracle answers verify from the candidate it was sent (by label, against the slot question's options), since a
+  follow-up reuses the slot's qid prefix for another record.
+- Live, 3 replays + controls (2026-09-25): false bindings 6 → **0** of 198; correct 82% → 81% (79/82/83 per replay,
+  within run-to-run noise); the gate fired on no true case; 1 decision in 297 needed the follow-up round; input
+  tokens per decision 2,817 → 3,315 (+18%).

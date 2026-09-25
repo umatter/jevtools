@@ -18,12 +18,13 @@ escalate, abstain or refuse, with a trace you can replay. C is a bound, a produc
 per-question probabilities, not itself a calibrated probability. It becomes one only after you fit a calibrator on
 labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
-> **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green. **Live Jev has been measured once**:
-> one run of the app-domain benchmark (99 cases, OpenRouter, 2026-09-25) scored 80% correct against a 99% ceiling,
-> with no planted value reaching a call ([Benchmarks](#benchmarks)). That is a single unreplicated run, not a
-> calibration. Every other number in this README (probabilities, confidences, token counts in examples and
-> fixtures) comes from the scripted backend, the offline `LexicalSimulator` or the benchmark oracle, and is never
-> evidence about Jev's accuracy.
+> **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green. **Live Jev has been measured on the
+> app-domain benchmark** (99 cases × 3 replays, OpenRouter, 2026-09-25): 81% correct against a 99% ceiling, no
+> planted value reaching a call, and no call shown for a wrong record in 198 negative controls (cases whose right
+> record was removed) ([Benchmarks](#benchmarks)). That is one benchmark on synthetic apps, not a calibration. Every
+> other number in this README (probabilities, confidences, token counts in examples and fixtures) comes from the
+> scripted backend, the offline `LexicalSimulator` or the benchmark oracle, and is never evidence about Jev's
+> accuracy.
 
 ## Where it fits
 
@@ -474,6 +475,11 @@ notifies people (attendees) is raised to external.
 | external | Π | 0.80 | 0.50 | `authorized` ≥ 0.90; content text accepted ≥ 0.80 |
 | critical | min(L, J) | never, unless certified | 0.80 | channels ⊆ {user, registry, author}; the joint Choice agrees |
 
+In the write, external and critical tiers, a call is shown only if Jev also confirms each chosen record (a contact,
+ticket, deal, account, file…) is the one the request refers to, and not a look-alike that shares a word with it. The
+`verify` question is asked in the same call for the best-matched records, so it rarely costs a second round. A
+record the user typed by its key (`INC-1052`) needs no check; a doubted one becomes a menu (`P9.<tier>.unverified`).
+
 These defaults are **priors, not measurements** (SPEC §3.8.3, Appendix B). A value within 0.03 of a threshold
 takes the safer side. The critical tier stays confirm-only until `jevtools tune` has certified it on ≥ 3,000
 labelled cases. Override any part in TOML; everything you leave out keeps its default:
@@ -546,13 +552,15 @@ with balance constraints, coreference and six injections planted in observations
 |---|---:|---:|---:|---:|---:|---:|---:|
 | cases | 20 | 17 | 16 | 15 | 16 | 15 | 99 |
 | ceiling (oracle, not Jev) | 95% | 100% | 100% | 100% | 100% | 100% | 99% |
-| live Jev, one run (2026-09-25) | 60% | 94% | 88% | 73% | 69% | 100% | 80% |
+| live Jev, 3 replays (2026-09-25) | 67% | 94% | 85% | 73% | 69% | 100% | 81% |
 
-The oracle makes no wrong executions and lets no planted value reach a call. Live Jev let no planted value reach a
-call either. Its 3 wrong executions were all the read-only `search_files` chosen instead of opening a file, and most
-of its other misses are clarify menus where the right call was bound but fell below the tier's prior thresholds
-(untuned). One run per case, so a single domain moves by ±10 points between runs. The one miss names a contact by a role
-that the app's data does not expose to matching. The cases use the §11.1 format, so the same files are `jevtools
+The oracle makes no wrong executions and lets no planted value reach a call; its one miss names a contact by a role
+that the app's data does not expose to matching. Live Jev let no planted value reach a call either (0 of 18). Its
+wrong executions (9 of 297) are all the read-only `search_files` chosen instead of opening a file, and most of its
+other misses are clarify menus where the right call was bound but fell below the tier's prior thresholds (untuned).
+`--controls` adds **negative controls**, each case with its right record removed: live Jev showed a call for a wrong
+record in none of 198, after the look-alike check (`verify`, below) closed the 6 it made before. The whole-bench
+number moves by about ±2 points between replays, a single domain by up to ±10. The cases use the §11.1 format, so the same files are `jevtools
 eval` datasets. `--dir` runs your own domains, which is the fastest way to see what jevtools can do on your tools and
 data before the first API call.
 
@@ -583,17 +591,20 @@ leads to execute. For cassettes, give the `Context` a fixed `now`, because the s
 
 These are condensed from SPEC §14.
 
-- **One live measurement.** A single run of the app-domain benchmark exists (see [Benchmarks](#benchmarks)).
-  Every other probability, token count and cost in the docs, examples and fixtures is illustrative. The live
-  experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been run.
+- **One live benchmark.** The app-domain benchmark has been run live with replays and negative controls (see
+  [Benchmarks](#benchmarks)), on synthetic apps. Every other probability, token count and cost in the docs, examples
+  and fixtures is illustrative. The live experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been
+  run.
 - **Thresholds are priors.** They mean something only after `jevtools eval` + `tune` on your own labelled traffic,
   and they do not transfer across datasets.
 - **Coverage is the ceiling.** Jev cannot elect a value that code did not nominate. Over an app's own data the
   oracle ceiling is high (98 of 99 on the app-domain bench). Outside that setting it is low: 35–42% on BFCL's
   single-call categories (docs/BENCH.md), mostly because extractors miss values that are in the text. When a value
   is missed, the best case is `NONE_OF_THESE`, which leads to widen or clarify. The worst case is a confident wrong
-  election among distractors. Whether the sentinels really absorb mass when the right value is missing is
-  unverified (experiment E2).
+  election among distractors: live, with the right record removed, Jev elected a record sharing one word with the
+  request ("the budget review" → "ACME quarterly review"). A `verify` Noul on the elected record now turns that into
+  a menu (0 of 198 controls shown a wrong call), but it covers top-level identity slots of write tiers and above,
+  not reads or nested values.
 - **Calibration of the new question forms is assumed.** This covers "Suppose…" premises, accept Nouls, joint
   sentences, membership Nouls and sentinels. The compositions are only as honest as their factors.
 - **Text is extractive without a Filler.** Bodies are templates plus the user's clauses and can read stilted. New

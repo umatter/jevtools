@@ -7,7 +7,7 @@ Ids are addresses for code only; decoders use the Ballot's decode map and never 
     T   := sanitized tool name
     F   := "authorized" | "joint" ("." G)? | "done_after"
          | P ( "" | ".present" | ".rev" | ".date" | ".time" | ".branch" | ".more" | ".group"
-                 | ".accept." N | ".m" N | ".item." N | ".member." N | ".bucket." N )
+                 | ".accept." N | ".verify." N | ".m" N | ".item." N | ".member." N | ".bucket." N )
     P   := sanitized param path; a segment equal to a reserved suffix word gets "_" appended
 
 Charset ``[a-z0-9_.]``, length ≤ 128, first character a letter.
@@ -27,7 +27,7 @@ QID_MAX = 128
 RESERVED_WORDS: frozenset[str] = frozenset(
     {
         "authorized", "joint", "done_after",
-        "present", "rev", "date", "time", "branch", "more", "group",
+        "present", "rev", "verify", "date", "time", "branch", "more", "group",
         "accept", "item", "member", "bucket",
     }
 )  # fmt: skip

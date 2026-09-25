@@ -198,6 +198,8 @@ class _Session:
     bindings: dict[str, tuple[Any, float, str | None]] = field(default_factory=dict)
     """User bindings (clicks, reply picks, passthrough) applied after every decode: slot → (value, p, label)."""
     tool_pick: tuple[str, float] | None = None
+    verified: set[tuple[str, tuple[str, ...], str]] = field(default_factory=set)
+    """``(tool, slot path, value key)`` of every elected record a ``verify`` round has asked about."""
     replanned: bool = False
     """Set on the re-plan after a failed TOCTOU check (no second revalidation loop)."""
     loop: bool = False
@@ -643,7 +645,42 @@ class Router:
                 if not (yield from self._fill(s, state, result.bottleneck or "")):
                     s.fills += 1
                 continue
+            if result.outcome in (Outcome.EXECUTE, Outcome.CONFIRM) and not inp.confirmed:
+                questions = self._verify_questions(s, state)
+                if questions:
+                    yield from self._followup(s, state, questions, mode="verify")
+                    continue
             return state, result, inp
+
+    def _verify_questions(self, s: _Session, state: _State) -> list[BallotQuestion]:
+        """Follow-up ``verify`` Nouls for a call about to be shown (§3.8.3): one per identity REF slot whose elected
+        record was not typed by its key, bound by the user, or verified already (the first round verifies the
+        best-anchored record, so this round runs only when Jev elected another one); tiers ``policy.probes.verify``."""
+        td = state.decoded.decision if state.decoded is not None else None
+        if td is None or td.tool.tier not in self.policy.probes.verify:
+            return []
+        out: list[BallotQuestion] = []
+        for slot in td.tool.slots:
+            result = td.slots.get(slot.name)
+            hook = getattr(get_resolver(slot.kind), "verify", None)
+            if not callable(hook) or slot.stakes != "identity" or len(slot.path) != 1 or result is None \
+                    or result.is_bottom \
+                    or slot.name in s.bindings or slot.name in td.verify:  # fmt: skip
+                continue
+            key = (td.tool.name, slot.path, value_key(result.value))
+            if key in s.verified:
+                continue
+            asked = [q for q in state.ballot.questions if q.family == "slot" and q.tool == td.tool.name
+                     and q.path == slot.path]  # fmt: skip
+            option = next((o for q in asked for o in q.options if value_key(o.value) == key[2]), None)
+            index = sum(q.family == "verify" and q.tool == td.tool.name and q.path == slot.path
+                        for q in state.ballot.questions)  # fmt: skip
+            question = hook(td.tool, slot, option, index) if option is not None else None
+            if question is None:
+                continue
+            s.verified.add(key)
+            out.append(question)
+        return out
 
     def _speculation_miss(self, s: _Session, decoded: Decoded) -> bool:
         chosen = decoded.chosen

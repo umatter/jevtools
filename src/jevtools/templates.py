@@ -24,6 +24,8 @@ PREMISE = "Suppose the assistant will {intent} to fulfil `request`."
 T_SLOT = PREMISE + " {ask}"
 T_PROBE = PREMISE + " Does the user indicate {noun}, in `request` or `history`?"
 T_PRESENT = PREMISE + " Does the user say or clearly imply {noun}?"
+T_VERIFY = PREMISE + " Is the candidate below {noun} that `request` refers to?"
+"""The ``question`` field of a REF slot's verify-Noul on its elected record; ``candidate`` is its label and text."""
 T_AUTH = (
     "Is the user asking the assistant to actually {intent} now? Judge `request` together with the user's own "
     "earlier turns in `history`."
@@ -98,6 +100,10 @@ SENTINEL_TEXT: dict[str, str] = {
 PRESENT_CRITERIA: dict[str, str] = {
     "true": "Yes, stated or clearly implied, possibly through `history`.",
     "false": "No; it would have to be guessed.",
+}
+VERIFY_CRITERIA: dict[str, str] = {
+    "true": "Yes: `request` names or clearly describes this one.",
+    "false": "No: `request` refers to a different one, even if this one is similar or shares words with it.",
 }
 AUTH_CRITERIA: dict[str, str] = {
     "true": "Yes: a direct instruction, or clear agreement to a proposal, to do it now.",
@@ -224,6 +230,11 @@ def present_instructions(intent: str, noun: str) -> str:
     return render(T_PRESENT, intent=intent, noun=noun)
 
 
+def verify_instructions(intent: str, noun: str, candidate: str) -> dict[str, str]:
+    """``T_VERIFY``: is the elected record the one the request refers to, not a look-alike?"""
+    return {"question": render(T_VERIFY, intent=intent, noun=noun), "candidate": candidate}
+
+
 def auth_instructions(intent: str) -> str:
     """``T_AUTH``: the ``authorized`` Noul."""
     return render(T_AUTH, intent=intent)
@@ -333,6 +344,7 @@ __all__ = [
     "PLACEHOLDER",
     "PREMISE",
     "PRESENT_CRITERIA",
+    "VERIFY_CRITERIA",
     "PROBE_NONE_OF_THESE_TEXT",
     "PROBE_NOT_STATED_TEXT",
     "REFUSE",
@@ -351,6 +363,7 @@ __all__ = [
     "T_MENTION",
     "T_MORE",
     "T_PRESENT",
+    "T_VERIFY",
     "T_PROBE",
     "T_REPLY",
     "T_SLOT",
@@ -376,6 +389,7 @@ __all__ = [
     "not_stated_text",
     "premise",
     "present_instructions",
+    "verify_instructions",
     "probe_instructions",
     "probe_not_stated_text",
     "quote_list",

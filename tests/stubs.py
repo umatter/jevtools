@@ -38,6 +38,7 @@ from jevtools.kinds.base import (
     unasked_result,
 )
 from jevtools.kinds.enum import CATALOG_DATA, load_catalog, register_catalog
+from jevtools.kinds.ref import RefResolver
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.wire import Answer, NoulAnswer
 from tests.scenario.fixtures import LOCALE, R2_HISTORY, SCENARIO_NOW, USER
@@ -56,10 +57,11 @@ class StubChoice:
     """A slot-Choice resolver over fixed candidates (``candidates["tool.slot"]``)."""
 
     def __init__(self, kind: str, candidates: Candidates | None = None, *, present: Sequence[str] = (),
-                 widen_with: Candidates | None = None) -> None:  # fmt: skip
+                 verify: Sequence[str] = (), widen_with: Candidates | None = None) -> None:  # fmt: skip
         self.kind = kind
         self.candidates: dict[str, list[Candidate]] = {k: list(v) for k, v in (candidates or {}).items()}
         self.present = set(present)
+        self.verify = set(verify)
         self.widen_with = {k: list(v) for k, v in (widen_with or {}).items()}
         self.widened: list[str] = []
 
@@ -82,6 +84,9 @@ class StubChoice:
                 instructions=templates.present_instructions(tool.intent, slot.noun),
                 criteria=dict(templates.PRESENT_CRITERIA),
             ))  # fmt: skip
+        if f"{tool.name}.{slot.name}" in self.verify:  # the first-round look-alike check, one per option (§3.8.3)
+            options = questions[0].options[: rc.policy.pools.verify_k]
+            questions += [RefResolver.verify_question(tool, slot, o, i) for i, o in enumerate(options)]
         return questions
 
     def decode(self, tool: ToolSpec, slot: SlotSpec, pool: Pool, answers: Mapping[str, Answer],
@@ -237,11 +242,14 @@ def accounts(savings_balance: float = 12000.0) -> list[Candidate]:
 
 
 def scenario_resolvers(*, savings_balance: float = 12000.0, city: Sequence[Candidate] = (),
-                       amount: Sequence[Candidate] = (cand("250.00", "user"),)) -> list[Any]:  # fmt: skip
-    """Stubs for every non-enum kind of the §13.2 catalog, loaded with the scenario rows."""
+                       amount: Sequence[Candidate] = (cand("250.00", "user"),),
+                       verify: bool = False) -> list[Any]:  # fmt: skip
+    """Stubs for every non-enum kind of the §13.2 catalog, loaded with the scenario rows (``verify``: also the
+    first-round ``send_email.to.verify.i`` Nouls of the spec's R2 request)."""
     rows = accounts(savings_balance)
     ref = StubChoice("ref", {"send_email.to": ANNAS, "transfer_funds.from_account": rows,
-                             "transfer_funds.to_account": rows}, present=["send_email.to"])  # fmt: skip
+                             "transfer_funds.to_account": rows}, present=["send_email.to"],
+                     verify=["send_email.to"] if verify else ())  # fmt: skip
     return [
         ref,
         StubChoice("span", {"get_weather.city": list(city)}),

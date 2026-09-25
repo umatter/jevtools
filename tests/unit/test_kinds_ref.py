@@ -28,8 +28,10 @@ def test_r2_to_pool_questions_and_decode() -> None:
     slot = tool.slot("to")
     pool, questions = resolve(tool, slot, rc)
     assert [c.label for c in pool.candidates] == [KELLER, ROSSI, FREY] and pool.evidence_backed
-    assert [q.family for q in questions] == ["slot", "present"]  # external tier: present, no rev
-    slot_q, present_q = questions
+    assert [q.family for q in questions] == ["slot", "present", "verify", "verify", "verify"]  # external: no rev
+    assert [q.meta["candidate"]["label"] for q in questions[2:]] == [KELLER, ROSSI, FREY]  # best-anchored first
+    assert [q.qid for q in questions[2:]] == [f"send_email.to.verify.{i}" for i in range(3)]
+    slot_q, present_q = questions[:2]
     answers = {
         slot_q.qid: choice(slot_q, {KELLER: 0.86, ROSSI: 0.07, FREY: 0.03, NONE_OF_THESE: 0.03, NOT_STATED: 0.01}),
         present_q.qid: noul(0.97),
@@ -44,7 +46,7 @@ def test_r2_to_pool_questions_and_decode() -> None:
 def test_presence_conflict() -> None:
     catalog, rc = scenario("Email Anna that I'll be 10 minutes late")
     tool = catalog["send_email"]
-    pool, (slot_q, present_q) = resolve(tool, tool.slot("to"), rc)
+    pool, (slot_q, present_q, *_) = resolve(tool, tool.slot("to"), rc)
     real = {slot_q.qid: choice(slot_q, {KELLER: 0.9, NOT_STATED: 0.1}), present_q.qid: noul(0.2)}
     assert "presence_conflict" in decode(tool, tool.slot("to"), pool, real, rc).flags
     missing = {slot_q.qid: choice(slot_q, {NOT_STATED: 0.9, KELLER: 0.1}), present_q.qid: noul(0.8)}
@@ -57,8 +59,8 @@ def test_r3_rev_probe_min_and_order_sensitivity() -> None:
     tool = catalog["transfer_funds"]
     slot = tool.slot("from_account")
     pool, questions = resolve(tool, slot, rc)
-    assert [q.family for q in questions] == ["slot", "present", "rev"]
-    fwd, present, rev = questions
+    assert [q.family for q in questions] == ["slot", "present", "rev", "verify", "verify", "verify"]
+    fwd, present, rev = questions[:3]
     assert [o.label for o in fwd.options] == [CHECKING, JOINT, SAVINGS, TRAVEL]
     assert [o.label for o in rev.options] == [TRAVEL, SAVINGS, JOINT, CHECKING] and rev.qid.endswith(".rev")
     assert rev.sentinels == fwd.sentinels and rev.instructions == fwd.instructions

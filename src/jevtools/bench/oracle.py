@@ -217,7 +217,10 @@ class OracleBackend:
         answers: dict[str, Any] = {}
         for qid, wire in request.questions.items():
             question = questions.get(qid)
-            if question is None:
+            verify = self._verify(qid, wire, questions)  # by the candidate sent: a follow-up reuses the qid
+            if verify is not None:
+                answers[qid] = verify
+            elif question is None:
                 self.unknown.append(qid)
                 answers[qid] = _uncertain(wire)
             else:
@@ -347,7 +350,7 @@ class OracleBackend:
             if self._matches(True, acceptable, "boolean") and ANY not in acceptable:
                 return P_YES
             return P_NO if self._matches(False, acceptable, "boolean") else 0.5
-        if q.family == "accept":
+        if q.family in ("accept", "verify"):
             candidate = (q.meta or {}).get("candidate") or {}
             return P_YES if self._matches(candidate.get("value"), acceptable, typ) else P_NO
         if q.family in ("item", "member"):  # a list element, or a member of a superlative's set ("the latest …")
@@ -356,6 +359,23 @@ class OracleBackend:
                 q.family == "member" and self._matches(value, acceptable, typ)))  # fmt: skip
             return P_YES if fits else P_NO
         return 0.5
+
+    def _verify(self, qid: str, wire: Any, questions: Mapping[str, BallotQuestion]) -> Answer | None:
+        """A ``verify`` Noul, answered from the candidate it was sent with (a follow-up round reuses the first round's
+        qid for another record): yes iff that record is an acceptable value. The slot question is the qid without
+        ``.verify.N``; the candidate string starts with the option's label."""
+        head, sep, index = qid.rpartition(".verify.")
+        slot = questions.get(head) if sep and index.isdigit() else None
+        instructions = getattr(wire, "instructions", None)
+        candidate = instructions.get("candidate") if isinstance(instructions, Mapping) else None
+        if slot is None or not isinstance(candidate, str):
+            return None
+        options = [o for o in slot.options if candidate == o.label or candidate.startswith(o.label + ". ")]
+        acceptable = self.acceptable(slot.path)
+        if not options or acceptable is None:
+            return None
+        option = max(options, key=lambda o: len(o.label))
+        return NoulAnswer(noul=P_YES if self._matches(option.value, acceptable, self.bfcl_type(slot.path)) else P_NO)
 
     def _elects_value(self, q: BallotQuestion) -> bool:
         """Whether the slot of a ``present`` probe is answered with a real option (not a sentinel)."""

@@ -31,6 +31,7 @@ __all__ = [
     "Resolver",
     "SlotResult",
     "ValueEntry",
+    "Verifiable",
     "Widenable",
     "decode_choice",
     "elect",

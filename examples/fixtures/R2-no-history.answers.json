@@ -10,6 +10,7 @@
     "send_email.authorized": 0.95,
     "send_email.to": {"Anna Keller <anna.keller@acme.com>": 0.47, "Anna Rossi <anna.rossi@gmail.com>": 0.41, "Annabel Frey <annabel.frey@muster.ch>": 0.06, "NOT_STATED": 0.03, "NONE_OF_THESE": 0.03},
     "send_email.to.present": 0.97,
+    "send_email.to.verify.*": 0.95,
     "send_email.subject.accept.0": 0.93,
     "send_email.subject.accept.1": 0.78,
     "send_email.subject.accept.2": 0.6,

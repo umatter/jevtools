@@ -194,7 +194,20 @@ class RefResolver(ChoiceResolver):
         real = len(pool.candidates)
         if real >= 2 and self._probe(slot.probe_reverse, tool, rc.policy.probes.reverse):
             out.append(self.rev_question(tool, base[0]))
+        if slot.stakes == "identity" and len(slot.path) == 1 and tool.tier in rc.policy.probes.verify:
+            anchored = [o for o in self.best_anchored(base[0], pool, rc.policy.pools.verify_k) if not self.typed_key(o)]
+            out += [self.verify_question(tool, slot, option, i) for i, option in enumerate(anchored)]
         return out
+
+    @staticmethod
+    def best_anchored(question: BallotQuestion, pool: Pool, k: int) -> list[BallotOption]:
+        """The options of the pool's ``k`` best-anchored candidates (highest match score, pool order on ties): the
+        records Jev most likely elects, collisions and a registry shared by two slots included. Their ``verify``
+        Nouls ride in the first round, so a call on one of them needs no follow-up round (§3.8.3)."""
+        scored = [(float(c.prov.get("score", 0.0)), -i, c) for i, c in enumerate(pool.candidates) if "anchor" in c.prov]
+        by_value = {value_key(o.value): o for o in question.options}
+        ranked = [by_value.get(value_key(c.value)) for _, _, c in sorted(scored, key=lambda t: (-t[0], -t[1]))]
+        return [o for o in ranked if o is not None][:k]
 
     @staticmethod
     def _probe(forced: bool | None, tool: ToolSpec, tiers: Sequence[Any]) -> bool:
@@ -214,6 +227,39 @@ class RefResolver(ChoiceResolver):
             instructions=templates.present_instructions(tool.intent, slot.noun),
             criteria=dict(templates.PRESENT_CRITERIA),
         )
+
+    @staticmethod
+    def verify_question(tool: ToolSpec, slot: SlotSpec, option: BallotOption, index: int) -> BallotQuestion:
+        """``T.P.verify.N``: is this record the one the request refers to? Asked in the first round on the best-anchored
+        records, and in a follow-up round when a call about to be shown elects another one (§3.8.3). The candidate is
+        the option's label and match note, so a record anchored only by a shared word ("the budget review" → "ACME
+        quarterly review") reads as the look-alike it is."""
+        text = option.text if isinstance(option.text, str) else ""
+        candidate = f"{option.label}. {text}".strip() if text else option.label
+        return BallotQuestion(
+            qid=slot_qid(tool.id, slot.qpath, "verify", index),
+            family="verify",
+            tool=tool.name,
+            path=slot.path,
+            kind=slot.kind,
+            stakes=slot.stakes,
+            primitive="noul",
+            instructions=templates.verify_instructions(tool.intent, slot.noun, candidate),
+            criteria=dict(templates.VERIFY_CRITERIA),
+            meta={"candidate": {"label": option.label, "value": option.value}},
+        )
+
+    def verify(self, tool: ToolSpec, slot: SlotSpec, option: BallotOption, index: int) -> BallotQuestion | None:
+        """The :class:`~jevtools.kinds.base.Verifiable` hook: the follow-up ``verify`` Noul (``None``: typed key)."""
+        return None if self.typed_key(option) else self.verify_question(tool, slot, option, index)
+
+    @staticmethod
+    def typed_key(option: BallotOption) -> bool:
+        """Whether the user typed the record's key (``INC-1052``, ``ticket 1100``): an identifier anchor, which
+        cannot name a look-alike, so it needs no ``verify``."""
+        anchor = option.prov.get("anchor")
+        return option.prov.get("match") in ("exact", "number") and isinstance(anchor, str) and any(
+            ch.isdigit() for ch in anchor)  # fmt: skip
 
     @staticmethod
     def rev_question(tool: ToolSpec, forward: BallotQuestion) -> BallotQuestion:

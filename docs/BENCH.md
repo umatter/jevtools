@@ -159,6 +159,24 @@ with "the budget review" removed, "Cancel the budget review" gave a confirm card
 confirm band; none executed. The `rev` probe (reverse option order) does not address this. The 8 wrong executions
 are the read-only `search_files` instead of `read_file` (ws-01, ws-06, ws-07).
 
+### The look-alike check
+
+The controls' false bindings led to the `verify` Noul (SPEC §3.8.3, DECISIONS "look-alike check"): before a call
+is shown in the write tier or above, Jev is asked whether the elected record, shown with its match note, is the one
+the request refers to; a no turns the card into a menu. Live, same settings (`--replays 3 --controls`):
+
+| | Before | With `verify` |
+|---|---:|---:|
+| Correct (pooled) | 82% (83 / 81 / 82) | 81% (81 / 79 / 83) |
+| False bindings in 198 controls | 6 | **0** |
+| `unverified` menus on the 297 normal decisions | – | 0 |
+| Decisions needing a second Jev round | 0 | 1 of 297 |
+| Input tokens per decision | 2,817 | 3,315 |
+| Cost of the run | $0.062 | $0.072 |
+
+Per domain with `verify`: inbox 67%, crm 94%, banking 85%, workspace 73%, helpdesk 69%, research 100%. The change in
+accuracy is within run-to-run noise; the gate never fired on a case whose right record was present.
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.

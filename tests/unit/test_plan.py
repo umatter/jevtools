@@ -33,21 +33,22 @@ from tests.support import load_fixture
 
 R2_QIDS = [
     "tool", "get_weather.city", "get_weather.unit", "search_web.query.accept.0", "search_web.query.accept.1",
-    "send_email.authorized", "send_email.to", "send_email.to.present", "send_email.subject.accept.0",
+    "send_email.authorized", "send_email.to", "send_email.to.present", "send_email.to.verify.0",
+    "send_email.to.verify.1", "send_email.to.verify.2", "send_email.subject.accept.0",
     "send_email.subject.accept.1", "send_email.subject.accept.2", "send_email.body.accept.0",
     "send_email.body.accept.1",
 ]  # fmt: skip
 
 
 def r2(catalog: Catalog, **kw: Any) -> Any:
-    with resolvers(*scenario_resolvers(amount=())):
+    with resolvers(*scenario_resolvers(amount=(), verify=True)):
         return compile_round(catalog, scenario_context(R2_MESSAGES), **kw)
 
 
 def test_r2_ballot_matches_the_spec_request_byte_for_byte(scenario_catalog: Catalog) -> None:
     plan = r2(scenario_catalog)
     ballot = plan.ballot
-    assert [q.qid for q in ballot.questions] == R2_QIDS  # 13 questions, §13.3
+    assert [q.qid for q in ballot.questions] == R2_QIDS  # 16 questions, §13.3
     assert ballot.request_bytes("~typesafe/jev-latest") == [canonical_json(load_fixture("spec_r2_request.json"))]
     viability = {t.name: (t.viable, t.speculated) for t in ballot.tools}
     assert viability == {
@@ -58,7 +59,7 @@ def test_r2_ballot_matches_the_spec_request_byte_for_byte(scenario_catalog: Cata
 
 
 def test_plan_round_returns_the_ballot(scenario_catalog: Catalog) -> None:
-    with resolvers(*scenario_resolvers(amount=())):
+    with resolvers(*scenario_resolvers(amount=(), verify=True)):
         ballot = plan_round(scenario_catalog, scenario_context(R2_MESSAGES))
     assert [q.qid for q in ballot.questions] == R2_QIDS
 
@@ -156,12 +157,14 @@ def test_budget_split_keeps_families_together(scenario_catalog: Catalog) -> None
     plan = r2(scenario_catalog, limits=Limits(max_questions=4))
     calls = plan.ballot.calls
     # over the question cap: the probe-only get_weather is cut first (§5.5), the rest is split
-    assert calls[0][0] == "tool" and sum(len(c) for c in calls) == 11 and len(calls) > 1
+    assert calls[0][0] == "tool" and sum(len(c) for c in calls) == 14 and len(calls) > 1
     assert all(len(c) <= 4 for c in calls)
-    for prefix in ("send_email.subject", "send_email.body", "search_web.query", "send_email.to"):
+    for prefix in ("send_email.subject", "send_email.body", "search_web.query"):
         assert len({i for i, c in enumerate(calls) for qid in c if qid.startswith(prefix)}) == 1
+    to = [i for i, c in enumerate(calls) for qid in c if qid in ("send_email.to", "send_email.to.present")]
+    assert len(set(to)) == 1  # the slot and its present Noul stay together; each verify Noul is a unit of its own
     units = family_units(plan.ballot.questions)
-    assert [len(u) for u in units] == [1, 2, 1, 2, 3, 2]
+    assert [len(u) for u in units] == [1, 2, 1, 2, 1, 1, 1, 3, 2]
 
 
 def test_budget_cuts_probe_only_tools_first(scenario_catalog: Catalog) -> None:
@@ -178,7 +181,7 @@ def test_split_calls_by_tokens(scenario_catalog: Catalog) -> None:
     ballot = r2(scenario_catalog).ballot
     limits = Limits(max_tokens=state_tokens(ballot.state, Limits()) + 450)
     calls = split_calls(ballot.questions, ballot.state, limits)
-    assert len(calls) > 2 and calls[0][0] == "tool" and sum(len(c) for c in calls) == 13
+    assert len(calls) > 2 and calls[0][0] == "tool" and sum(len(c) for c in calls) == 16
     split = ballot.model_copy(update={"calls": calls})
     assert all(limits.estimate_tokens(r.to_wire()) <= limits.max_tokens for r in split.to_requests(""))
 

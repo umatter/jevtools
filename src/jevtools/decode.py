@@ -82,6 +82,8 @@ class ToolDecode:
     authorized: float | None = None
     done_after: float | None = None
     present: dict[str, float] = field(default_factory=dict)
+    verify: dict[str, float] = field(default_factory=dict)
+    """``verify`` Nouls whose candidate is the slot's elected value (a stale one, after a re-election, is dropped)."""
     joint: float | None = None
     flags: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -91,6 +93,7 @@ class ToolDecode:
         """Gate values for the Decision: ``authorized``, ``present.<slot>`` and (loop mode) ``done_after``."""
         gates = {"authorized": self.authorized} if self.authorized is not None else {}
         gates.update({f"present.{k}": v for k, v in self.present.items()})
+        gates.update({f"verify.{k}": v for k, v in self.verify.items()})
         if self.done_after is not None:
             gates["done_after"] = self.done_after
         return gates
@@ -321,9 +324,18 @@ def decode_tool(
     q = 0.0 if "infeasible" in flags else math.prod(factors.slot_items().values())
     present = {".".join(question.path): n for question in ballot.questions_for(tool.name)
                if question.family == "present" and (n := noul(answers, question.qid)) is not None}  # fmt: skip
+    verify = {".".join(question.path): n for question in ballot.questions_for(tool.name)
+              if question.family == "verify" and (n := noul(answers, question.qid)) is not None
+              and _verifies(question, results.get(".".join(question.path)))}  # fmt: skip
     return ToolDecode(tool=tool, p=p_tool, slots=results, arguments=arguments, complete=complete, factors=factors,
                       Q=q, authorized=authorized, done_after=noul(answers, tool_qid(tool.id, "done_after")),
-                      present=present, joint=joint, flags=_unique(flags), notes=notes)  # fmt: skip
+                      present=present, verify=verify, joint=joint, flags=_unique(flags), notes=notes)  # fmt: skip
+
+
+def _verifies(question: BallotQuestion, result: SlotResult | None) -> bool:
+    """Whether a ``verify`` Noul was asked about the value the slot now elects."""
+    candidate = (question.meta or {}).get("candidate") or {}
+    return result is not None and not result.is_bottom and value_key(candidate.get("value")) == value_key(result.value)
 
 
 def dropped_result(slot: SlotSpec) -> SlotResult:
@@ -874,7 +886,8 @@ def policy_input(
         authorized=td.authorized if td is not None else None, observations=decoded.observations,
         slots=[slot_state(n, r) for n, r in td.slots.items()] if td is not None else [], flags=flags,
         call_map=decoded.call_map.call_map, C=comp.C if comp is not None else None,
-        present=dict(td.present) if td is not None else {}, loop=loop, escalator=escalator,
+        present=dict(td.present) if td is not None else {}, verify=dict(td.verify) if td is not None else {},
+        loop=loop, escalator=escalator,
         widen_ok=list(widen_ok), fill_ok=list(fill_ok),
         confirm_always=td is not None and td.tool.confirm == "always", confirmed=confirmed,
     )  # fmt: skip

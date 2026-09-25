@@ -92,6 +92,39 @@
     "false": "No; it would have to be guessed."
    }
   },
+  "send_email.to.verify.0": {
+   "type": "noul",
+   "instructions": {
+    "question": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Is the candidate below the recipient that `request` refers to?",
+    "candidate": "Anna Keller <anna.keller@acme.com>. Contact matching \"Anna\": Account Manager at ACME; last emailed 2 days ago."
+   },
+   "criteria": {
+    "true": "Yes: `request` names or clearly describes this one.",
+    "false": "No: `request` refers to a different one, even if this one is similar or shares words with it."
+   }
+  },
+  "send_email.to.verify.1": {
+   "type": "noul",
+   "instructions": {
+    "question": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Is the candidate below the recipient that `request` refers to?",
+    "candidate": "Anna Rossi <anna.rossi@gmail.com>. Contact matching \"Anna\": personal contact; last emailed 3 weeks ago."
+   },
+   "criteria": {
+    "true": "Yes: `request` names or clearly describes this one.",
+    "false": "No: `request` refers to a different one, even if this one is similar or shares words with it."
+   }
+  },
+  "send_email.to.verify.2": {
+   "type": "noul",
+   "instructions": {
+    "question": "Suppose the assistant will send an email from the user to one recipient to fulfil `request`. Is the candidate below the recipient that `request` refers to?",
+    "candidate": "Annabel Frey <annabel.frey@muster.ch>. Contact similar to \"Anna\": Finance, the user's own company; last emailed 5 months ago."
+   },
+   "criteria": {
+    "true": "Yes: `request` names or clearly describes this one.",
+    "false": "No: `request` refers to a different one, even if this one is similar or shares words with it."
+   }
+  },
   "send_email.subject.accept.0": {
    "type": "noul",
    "instructions": {

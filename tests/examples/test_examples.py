@@ -100,7 +100,7 @@ def test_02_email(capsys: pytest.CaptureFixture[str]) -> None:
     assert reply.outcome is Outcome.CONFIRM and reply.rounds == 1 and reply.trace.resumed_from == menu.pending_id
     assert reply.call is not None and reply.call.arguments["to"] == "anna.rossi@gmail.com"
     out = capsys.readouterr().out
-    assert "13 in 1 Jev call" in out and "0 — no Jev call (a click on a prompt option)" in out
+    assert "16 in 1 Jev call" in out and "0 — no Jev call (a click on a prompt option)" in out
 
 
 def test_03_transfer() -> None:

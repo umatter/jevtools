@@ -22,6 +22,7 @@ from jevtools.candidates import NO_TOOL, NONE_OF_THESE, NOT_STATED, UNSUPPORTED,
 from jevtools.canonical import canonical_json
 from jevtools.context import Context, build_state
 from jevtools.kinds.base import ResolveContext, get_resolver, probe_question, resolve_default
+from jevtools.kinds.ref import RefResolver
 from jevtools.policy import Policy
 from jevtools.spec.catalog import Catalog
 from tests.support import load_fixture
@@ -150,6 +151,7 @@ def r2_ballot(catalog: Catalog, ctx: Context) -> Ballot:
             t.PRESENT_CRITERIA,
             ("to",),
         ),
+        *[RefResolver.verify_question(send, to, option, i) for i, option in enumerate(to_question.options)],
         *[
             _accept(
                 f"send_email.subject.accept.{i}",
@@ -259,8 +261,10 @@ def test_split_calls_and_opaque_ids(scenario_catalog: Catalog, ctx_default: Cont
     (opaque,) = ballot.to_requests(MODEL, id_mode="opaque")
     assert list(opaque.questions)[:3] == ["q0001", "q0002", "q0003"]
     assert ballot.wire_ids("opaque")["send_email.to"] == "q0007"
-    assert [q.qid for q in ballot.questions_for("send_email", ["to"])] == ["send_email.to", "send_email.to.present"]
-    assert len(ballot.questions_for("send_email")) == 8 and ballot.question("tool").family == "tool"
+    assert [q.qid for q in ballot.questions_for("send_email", ["to"])] == [
+        "send_email.to", "send_email.to.present", "send_email.to.verify.0", "send_email.to.verify.1",
+        "send_email.to.verify.2"]  # fmt: skip
+    assert len(ballot.questions_for("send_email")) == 11 and ballot.question("tool").family == "tool"
     with pytest.raises(KeyError):
         ballot.question("nope")
 

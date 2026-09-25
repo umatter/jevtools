@@ -11,9 +11,11 @@
     "transfer_funds.joint": {"250.00 CHF: Savings → Checking": 0.92, "250.00 CHF: Travel savings → Checking": 0.04, "NONE_OF_THESE": 0.04},
     "transfer_funds.from_account": {"Savings · CHF · CH93…2957": 0.95, "Travel savings · EUR · CH08…4410": 0.04, "NONE_OF_THESE": 0.01},
     "transfer_funds.from_account.present": 0.97,
+    "transfer_funds.from_account.verify.*": 0.95,
     "transfer_funds.from_account.rev": {"Savings · CHF · CH93…2957": 0.96, "Travel savings · EUR · CH08…4410": 0.04},
     "transfer_funds.to_account": {"Checking · CHF · CH56…1180": 0.97, "Savings · CHF · CH93…2957": 0.01, "NONE_OF_THESE": 0.02},
     "transfer_funds.to_account.present": 0.98,
+    "transfer_funds.to_account.verify.*": 0.96,
     "transfer_funds.to_account.rev": {"Checking · CHF · CH56…1180": 0.98, "NONE_OF_THESE": 0.02},
     "transfer_funds.amount": {"250.00": 0.99, "NONE_OF_THESE": 0.01},
     "transfer_funds.currency": {"CHF": 0.95, "EUR": 0.01, "NOT_STATED": 0.02, "NONE_OF_THESE": 0.02}
