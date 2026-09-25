@@ -393,7 +393,10 @@ class TextResolver:
         ladder = template_candidates(slot, template_inputs(tool, rc)) + extracted_candidates(slot, rc)
         if content:
             ladder += perspective_candidates(slot, rc) + observation_candidates(rc)
-        return ladder + example_candidates(slot)
+        ladder += example_candidates(slot)
+        # An accept-Noul carries its candidate verbatim; one longer than the wire limit is not nominated (§3.5.6: a
+        # value the ballot cannot carry is dropped at pool time, never sent and never raised).
+        return [c for c in ladder if len(str(c.value)) <= rc.limits.accept_max]
 
     def cap(self, slot: SlotSpec, rc: ResolveContext) -> int:
         pools = rc.policy.pools

@@ -1,0 +1,8 @@
+This directory holds a small sample of the Berkeley Function Calling Leaderboard (BFCL) v4 data, used only by the
+jevtools bench tests. The files are copied unchanged (one JSON object per line), a few cases per category, from
+
+  https://github.com/ShishirPatil/gorilla/tree/main/berkeley-function-call-leaderboard/bfcl_eval/data
+
+(fetched 2026-09-25). BFCL is part of the Gorilla project and is licensed under the Apache License, Version 2.0:
+https://github.com/ShishirPatil/gorilla/blob/main/LICENSE. Copyright belongs to the Gorilla / BFCL authors.
+Run `jevtools bench bfcl --download` to fetch the full data set.

@@ -1,0 +1,2 @@
+{"id": "live_simple_0-0-0", "ground_truth": [{"get_user_info": {"user_id": [7890], "special": ["black"]}}]}
+{"id": "live_simple_1-1-0", "ground_truth": [{"github_star": {"repos": ["ShishirPatil/gorilla,gorilla-llm/gorilla-cli"], "aligned": [true]}}]}

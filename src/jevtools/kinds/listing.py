@@ -83,6 +83,9 @@ class _Tally:
     alternatives: list[Alternative] = field(default_factory=list)
     parts: dict[str, SlotResult] = field(default_factory=dict)
     probes: dict[str, float] = field(default_factory=dict)
+    included: list[tuple[float, int, Any]] = field(default_factory=list)
+    """Included item values keyed by where they were mentioned: items are asked in canonical (neutral) option order,
+    but the list keeps mention order (§4.3 "dedupe preserving mention order")."""
 
     def mention(self, part: str, r: SlotResult) -> None:
         """One anchor: ``argmax`` value (``EXCLUDE`` drops it), factor ``P(anchor value)``."""
@@ -103,7 +106,10 @@ class _Tally:
         if decision is None:
             self.shapes.append("flag_band")
         elif decision:
-            self.values.append(candidate.value)
+            mention = candidate.prov.get("mention")
+            span = mention.get("span") if isinstance(mention, Mapping) else None
+            start = float(span[0]) if isinstance(span, (list, tuple)) and span else math.inf
+            self.included.append((start, len(self.included), candidate.value))
             self.channels.append(candidate.channel)
 
     def more(self, n: float | None) -> None:
@@ -116,7 +122,8 @@ class _Tally:
             self.flags.append("more")
 
     def result(self, slot: SlotSpec, qids: tuple[str, ...], normalizer: str) -> SlotResult:
-        value = normalize_list(self.values, slot.json_schema)
+        items = [v for _, _, v in sorted(self.included, key=lambda entry: (entry[0], entry[1]))]
+        value = normalize_list([*self.values, *items], slot.json_schema)
         factor = math.prod(self.factors) if self.factors else 0.0
         key = value_key(value)
         channel = least_trusted(*self.channels) if self.channels else None

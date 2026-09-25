@@ -485,8 +485,23 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools eval DATASET [--backend B] [--replays N] [--out report.json]` | run a labelled dataset and report the SPEC §11.2 metrics |
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
 | `jevtools fixtures [--update] [--case NAME]` | check or regenerate the golden conformance fixtures (from a checkout) |
+| `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |
 
 `--backend` accepts `auto | typesafe | openrouter_systemone | openrouter_decisions | simulator | cassette:<path>`.
+
+## Benchmark: BFCL
+
+`jevtools bench bfcl --download` runs the single-turn categories of the Berkeley Function Calling Leaderboard and
+scores every decision with a port of BFCL's own checker. By default it runs an **oracle**, a backend that answers
+every Jev question perfectly from the BFCL answer. The oracle's accuracy is the **ceiling** of "bind, don't write":
+how often the right call can come out at all, given the candidates code nominated. With a key,
+`--backend auto` runs live Jev and reports each category's ceiling next to Jev's accuracy.
+
+The offline baseline (oracle, not Jev) is 37% on `simple_python`, 38% on `multiple`, 33% on `live_simple` and
+`live_multiple`, and 100% on the irrelevance categories. Almost every miss is a value no extractor nominated, and
+59% of those values appear verbatim in the user's text, so better extraction can close them. Date strings in a
+stated format, single-word spans and numbers with written-out units are the biggest gaps. Details, attribution and
+the full table are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends
 
@@ -512,10 +527,11 @@ These are condensed from SPEC §14.
   illustrative. The live experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been run.
 - **Thresholds are priors.** They mean something only after `jevtools eval` + `tune` on your own labelled traffic,
   and they do not transfer across datasets.
-- **Coverage is the ceiling.** Jev cannot elect a value that code did not nominate. When extractors, registries or
-  retrievers miss it, the best case is `NONE_OF_THESE`, which leads to widen or clarify. The worst case is a
-  confident wrong election among distractors. Whether the sentinels really absorb mass when the right value is
-  missing is unverified (experiment E2).
+- **Coverage is the ceiling, and it is low today.** Jev cannot elect a value that code did not nominate. On BFCL's
+  single-call categories the oracle ceiling is 33–38% (docs/BENCH.md), mostly because extractors miss values that
+  are in the text. When a value is missed, the best case is `NONE_OF_THESE`, which leads to widen or clarify. The
+  worst case is a confident wrong election among distractors. Whether the sentinels really absorb mass when the
+  right value is missing is unverified (experiment E2).
 - **Calibration of the new question forms is assumed.** This covers "Suppose…" premises, accept Nouls, joint
   sentences, membership Nouls and sentinels. The compositions are only as honest as their factors.
 - **Text is extractive without a Filler.** Bodies are templates plus the user's clauses and can read stilted. New
@@ -541,6 +557,7 @@ src/jevtools/        the package (module map: docs/ARCHITECTURE.md)
   spec/ sources/ extract/ kinds/     ingest, candidate sources, extractors, one resolver per slot kind
   plan.py decode.py confidence.py policy.py router.py trace.py   the decision pipeline
   adapters/ serve/ eval/ backends/ demo/   integrations, proxy, evaluation, Jev backends, synthetic demo world
+  bench/               BFCL benchmark: data, checker port, oracle, runner (docs/BENCH.md)
 examples/            01–08 runnable scripts (offline by default; --backend scripted|sim|live), proxy/
 tests/               1,000+ offline tests; tests/golden/ holds the conformance fixtures, tests/live/ the live smoke suite
 docs/SPEC.md         the normative protocol (jevtools/0.1)

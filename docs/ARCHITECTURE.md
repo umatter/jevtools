@@ -146,6 +146,10 @@ src/jevtools/
   demo/
     scenario.py          the §13 world: synthetic contacts, accounts, 3,000 paths, six tools, fake Workspace
     scripts.py           the §13.3 answer scripts (illustrative numbers)
+  bench/                 BFCL benchmark (docs/BENCH.md)
+    bfcl.py              data loading and download, schema conversion, port of BFCL's AST checker
+    oracle.py            OracleBackend: perfect answers from the BFCL answer; per-parameter coverage and in_text
+    run.py               run_bfcl/run_case: ceiling, proposal and strict scores, attribution, report
 ```
 
 ## Tests and fixtures
@@ -157,6 +161,8 @@ src/jevtools/
   key is set, the conformance probe, R1–R7 in turn mode, R6 as a loop and a cassette record/replay round trip. It
   asserts invariants only. Run it with `python -m pytest -m live`.
 - `tests/examples` runs every example in scripted and simulator mode. These tests are marked `fast`.
+- `tests/bench` runs the BFCL checker port, the oracle, the runner and the `bench` command over a small vendored
+  BFCL sample (`tests/bench/data`, Apache-2.0, see its NOTICE).
 - `tests/golden/<case>/` holds the conformance fixtures of §10.2. `jevtools fixtures [--update]` checks or
   regenerates them, and a port must reproduce their bytes. See `tests/golden/README.md`.
 - Scripted and simulated answers exercise the plumbing and the policy branches. They are never evidence about Jev's

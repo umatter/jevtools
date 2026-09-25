@@ -1,0 +1,5 @@
+{"id": "simple_python_0", "ground_truth": [{"calculate_triangle_area": {"base": [10], "height": [5], "unit": ["units", ""]}}]}
+{"id": "simple_python_1", "ground_truth": [{"math.factorial": {"number": [5]}}]}
+{"id": "simple_python_7", "ground_truth": [{"calculate_circumference": {"radius": [4], "unit": ["inches", "in"]}}]}
+{"id": "simple_python_13", "ground_truth": [{"calculate_area_under_curve": {"function": ["x**2", "lambda x: x**2", "y=x**2"], "interval": [[1.0, 3.0]], "method": ["", "trapezoidal"]}}]}
+{"id": "simple_python_34", "ground_truth": [{"travel_itinerary_generator": {"destination": ["Tokyo"], "days": [7], "daily_budget": [100], "exploration_type": ["nature"]}}]}

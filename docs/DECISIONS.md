@@ -1619,3 +1619,34 @@ Extends "Documentation and final merge":
 - §7.2.4 proxy: `POST /v1/chat/completions` requires `Content-Type: application/json` (415 `unsupported_media_type`
   otherwise), so a cross-origin "simple" browser POST cannot trigger Jev calls on a local proxy.
 - Regression tests: `tests/unit/test_trust_followups.py`, `tests/serve/test_app.py`.
+
+## BFCL benchmark
+
+- Scope: the single-turn Python categories of BFCL v4. `parallel*` categories can be run (`--categories all`) but
+  score 0 by construction (one call per turn; `ext.parallel` is not implemented). Java/JavaScript (BFCL converts
+  their string-typed values with language converters), multi-turn, memory and web-search categories are out of
+  scope.
+- Scoring ports BFCL's `ast_checker` for Python (string standardization, `int` for `float`, one level of nested
+  type checks, dict and list-of-dict values; irrelevance = no call, relevance = any call). Two views are reported:
+  *strict* (only `execute` emits a call) and *proposal* (the proposed call counts unless the outcome is
+  abstain/refuse), because BFCL has no notion of confirm or clarify.
+- The oracle (`bench/oracle.py`) answers from the round-1 Ballot and pools compiled with the router's own inputs.
+  Questions it cannot map (follow-up rounds) get an uncertain answer and are listed in `OracleBackend.unknown`.
+  Choice: the first option BFCL would accept, else `NOT_STATED` when omitting (or the default) is acceptable, else
+  `NONE_OF_THESE`. Nouls: accept/item/member by acceptability, flags by the expected boolean, `authorized`/
+  `present` yes, `more`/`done_after` no. For `live_relevance` (any call is right) it elects the first real tool.
+- Every non-oracle run also decides each case with the oracle first, to report the case's ceiling and coverage next
+  to the live result ("within ceiling" isolates the model's judgment from extractor coverage).
+- BFCL tools get `x-jev.risk = "read"` by default (`--risk infer` keeps the inferred tier): they are side-effect
+  free, and their names mostly fall through the verb table to the fail-safe external tier.
+- The clock is fixed at 2026-09-25 10:00 UTC; BFCL answers with relative dates assume other dates and are misses
+  either way.
+- Found and fixed while building it (with regression tests): a fractional amount crashed an integer money slot
+  (`kinds/money.py` now drops values the schema cannot hold at pool time); a text candidate over `accept_max` made
+  the pre-send validator reject the ballot (`kinds/text.py` no longer nominates it); list items were emitted in
+  canonical label order (the neutral option order on the ballot) instead of mention order (§4.3), now fixed in
+  `kinds/listing.py`.
+- Known inference issue surfaced by the bench (not changed): an integer described with "total" is inferred as
+  money (§3.3.1 row 6), e.g. BFCL's `panelArea` ("The total solar panel area"). The pool still holds the stated
+  numbers, so the effect is limited to money-style normalization.
+

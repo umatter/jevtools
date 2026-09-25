@@ -13,6 +13,8 @@
     jevtools tune <report.json> [--out DIR] [--policy base.toml] [--alpha write=0.01 …] [--method cp|crc]
                                 [--calibrate | --held-out report.json]
     jevtools fixtures [--update] [--dir tests/golden] [--case NAME …]
+    jevtools bench bfcl [--data DIR] [--download [--ref main]] [--categories c1,c2 | all] [--limit N]
+                        [--backend oracle|sim|auto|typesafe|openrouter_decisions|…] [--risk read|infer] [--out F]
 
 ``lint`` prints one line per tool and per slot (``name  description  stakes  STATUS  note``) plus the description
 overlap check, and exits 1 when any check is an ERROR (``--strict``: also WARN/WEAK). ``explain`` renders a trace
@@ -870,6 +872,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", default="tests/golden", help="the golden fixture directory (default: tests/golden)")
     p.add_argument("--case", action="append", help="only this case (repeatable)")
 
+    p = sub.add_parser("bench", help="run a public tool-calling benchmark (BFCL)")
+    p.add_argument("suite", choices=("bfcl",), help="the benchmark (bfcl: Berkeley Function Calling Leaderboard)")
+    p.add_argument("--data", default=None, help="BFCL data directory (default: <cache>/bfcl)")
+    p.add_argument("--download", action="store_true", help="fetch the BFCL data files from GitHub into --data")
+    p.add_argument("--ref", default="main", help="BFCL repository branch, tag or commit to download (default: main)")
+    p.add_argument("--categories", default=None, help="comma-separated categories, or 'all' (default: single-call, "
+                                                      "irrelevance and relevance categories)")  # fmt: skip
+    p.add_argument("--limit", type=int, default=None, help="at most N cases per category")
+    p.add_argument("--backend", default="oracle",
+                   help="oracle (the ceiling), sim (offline test double), or a Jev backend as for probe "
+                        "(auto, typesafe, openrouter_decisions…)")  # fmt: skip
+    p.add_argument("--allow-offline", action="store_true", help="let 'auto' fall back to the offline simulator")
+    p.add_argument("--risk", default="read", help="risk tier given to every BFCL tool; 'infer' keeps the inferred tier")
+    p.add_argument("--out", help="write the full report (JSON)")
+
     p = sub.add_parser("tune", help="tune policy thresholds on an evaluation report (§11.3, §11.4)")
     p.add_argument("report", help="report JSON written by `jevtools eval --out`")
     p.add_argument("--out", default=".", help="directory for policy.toml (and policy.calibrators.json)")
@@ -879,6 +896,67 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--calibrate", action="store_true", help="fit isotonic calibrators in-sample (optimistic)")
     p.add_argument("--held-out", help="fit calibrators on this held-out report instead")
     return parser
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# bench (BFCL)
+# --------------------------------------------------------------------------------------------------------------------
+
+
+def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    from jevtools.backends.errors import BackendError
+    from jevtools.bench.bfcl import CATEGORIES, DEFAULT_CATEGORIES, download, load_category
+    from jevtools.bench.run import run_bfcl
+    from jevtools.validate import cache_dir
+
+    data = Path(args.data) if args.data else cache_dir() / "bfcl"
+    names = (
+        CATEGORIES
+        if args.categories == "all"
+        else (
+            tuple(c.strip() for c in args.categories.split(",") if c.strip()) if args.categories else DEFAULT_CATEGORIES
+        )
+    )
+    if args.download:
+        written = download(data, names, ref=args.ref)
+        print(f"downloaded {len(written)} BFCL file(s) into {data} (ref {args.ref})", file=out)
+    backend: Any
+    if args.backend in ("oracle",):
+        backend = "oracle"
+    elif args.backend in ("sim", "simulator"):
+        from jevtools.backends.simulator import LexicalSimulator
+
+        backend = LexicalSimulator()
+    else:
+        try:
+            backend = _backend(args.backend, args.allow_offline)
+        except BackendError as exc:
+            print(f"jevtools bench: {type(exc).__name__}: {exc}", file=err)
+            return 1
+    try:
+        cases = [c for name in names for c in load_category(data, name, limit=args.limit)]
+    except FileNotFoundError as exc:
+        print(f"jevtools bench: {exc.filename} not found; run with --download (or --data DIR)", file=err)
+        return 1
+
+    def progress(index: int, record: Any) -> None:
+        if (index + 1) % 100 == 0:
+            print(f"  {index + 1}/{len(cases)}", file=err)
+
+    risk = None if args.risk == "infer" else args.risk
+    report = run_bfcl(cases, backend, risk=risk, progress=progress, meta={"data": str(data), "ref": args.ref})
+    print(f"BFCL {len(cases)} case(s) on {report.mode} (risk {risk or 'inferred'})", file=out)
+    print(report.render(), file=out)
+    if report.mode == "oracle":
+        print("note: the oracle answers every question perfectly from the BFCL answer; its accuracy is the ceiling "
+              "of what jevtools can emit (candidate coverage, decoding, policy), not a measurement of Jev",
+              file=out)  # fmt: skip
+    elif getattr(backend, "name", "") == "simulator":
+        print(OFFLINE_NOTE.format(name="the simulator"), file=out)
+    if args.out:
+        report.save(args.out)
+        print(f"wrote {args.out}", file=out)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None, err: TextIO | None = None) -> int:
@@ -905,6 +983,8 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None, err: T
             return _cmd_fixtures(args, out, err)
         if args.command == "tune":
             return _cmd_tune(args, out)
+        if args.command == "bench":
+            return _cmd_bench(args, out, err)
         return _cmd_serve(args, out, err)
     except (OSError, ValueError, JevtoolsError) as exc:
         print(f"jevtools {args.command}: {type(exc).__name__}: {exc}", file=err)

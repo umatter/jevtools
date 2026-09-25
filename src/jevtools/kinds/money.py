@@ -15,12 +15,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 from jevtools.candidates import Candidate, Channel
 from jevtools.extract.base import Mentions
 from jevtools.kinds.base import ResolveContext, register_resolver
 from jevtools.kinds.common import ChoiceResolver, mention_candidate, pool_mentions
-from jevtools.kinds.normalize import money_display, normalize_money
+from jevtools.kinds.normalize import NormalizationError, money_display, normalize_money
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.templates import PLACEHOLDER, humanize
 
@@ -60,13 +61,15 @@ class MoneyResolver(ChoiceResolver):
         out: list[Candidate] = []
         for m in pool_mentions(rc, "money"):
             currency = m.attrs.get("currency")
-            value = normalize_money(Decimal(m.value["amount"]), slot.json_schema, currency=currency)
-            display = money_display(Decimal(m.value["amount"]), currency)
-            out.append(mention_candidate(m, value, display=display, currency=currency))
+            value = _normalized(Decimal(m.value["amount"]), slot, currency)
+            if value is not None:
+                display = money_display(Decimal(m.value["amount"]), currency)
+                out.append(mention_candidate(m, value, display=display, currency=currency))
         if not out:
             for m in pool_mentions(rc, "number"):
-                value = normalize_money(Decimal(m.value), slot.json_schema, currency=None)
-                out.append(mention_candidate(m, value, display=money_display(Decimal(m.value), None)))
+                value = _normalized(Decimal(m.value), slot, None)
+                if value is not None:
+                    out.append(mention_candidate(m, value, display=money_display(Decimal(m.value), None)))
         out += self.derived(tool, slot, rc.get_mentions())
         return out
 
@@ -92,6 +95,15 @@ class MoneyResolver(ChoiceResolver):
                 )
             )
         return out
+
+
+def _normalized(amount: Decimal, slot: SlotSpec, currency: str | None) -> Any:
+    """The amount in the slot's schema form, or ``None`` when the schema cannot hold it (e.g. a fractional amount
+    for an ``integer`` slot): an invalid value is dropped at pool time, never raised (spec §3.5.6 "Values")."""
+    try:
+        return normalize_money(amount, slot.json_schema, currency=currency)
+    except (NormalizationError, ArithmeticError, ValueError):
+        return None
 
 
 register_resolver("money", MoneyResolver())
