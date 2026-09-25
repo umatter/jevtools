@@ -1,0 +1,6 @@
+{"now": "2026-09-24T14:05:00+02:00", "tz": "Europe/Zurich", "locale": "en-CH",
+ "user": {"name": "Sam Muster", "email": "sam.muster@muster.ch", "home_city": "Zurich"},
+ "sources": [
+  {"name": "files", "type": "files", "path": "data/files.json", "synonyms": {"deck": ["slides", "presentation", "pptx"], "budget": ["xlsx"], "mockup": ["design", "fig"]}},
+  {"name": "folders", "type": "registry", "path": "data/folders.json", "key": "path", "label": "{path}/", "match": ["path"], "provides": ["folder"], "item": "folder"},
+  {"name": "people", "type": "registry", "path": "data/people.json", "key": "email", "label": "{name} <{email}>", "describe": "{notes}", "match": ["name", "aliases", "org"], "provides": ["email", "person"], "attrs": ["name", "org"]}]}

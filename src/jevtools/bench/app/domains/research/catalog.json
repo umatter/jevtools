@@ -1,0 +1,32 @@
+[
+ {"type": "function", "function": {"name": "summarize_dataset", "description": "Summarize a dataset: size, variables, missing values and descriptive statistics.",
+  "parameters": {"type": "object", "required": ["dataset_id"], "properties": {
+   "dataset_id": {"type": "string", "description": "The dataset"}}},
+  "x-jev": {"risk": "read"}}},
+ {"type": "function", "function": {"name": "run_regression", "description": "Fit a regression model on a dataset and report the estimates.",
+  "parameters": {"type": "object", "required": ["dataset_id", "outcome", "predictors"], "properties": {
+   "dataset_id": {"type": "string", "description": "The dataset"},
+   "outcome": {"type": "string", "description": "The outcome (dependent) variable", "x-jev": {"source": "variables"}},
+   "predictors": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "The predictor (independent) variables", "x-jev": {"source": "variables"}},
+   "model": {"type": "string", "description": "The model family", "default": "ols", "oneOf": [
+     {"const": "ols", "title": "Linear regression (OLS) for a continuous outcome"},
+     {"const": "logit", "title": "Logistic regression (logit) for a yes/no outcome"},
+     {"const": "poisson", "title": "Poisson regression for a count outcome"}]}}},
+  "x-jev": {"risk": "read"}}},
+ {"type": "function", "function": {"name": "plot_variable", "description": "Plot the distribution of one variable of a dataset.",
+  "parameters": {"type": "object", "required": ["dataset_id", "variable"], "properties": {
+   "dataset_id": {"type": "string", "description": "The dataset"},
+   "variable": {"type": "string", "description": "The variable to plot", "x-jev": {"source": "variables"}},
+   "chart": {"type": "string", "enum": ["histogram", "boxplot", "density", "bar"], "default": "histogram", "description": "The kind of chart"}}},
+  "x-jev": {"risk": "read"}}},
+ {"type": "function", "function": {"name": "share_report", "description": "Share a report or notebook from the project with a collaborator.",
+  "parameters": {"type": "object", "required": ["report_path", "recipient"], "properties": {
+   "report_path": {"type": "string", "description": "The project path of the report or notebook"},
+   "recipient": {"type": "string", "format": "email", "description": "The collaborator's email address"}}},
+  "x-jev": {"risk": "external"}}},
+ {"type": "function", "function": {"name": "schedule_job", "description": "Schedule an R or Python script of the project to run at a given time.",
+  "parameters": {"type": "object", "required": ["script_path", "run_at"], "properties": {
+   "script_path": {"type": "string", "description": "The project path of the script"},
+   "run_at": {"type": "string", "format": "date-time", "description": "When the script should run"}}},
+  "x-jev": {"risk": "write"}}}
+]

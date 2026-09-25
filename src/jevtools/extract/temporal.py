@@ -270,6 +270,18 @@ def day_label(day: date) -> str:
     return f"{day.day} {MONTH_NAMES[day.month - 1]} {day.year}"
 
 
+def previous_occurrence(month: int, day: int, today: date) -> date | None:
+    """The last ``day.month`` before today (this year, else last year); ``None`` for impossible dates."""
+    for year in (today.year, today.year - 1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            continue
+        if candidate < today:
+            return candidate
+    return None
+
+
 def next_occurrence(month: int, day: int, today: date) -> date | None:
     """The next ``day.month`` on or after today (this year, else next year); ``None`` for impossible dates."""
     for year in (today.year, today.year + 1):
@@ -428,9 +440,18 @@ class _Parser:
                 self._month_atom(m.start(), m.end(), int(m.group(2)), month, m.group(3))
 
     def _month_atom(self, start: int, end: int, day: int, month: int, year: str | None) -> None:
+        """A named-month date. Without a year it has two readings once this year's date has passed: the coming one
+        and the past one (``since September 1`` said on 24 September means the past one)."""
         value = self._dmy(day, month, year)
-        if value is not None:
+        if value is None:
+            return
+        past = previous_occurrence(month, day, self.today) if year is None else None
+        if past is None or past.year != self.today.year:  # this year's date is still to come: one reading
             self._add(_Atom("date", start, end, dates=[DatePart(value, day_label(value), "date:month_name")]))
+            return
+        parts = [DatePart(d, f"{day_label(d)}, {in_days((d - self.today).days)}", f"date:month_name:{which}")
+                 for d, which in ((past, "past"), (value, "next"))]  # fmt: skip
+        self._add(_Atom("date", start, end, dates=parts))
 
     # -- clock times ---------------------------------------------------------------------------------------------
 

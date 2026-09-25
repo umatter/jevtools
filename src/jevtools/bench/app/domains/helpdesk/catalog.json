@@ -1,0 +1,35 @@
+[
+ {"type": "function", "function": {"name": "get_ticket", "description": "Show a support ticket: status, requester, history.",
+  "parameters": {"type": "object", "required": ["ticket_id"], "properties": {
+   "ticket_id": {"type": "string", "description": "The ticket"}}},
+  "x-jev": {"risk": "read"}}},
+ {"type": "function", "function": {"name": "assign_ticket", "description": "Assign a support ticket to a helpdesk agent.",
+  "parameters": {"type": "object", "required": ["ticket_id", "assignee"], "properties": {
+   "ticket_id": {"type": "string", "description": "The ticket"},
+   "assignee": {"type": "string", "format": "email", "description": "The agent's email address", "x-jev": {"source": "agents"}}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "set_priority", "description": "Change the priority of a support ticket.",
+  "parameters": {"type": "object", "required": ["ticket_id", "priority"], "properties": {
+   "ticket_id": {"type": "string", "description": "The ticket"},
+   "priority": {"type": "string", "description": "The new priority", "oneOf": [
+     {"const": "P1", "title": "Critical: an outage or many people blocked"},
+     {"const": "P2", "title": "High: one person or team blocked"},
+     {"const": "P3", "title": "Normal: work is impaired but continues"},
+     {"const": "P4", "title": "Low: a question, request or cosmetic issue"}]}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "add_comment", "description": "Add an internal comment to a support ticket.",
+  "parameters": {"type": "object", "required": ["ticket_id", "comment"], "properties": {
+   "ticket_id": {"type": "string", "description": "The ticket"},
+   "comment": {"type": "string", "description": "The comment text"}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "close_ticket", "description": "Close a support ticket with a resolution.",
+  "parameters": {"type": "object", "required": ["ticket_id", "resolution"], "properties": {
+   "ticket_id": {"type": "string", "description": "The ticket"},
+   "resolution": {"type": "string", "enum": ["fixed", "duplicate", "wont_fix", "cannot_reproduce"], "description": "Why the ticket is closed"}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "escalate_ticket", "description": "Escalate a support ticket to a specialist team.",
+  "parameters": {"type": "object", "required": ["ticket_id", "team"], "properties": {
+   "ticket_id": {"type": "string", "description": "The ticket"},
+   "team": {"type": "string", "enum": ["network", "database", "security", "desktop"], "description": "The specialist team"}}},
+  "x-jev": {"risk": "write"}}}
+]

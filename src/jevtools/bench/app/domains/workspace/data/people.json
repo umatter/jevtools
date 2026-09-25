@@ -1,0 +1,8 @@
+[
+{"name": "Caroline Weber", "email": "caroline.weber@muster.ch", "aliases": [], "org": "Muster", "notes": "Legal"},
+{"name": "Thomas Becker", "email": "thomas.becker@muster.ch", "aliases": ["Tom"], "org": "Muster", "notes": "Engineering lead, goes by Tom"},
+{"name": "Lisa Wong", "email": "lisa.wong@muster.ch", "aliases": [], "org": "Muster", "notes": "Design"},
+{"name": "Maria Garcia", "email": "maria.garcia@muster.ch", "aliases": [], "org": "Muster", "notes": "Marketing"},
+{"name": "Priya Nair", "email": "priya.nair@muster.ch", "aliases": [], "org": "Muster", "notes": "Data science"},
+{"name": "Finance Team", "email": "finance@muster.ch", "aliases": ["finance"], "org": "Muster", "notes": "Group address of the finance team"}
+]

@@ -1,0 +1,7 @@
+{"now": "2026-09-24T14:05:00+02:00", "tz": "Europe/Zurich", "locale": "en-CH",
+ "user": {"name": "Sam Muster", "email": "sam.muster@muster.ch", "home_city": "Zurich"},
+ "sources": [
+  {"name": "datasets", "type": "registry", "path": "data/datasets.json", "key": "id", "label": "{name} ({rows} rows)", "describe": "{description}", "match": ["name", "description"], "provides": ["dataset_id", "dataset"], "attrs": ["name", "rows"], "item": "dataset"},
+  {"name": "variables", "type": "registry", "path": "data/variables.json", "key": "name", "label": "{name}: {label}", "describe": "In {dataset}", "match": ["name", "label"], "provides": ["variable"], "attrs": ["dataset", "label"], "item": "variable"},
+  {"name": "files", "type": "files", "path": "data/files.json", "synonyms": {"notebook": ["ipynb"], "report": ["html"], "script": ["r", "py"]}},
+  {"name": "collaborators", "type": "registry", "path": "data/collaborators.json", "key": "email", "label": "{name} <{email}>", "describe": "{notes}", "match": ["name", "aliases", "org"], "provides": ["email", "person"], "attrs": ["name", "org"]}]}

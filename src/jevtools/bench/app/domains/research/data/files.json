@@ -1,0 +1,11 @@
+[
+"analysis/clean_data.R",
+"analysis/fit_models.py",
+"analysis/churn_model.R",
+"analysis/polls_trend.R",
+"reports/churn_report.html",
+"reports/survey_wave2_summary.html",
+"reports/housing_prices_2025.html",
+"notebooks/eda_housing.ipynb",
+"notebooks/eda_trial.ipynb"
+]

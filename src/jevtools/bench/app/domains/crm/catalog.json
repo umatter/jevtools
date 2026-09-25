@@ -1,0 +1,27 @@
+[
+ {"type": "function", "function": {"name": "create_deal", "description": "Create a new sales deal for a company.",
+  "parameters": {"type": "object", "required": ["company_id", "title", "amount", "currency"], "properties": {
+   "company_id": {"type": "string", "description": "The customer company"},
+   "title": {"type": "string", "description": "A short title for the deal"},
+   "amount": {"type": "number", "description": "The expected deal value"},
+   "currency": {"type": "string", "enum": ["CHF", "EUR", "USD"], "default": "CHF", "description": "The currency of the amount"},
+   "stage": {"type": "string", "enum": ["lead", "qualified", "proposal", "negotiation", "won", "lost"], "default": "lead", "description": "The pipeline stage"},
+   "close_date": {"type": "string", "format": "date", "description": "The expected close date"}}}}},
+ {"type": "function", "function": {"name": "update_deal_stage", "description": "Move a deal to another pipeline stage.",
+  "parameters": {"type": "object", "required": ["deal_id", "stage"], "properties": {
+   "deal_id": {"type": "string", "description": "The deal to update"},
+   "stage": {"type": "string", "enum": ["lead", "qualified", "proposal", "negotiation", "won", "lost"], "description": "The new pipeline stage"}}}}},
+ {"type": "function", "function": {"name": "assign_deal", "description": "Make a sales rep the owner of a deal.",
+  "parameters": {"type": "object", "required": ["deal_id", "owner_email"], "properties": {
+   "deal_id": {"type": "string", "description": "The deal to reassign"},
+   "owner_email": {"type": "string", "format": "email", "description": "The new owner's email address", "x-jev": {"source": "reps"}}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "log_call", "description": "Log a phone call with a customer contact.",
+  "parameters": {"type": "object", "required": ["contact_id", "notes"], "properties": {
+   "contact_id": {"type": "string", "description": "The customer contact who was called"},
+   "notes": {"type": "string", "description": "The notes about the call"}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "get_deal", "description": "Look up a deal: stage, owner, amount and history.",
+  "parameters": {"type": "object", "required": ["deal_id"], "properties": {
+   "deal_id": {"type": "string", "description": "The deal to look up"}}}}}
+]

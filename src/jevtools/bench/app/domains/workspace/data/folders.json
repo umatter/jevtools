@@ -1,0 +1,15 @@
+[
+{"path": "archive"},
+{"path": "archive/board"},
+{"path": "board"},
+{"path": "design/mockups"},
+{"path": "finance/budget"},
+{"path": "legal/contracts/drafts"},
+{"path": "legal/contracts/signed"},
+{"path": "marketing/pricing"},
+{"path": "projects/alpha"},
+{"path": "projects/atlas"},
+{"path": "projects/beta"},
+{"path": "reports/weekly"},
+{"path": "shared"}
+]

@@ -1,0 +1,12 @@
+[
+{"id": "pay_swisscom", "name": "Swisscom", "category": "Telecom", "iban_masked": "CH11…0001"},
+{"id": "pay_sunrise", "name": "Sunrise", "category": "Telecom", "iban_masked": "CH11…0002"},
+{"id": "pay_ewz", "name": "EWZ Electricity", "category": "Utilities", "iban_masked": "CH11…0003"},
+{"id": "pay_primeo", "name": "Primeo Electricity", "category": "Utilities", "iban_masked": "CH11…0004"},
+{"id": "pay_landlord", "name": "Immo Stauffacher (rent)", "category": "Rent", "iban_masked": "CH11…0005"},
+{"id": "pay_helsana", "name": "Helsana health insurance", "category": "Insurance", "iban_masked": "CH11…0006"},
+{"id": "pay_tax", "name": "Canton of Zurich tax office", "category": "Taxes", "iban_masked": "CH11…0007"},
+{"id": "pay_anna", "name": "Anna Rossi", "category": "Friends", "iban_masked": "CH11…0008"},
+{"id": "pay_acme", "name": "ACME AG", "category": "Suppliers", "iban_masked": "CH11…0009"},
+{"id": "pay_gym", "name": "Kraftwerk Gym", "category": "Leisure", "iban_masked": "CH11…0010"}
+]

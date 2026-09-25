@@ -29,7 +29,7 @@ CATALOGS: tuple[str, ...] = ("iso4217", "iso3166", "iso639", "iana_tz")
 """Built-in catalog names usable as ``x-jev.values``."""
 
 EXTRACTORS: tuple[str, ...] = (
-    "clause", "quote", "noun_phrase", "proper_noun", "place", "email", "url", "uuid", "ipv4",
+    "clause", "quote", "noun_phrase", "proper_noun", "place", "email", "url", "uuid", "ipv4", "code",
     "number", "money", "duration", "datetime",
 )  # fmt: skip
 """Extractor names of ``x-jev.extract`` (plus ``regex:<re>``)."""

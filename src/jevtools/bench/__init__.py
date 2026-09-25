@@ -1,4 +1,5 @@
-"""Benchmarks for jevtools against public tool-calling test sets (BFCL first; see docs/BENCH.md)."""
+"""Benchmarks for jevtools (docs/BENCH.md): the app-domain benchmark (:mod:`jevtools.bench.app`, the setting jevtools
+is built for) and BFCL, the public tool-calling test set used as the stress test outside it."""
 
 from jevtools.bench.bfcl import BfclCase, check, download, load_category
 from jevtools.bench.oracle import OracleBackend, ParamCoverage

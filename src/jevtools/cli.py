@@ -15,6 +15,7 @@
     jevtools fixtures [--update] [--dir tests/golden] [--case NAME …]
     jevtools bench bfcl [--data DIR] [--download [--ref main]] [--categories c1,c2 | all] [--limit N]
                         [--backend oracle|sim|auto|typesafe|openrouter_decisions|…] [--risk read|infer] [--out F]
+    jevtools bench app [--domains inbox,crm,…] [--dir DIR] [--backend oracle|sim|auto|…] [--tags] [--out F]
 
 ``lint`` prints one line per tool and per slot (``name  description  stakes  STATUS  note``) plus the description
 overlap check, and exits 1 when any check is an ERROR (``--strict``: also WARN/WEAK). ``explain`` renders a trace
@@ -872,8 +873,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", default="tests/golden", help="the golden fixture directory (default: tests/golden)")
     p.add_argument("--case", action="append", help="only this case (repeatable)")
 
-    p = sub.add_parser("bench", help="run a public tool-calling benchmark (BFCL)")
-    p.add_argument("suite", choices=("bfcl",), help="the benchmark (bfcl: Berkeley Function Calling Leaderboard)")
+    p = sub.add_parser("bench", help="run a tool-calling benchmark (BFCL, or the app-domain benchmark)")
+    p.add_argument("suite", choices=("bfcl", "app"),
+                   help="bfcl: Berkeley Function Calling Leaderboard; app: the bundled app-domain benchmark "
+                        "(assistants over an app's own data)")  # fmt: skip
+    p.add_argument("--domains", default=None, help="app: comma-separated domains (default: all bundled domains)")
+    p.add_argument("--dir", default=None, help="app: a directory of domains (<name>/cases.jsonl) instead of the "
+                                               "bundled ones")  # fmt: skip
+    p.add_argument("--tags", action="store_true", help="app: also print the per-tag table")
     p.add_argument("--data", default=None, help="BFCL data directory (default: <cache>/bfcl)")
     p.add_argument("--download", action="store_true", help="fetch the BFCL data files from GitHub into --data")
     p.add_argument("--ref", default="main", help="BFCL repository branch, tag or commit to download (default: main)")
@@ -884,7 +891,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="oracle (the ceiling), sim (offline test double), or a Jev backend as for probe "
                         "(auto, typesafe, openrouter_decisions…)")  # fmt: skip
     p.add_argument("--allow-offline", action="store_true", help="let 'auto' fall back to the offline simulator")
-    p.add_argument("--risk", default="read", help="risk tier given to every BFCL tool; 'infer' keeps the inferred tier")
+    p.add_argument("--risk", default="read", help="bfcl: risk tier given to every BFCL tool; 'infer' keeps the "
+                                                  "inferred tier")  # fmt: skip
     p.add_argument("--out", help="write the full report (JSON)")
 
     p = sub.add_parser("tune", help="tune policy thresholds on an evaluation report (§11.3, §11.4)")
@@ -899,12 +907,62 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 # --------------------------------------------------------------------------------------------------------------------
-# bench (BFCL)
+# bench (BFCL, app domains)
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+def _bench_backend(name: str, allow_offline: bool, err: TextIO) -> Any:
+    """``"oracle"``, the offline simulator or a Jev backend; ``None`` after printing why it is unavailable."""
     from jevtools.backends.errors import BackendError
+
+    if name == "oracle":
+        return "oracle"
+    if name in ("sim", "simulator"):
+        from jevtools.backends.simulator import LexicalSimulator
+
+        return LexicalSimulator()
+    try:
+        return _backend(name, allow_offline)
+    except BackendError as exc:
+        print(f"jevtools bench: {type(exc).__name__}: {exc}", file=err)
+        return None
+
+
+def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    from jevtools.bench.app import DOMAINS, load_domain, run_app
+
+    names = tuple(d.strip() for d in args.domains.split(",") if d.strip()) if args.domains else None
+    if names is None:
+        names = DOMAINS if args.dir is None else tuple(sorted(p.name for p in Path(args.dir).iterdir()
+                                                              if (p / "cases.jsonl").is_file()))  # fmt: skip
+    backend = _bench_backend(args.backend, args.allow_offline, err)
+    if backend is None:
+        return 1
+    try:
+        cases = [(name, case) for name in names for case in load_domain(name, args.dir)]
+    except FileNotFoundError as exc:
+        print(f"jevtools bench: {exc}", file=err)
+        return 1
+    if args.limit is not None:
+        cases = [c for name in names for c in [x for x in cases if x[0] == name][: args.limit]]
+    report = run_app(cases, backend, meta={"domains": list(names), "dir": args.dir})
+    print(f"app bench: {len(cases)} case(s) in {len(names)} domain(s) on {report.mode}", file=out)
+    print(report.render(tags=args.tags), file=out)
+    if report.mode == "oracle":
+        print("note: the oracle answers every question perfectly from the gold label; its accuracy is the ceiling "
+              "of what jevtools can emit (candidate coverage, decoding, policy), not a measurement of Jev",
+              file=out)  # fmt: skip
+    elif getattr(backend, "name", "") == "simulator":
+        print(OFFLINE_NOTE.format(name="the simulator"), file=out)
+    if args.out:
+        report.save(args.out)
+        print(f"wrote {args.out}", file=out)
+    return 0
+
+
+def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    if args.suite == "app":
+        return _cmd_bench_app(args, out, err)
     from jevtools.bench.bfcl import CATEGORIES, DEFAULT_CATEGORIES, download, load_category
     from jevtools.bench.run import run_bfcl
     from jevtools.validate import cache_dir
@@ -920,19 +978,9 @@ def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     if args.download:
         written = download(data, names, ref=args.ref)
         print(f"downloaded {len(written)} BFCL file(s) into {data} (ref {args.ref})", file=out)
-    backend: Any
-    if args.backend in ("oracle",):
-        backend = "oracle"
-    elif args.backend in ("sim", "simulator"):
-        from jevtools.backends.simulator import LexicalSimulator
-
-        backend = LexicalSimulator()
-    else:
-        try:
-            backend = _backend(args.backend, args.allow_offline)
-        except BackendError as exc:
-            print(f"jevtools bench: {type(exc).__name__}: {exc}", file=err)
-            return 1
+    backend = _bench_backend(args.backend, args.allow_offline, err)
+    if backend is None:
+        return 1
     try:
         cases = [c for name in names for c in load_category(data, name, limit=args.limit)]
     except FileNotFoundError as exc:

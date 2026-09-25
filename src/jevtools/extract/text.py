@@ -114,6 +114,36 @@ def quotes(source: SourceText) -> list[Mention]:
     return out
 
 
+NAMING_CUES = frozenset({"called", "named", "titled", "entitled", "namens", "genannt", "appele", "appelee",
+                         "intitule", "intitulee"})  # fmt: skip
+"""Words after which the user gives a name (``a deal called data platform phase 2``); folded forms."""
+NAME_MAX_TOKENS = 8
+
+
+def named_spans(source: SourceText, lex: _Lex) -> list[Mention]:
+    """The name after a naming cue, up to punctuation, a preposition or a conjunction (at most 8 tokens), as a
+    ``quote`` mention: the user's own words for the name, like a quoted string."""
+    tokens = source.tokens
+    out: list[Mention] = []
+    for i, token in enumerate(tokens):
+        if token.folded not in NAMING_CUES:
+            continue
+        j = i + 1
+        while j < len(tokens) and j - i <= NAME_MAX_TOKENS:
+            t = tokens[j]
+            glued = t.start == tokens[j - 1].end and j + 1 < len(tokens) and tokens[j + 1].start == t.end
+            stop = t.kind == "punct" and not glued and t.text not in "-_/&+'’#"
+            if stop or t.folded in lex.prepositions or t.folded in lex.conjunctions:
+                break
+            j += 1
+        if j > i + 1 and tokens[i + 1].kind != "punct":
+            start, end = tokens[i + 1].start, tokens[j - 1].end
+            inner = source.text[start:end]
+            out.append(Mention("quote", inner, (start, end), inner, None, source.channel, source.ref, "quote",
+                               attrs={"naming": token.text}))  # fmt: skip
+    return out
+
+
 def proper_nouns(source: SourceText, lex: _Lex) -> list[Mention]:
     """Runs of capitalized words; sentence-initial function/command words and ``I`` are skipped."""
     tokens = source.tokens
@@ -443,7 +473,7 @@ def extract(source: SourceText, locale: Locale, mentions: Sequence[Mention]) -> 
     lex = _Lex.of(locale)
     blocked = [m.span for m in mentions if m.kind in _BLOCKING_KINDS]
     temporal = [m.span for m in mentions if m.kind == "temporal"]
-    out = quotes(source) + proper_nouns(source, lex) + message_clauses(source, lex)
+    out = quotes(source) + named_spans(source, lex) + proper_nouns(source, lex) + message_clauses(source, lex)
     command, verb = command_mention(source, lex)
     if command is not None:
         out.append(command)

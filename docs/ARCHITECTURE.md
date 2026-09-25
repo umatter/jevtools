@@ -146,10 +146,12 @@ src/jevtools/
   demo/
     scenario.py          the §13 world: synthetic contacts, accounts, 3,000 paths, six tools, fake Workspace
     scripts.py           the §13.3 answer scripts (illustrative numbers)
-  bench/                 BFCL benchmark (docs/BENCH.md)
-    bfcl.py              data loading and download, schema conversion, port of BFCL's AST checker
-    oracle.py            OracleBackend: perfect answers from the BFCL answer; per-parameter coverage and in_text
+  bench/                 benchmarks (docs/BENCH.md)
+    oracle.py            OracleBackend: perfect answers from a gold label (GoldView: BfclGold, EvalGold); coverage
+    bfcl.py              BFCL data loading and download, schema conversion, port of BFCL's AST checker
     run.py               run_bfcl/run_case: ceiling, proposal and strict scores, attribution, report
+    app/                 app-domain benchmark: runner.py (run_app/run_domains, AppReport), _generate.py (data)
+      domains/<name>/    catalog.json, context.json, data/, cases.jsonl (§11.1) for six synthetic apps
 ```
 
 ## Tests and fixtures
@@ -162,7 +164,8 @@ src/jevtools/
   asserts invariants only. Run it with `python -m pytest -m live`.
 - `tests/examples` runs every example in scripted and simulator mode. These tests are marked `fast`.
 - `tests/bench` runs the BFCL checker port, the oracle, the runner and the `bench` command over a small vendored
-  BFCL sample (`tests/bench/data`, Apache-2.0, see its NOTICE).
+  BFCL sample (`tests/bench/data`, Apache-2.0, see its NOTICE), and the app-domain benchmark over its bundled
+  domains (the oracle ceiling, the generator check and `jevtools bench app`).
 - `tests/golden/<case>/` holds the conformance fixtures of §10.2. `jevtools fixtures [--update]` checks or
   regenerates them, and a port must reproduce their bytes. See `tests/golden/README.md`.
 - Scripted and simulated answers exercise the plumbing and the policy branches. They are never evidence about Jev's

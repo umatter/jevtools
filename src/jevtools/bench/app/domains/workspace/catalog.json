@@ -1,0 +1,26 @@
+[
+ {"type": "function", "function": {"name": "read_file", "description": "Open a file from the team workspace and show its content.",
+  "parameters": {"type": "object", "required": ["path"], "properties": {
+   "path": {"type": "string", "description": "The workspace path of the file"}}},
+  "x-jev": {"risk": "read"}}},
+ {"type": "function", "function": {"name": "share_file", "description": "Share a workspace file with a person.",
+  "parameters": {"type": "object", "required": ["path", "recipient"], "properties": {
+   "path": {"type": "string", "description": "The workspace path of the file"},
+   "recipient": {"type": "string", "format": "email", "description": "The email address of the person to share with"},
+   "access": {"type": "string", "enum": ["view", "comment", "edit"], "default": "view", "description": "What the person may do with the file"}}},
+  "x-jev": {"risk": "external"}}},
+ {"type": "function", "function": {"name": "move_file", "description": "Move a workspace file into another folder.",
+  "parameters": {"type": "object", "required": ["path", "destination"], "properties": {
+   "path": {"type": "string", "description": "The workspace path of the file to move"},
+   "destination": {"type": "string", "description": "The folder to move the file into", "x-jev": {"source": "folders"}}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "rename_file", "description": "Rename a workspace file (it stays in its folder).",
+  "parameters": {"type": "object", "required": ["path", "new_name"], "properties": {
+   "path": {"type": "string", "description": "The workspace path of the file to rename"},
+   "new_name": {"type": "string", "description": "The new file name, with its extension"}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "search_files", "description": "Search the workspace for files about a topic.",
+  "parameters": {"type": "object", "required": ["query"], "properties": {
+   "query": {"type": "string", "description": "The search query"}}},
+  "x-jev": {"risk": "read"}}}
+]

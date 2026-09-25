@@ -1650,3 +1650,56 @@ Extends "Documentation and final merge":
   money (§3.3.1 row 6), e.g. BFCL's `panelArea` ("The total solar panel area"). The pool still holds the stated
   numbers, so the effect is limited to money-style normalization.
 
+
+## App-domain benchmark and the good-fit fixes
+
+- Scope: jevtools is positioned for assistants and agents over an app's own data (arguments come from the user's
+  words, the app's registries and closed sets). `jevtools bench app` measures exactly that: six synthetic domains
+  (inbox, crm, banking, workspace, helpdesk, research), 99 cases in the §11.1 format, so each `cases.jsonl` is also a
+  `jevtools eval` dataset. Data is generated deterministically (`python -m jevtools.bench.app._generate [--check]`)
+  and shipped in the wheel. Scoring is the eval harness's (`score_decision`): allowed outcome plus, for a shown call,
+  the gold call. BFCL stays as the stress test outside the fit.
+- The oracle serves both benches through a `GoldView` (`BfclGold`, `EvalGold`). §11.1 gold names only some
+  arguments; the others are `ANY` (any non-empty value, or none). For a clarify-only gold whose `accepted` lists
+  several values, the oracle spreads its mass evenly over the matching options (a genuine ambiguity), so the
+  policy's menu path is exercised. It answers the joint question (critical tier, §3.7) with the combination whose
+  every value is acceptable, and `member` Nouls (superlatives, §4.2.8) by the member's own value.
+- Oracle confidence 0.94 → 0.99 (`P_TOP`, `P_YES`; `P_NO` 0.04 → 0.01): under the critical tier's Łukasiewicz
+  bound six factors at 0.94 give L = 0.665 < 0.80, so a perfect judge could never reach a confirm card for a
+  transfer. BFCL (read tier, W) is unaffected in its ceiling; its strict column moves by up to 0.8 points
+  (docs/BENCH.md has the rerun).
+- §4.2.7 identifiers: typed IDs are how people name records in apps, and the token rules never matched them
+  (`D-1017` is `D`, `-`, `1017`; the words are too short, the number is not a word). A token with a digit that
+  equals the key or a whole `match` value anchors the row exactly. A bare number counts only after a cue (`#`, the
+  source's item noun as in "ticket 1100", `number`/`no`/`nr`/`id`/`ref`): without one, "Transfer 200 …" would anchor
+  an account whose id is 200. With ≥ 3 digits it also matches keys ending in it (score 0.9, `how = "number"`).
+  Words inside a matched identifier make no anchors, otherwise `INC` anchored all 48 tickets.
+- §4.2.6 `code` extractor: identifier-like tokens (a letter plus a digit or `_`, or a file name with an extension)
+  become span candidates for generic strings (role default) and on request (`x-jev.extract: ["code"]`). Code
+  mentions are weak (never claim), so `300K` stays a quantity and `3pm` a time. Side effect on BFCL: `y=x^2` is now
+  nominated (BFCL equates `^` and `**`); the case then fails BFCL's nested float check on `[1, 3]`, so its
+  attribution moved from `value_not_nominated` to `wrong_call` (test updated).
+- §4.2.6 naming cues: "a deal called data platform phase 2" had no candidate for the title. The name after
+  `called/named/titled/entitled` (and de/fr forms) becomes a `quote` mention, up to punctuation (glued punctuation
+  such as `notes_old.txt` stays), a preposition or a conjunction, at most 8 tokens.
+- §4.2.5 year-less dates: "since September 1" said on 24 September gave only 2027-09-01. A named-month date
+  without a year now also offers the past occurrence once this year's date has passed; the gloss says "23 days
+  ago" / "in 342 days" and Jev chooses. A date still to come this year keeps one reading (so "on 29 September"
+  and future-looking requests are unchanged). Numeric dates (`9/1`, `1.9.`) are unchanged: they already carry
+  D/M-M/D readings.
+- §3.8.3 `confirm_margin` (new, 0.20): with the oracle's split, "Give the Initech deal to Jonas" (two reps named
+  Jonas) produced a write-tier confirm card for one of them, because Π = 0.495·… cleared the 0.45 confirm
+  threshold. A card that presents a coin flip between two identities is a guess with a button. In the confirm band,
+  an identity slot whose top two real values are closer than 0.20 now routes to the menu (`P9.<tier>.ambiguous`,
+  reason `margin`). The execute band is unaffected (its thresholds already imply a margin ≥ 0.20), and cosmetic or
+  content slots are not checked.
+- §3.7.4 call MAP rivals: an infeasible transfer ("50,000 from a 12,500 account") gave `Q = 0` for
+  `transfer_funds`, so `t_S` became `freeze_card` at P = 0.002 and P5 offered "transfer or freeze my card?". Only
+  `t*` and tools with `P(t) ≥ 0.10` (`CALL_MAP_MIN_P`) now compete for `t_S`; the infeasible call reaches P8
+  (`infeasible` → clarify on the flagged slot). R7's trace changed only in its `call_map` field (a sentinel was
+  chosen, so no flag was ever raised).
+- `clarify_useful` counts only menus that offer tools or values of an argument the gold names (a menu asking for
+  the missing account in "Send 300 to Anna" cannot contain a gold payee).
+- Remaining ceiling miss, kept on purpose: inbox-17 "Email the head of legal…". The role is only in the contact's
+  `notes`, which is not a `match` field, so `send_email` is not speculated (P6). An app would add a `role` field to
+  `match`; the case shows that the ceiling depends on how the app describes its data.

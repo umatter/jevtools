@@ -1,0 +1,5 @@
+{"now": "2026-09-24T14:05:00+02:00", "tz": "Europe/Zurich", "locale": "en-CH",
+ "user": {"name": "Sam Muster", "email": "sam.muster@muster.ch", "home_city": "Zurich"},
+ "sources": [
+  {"name": "tickets", "type": "registry", "path": "data/tickets.json", "key": "id", "label": "{id} {title}", "describe": "Requested by {requester}, {status}, team {team}", "match": ["id", "title", "requester"], "provides": ["ticket_id", "ticket"], "attrs": ["title", "requester", "status", "team"], "item": "ticket"},
+  {"name": "agents", "type": "registry", "path": "data/agents.json", "key": "email", "label": "{name} <{email}>", "describe": "{team} team", "match": ["name", "team"], "provides": ["agent"], "attrs": ["name", "team"], "item": "agent"}]}

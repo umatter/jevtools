@@ -1,0 +1,7 @@
+{"now": "2026-09-24T14:05:00+02:00", "tz": "Europe/Zurich", "locale": "en-CH",
+ "user": {"name": "Sam Muster", "email": "sam.muster@muster.ch", "home_city": "Zurich"},
+ "sources": [
+  {"name": "companies", "type": "registry", "path": "data/companies.json", "key": "id", "label": "{name} ({city})", "describe": "{industry}", "match": ["name"], "provides": ["company_id", "company"], "attrs": ["name", "city"]},
+  {"name": "contacts", "type": "registry", "path": "data/contacts.json", "key": "id", "label": "{name}, {role} at {company}", "describe": "{email}", "match": ["name", "company"], "provides": ["contact_id", "contact"], "attrs": ["name", "company", "email"]},
+  {"name": "deals", "type": "registry", "path": "data/deals.json", "key": "id", "label": "{id} {name}", "describe": "{company}, stage {stage}, owner {owner}", "match": ["id", "name", "company"], "provides": ["deal_id", "deal"], "attrs": ["name", "company", "stage", "owner"]},
+  {"name": "reps", "type": "registry", "path": "data/reps.json", "key": "email", "label": "{name} <{email}>", "describe": "{team} team", "match": ["name", "team"], "provides": ["rep"], "attrs": ["name", "team"]}]}

@@ -208,7 +208,7 @@ Unknown `x-jev` keys are an error, raised by `jevtools lint` and at `Catalog` co
 | `source` | string \| object \| array | A registered source name, `{"tool": name, "args": {}, "items": "$.path[*]", "key", "label", "ttl"}`, `{"mcp_resources": "uri-template"}`, or a union array | tag match (§3.3) |
 | `tags` | string[] | Matched against a source's `provides` | from `format`/name |
 | `channels` | string[] | Channel allow-list | tier × stakes table (§3.4.2) |
-| `extract` | string[] | Extractors: `clause quote noun_phrase proper_noun place email url uuid ipv4 number money duration datetime regex:<re>` | by kind |
+| `extract` | string[] | Extractors: `clause quote noun_phrase proper_noun place email url uuid ipv4 code number money duration datetime regex:<re>` | by kind |
 | `values` | array \| catalog name | Literal candidates, or `iso4217 iso3166 iso639 iana_tz` | enum / `examples` |
 | `templates` | string[] \| pack | Text templates with `{…}` placeholders. Packs: `email.subject email.body email.forward event.title` | pack auto-attached by name (§3.3) |
 | `default_from` | string | Context path (`user.home_city`) or late-bound slot path (`from_account.currency`) | none |
@@ -653,7 +653,7 @@ For each speculated tool t:
 Then:
 - **Tool selection** is `t* = argmax_t P(t)`.
 - **Call MAP** is `t_S = argmax_t S(t)`.
-- If `t_S ≠ t*`, raise flag `call_map_disagrees`, which forces CLARIFY between the two tools (§3.8).
+- If `t_S ≠ t*`, raise flag `call_map_disagrees`, which forces CLARIFY between the two tools (§3.8). Only `t*` and the tools with `P(t) ≥ 0.10` compete for `t_S`: when the tool the user asked for has an infeasible call and no other tool is plausible, the call's own flags (`infeasible`, P8) decide, not a menu with an unrelated tool.
 
 This handles the case "the argmax tool is infeasible but the runner-up is fully covered" without letting slot coverage silently override the user's intent.
 
@@ -688,7 +688,7 @@ This handles the case "the argmax tool is infeasible but the runner-up is fully 
 | P6 `tool.not_speculated` | t\* was non-viable (`empty:<slot>`) | `clarify(open)` for that slot. No extra Jev round is needed: the user must supply the value anyway. |
 | P7 `slot.shape` | Any slot of t\* has shape `missing` (and no default), `out_of_pool`, `uncovered_text` or `flag_band` | missing → `clarify(open)`. out_of_pool → `widen` if a strategy and round budget remain, else `clarify(open)`. uncovered_text → `fill` if allowed and configured, else `clarify(open)` (or `passthrough`). flag_band → `clarify(yes/no menu)`. |
 | P8 `consistency` | Flags `presence_conflict`, `order_sensitive` or `joint_disagrees` | `clarify(menu on the flagged slot)` |
-| P9 `tier.<tier>.<band>` | Compare C with the tier thresholds, with **hysteresis** h = 0.03: a C with `|C − τ| < h` takes the safer side (more conservative in the order execute > confirm > clarify) | See §3.8.3. Caps: `authorized` below the tier gate, or any `tool_output`/`generated` value in an external or critical call → at most `confirm` (`.capped`) |
+| P9 `tier.<tier>.<band>` | Compare C with the tier thresholds, with **hysteresis** h = 0.03: a C with `|C − τ| < h` takes the safer side (more conservative in the order execute > confirm > clarify) | See §3.8.3. Caps: `authorized` below the tier gate, or any `tool_output`/`generated` value in an external or critical call → at most `confirm` (`.capped`). In the confirm band, an identity slot whose top two values are within 0.20 → `clarify(menu)` (`.ambiguous`, reason `margin`) |
 | P10 `loop.done` | Loop mode: `DONE` ≥ 0.5, or `done_after(t*) ≥ 0.8` after a successful execute | `done` |
 
 #### 3.8.3 Tier thresholds (defaults; priors until tuned by §11)
@@ -703,6 +703,7 @@ This handles the case "the argmax tool is infeasible but the runner-up is fully 
 **Shape routing** applies when C is below confirm. It uses the **bottleneck** b = argmin over slot factors, and for a list, its weakest part:
 
 - **ambiguous**: the top k ≤ 4 real values cover ≥ 0.90 of `D_b` → `clarify(menu of k + "Something else")`;
+- the same menu (reason `margin`) replaces a confirm card when C is in the confirm band but an **identity** slot's top two real values are within `confirm_margin` = 0.20 of each other: a card must not present a coin flip between two people, accounts or records;
 - **missing**: → `clarify(open)`;
 - **diffuse**: otherwise → `escalate` if configured, else `clarify(open)`.
 
@@ -904,6 +905,7 @@ The parser emits every reading:
 - `next Tuesday` said on Thursday gives the coming Tuesday (+5 days) and the Tuesday of the following week (+12 days).
 - `at 3` gives 03:00 and 15:00.
 - `03/04` gives D/M and M/D.
+- A named-month date without a year gives the coming occurrence, plus the past one once this year's date has passed: `since September 1` said on 24 September 2026 gives 2026-09-01 ("23 days ago") and 2027-09-01 ("in 342 days"). A date still to come this year has one reading.
 - `end of day` gives 17:00, 18:00 or 23:59, as a locale profile.
 - Explicit timezones are honoured.
 - Readings that violate unary constraints (`start > now`) are dropped at pool time.
@@ -917,12 +919,12 @@ Each option description names the reading ("read as the coming Tuesday, in 5 day
 #### 4.2.6 span
 
 Extractors:
-- quoted strings;
+- quoted strings, and the name after a naming cue (`called | named | titled | entitled | namens | genannt | appelé | intitulé`, up to punctuation, a preposition or a conjunction, at most 8 tokens): "a deal called data platform phase 2";
 - proper-noun runs;
 - noun chunks (determiner? adjective* noun+ (preposition noun)?);
 - message clauses (after `that | saying | to say | : | tell <X> (that)?`);
 - the request minus its leading command verb;
-- regex/format extractors;
+- regex/format extractors, including `code`: identifier-like tokens with a letter and a digit or `_` (`DNA123`, `SKU-4411`, `v2.3.1`), or a file name with an extension (`notes_old.txt`). Code mentions never claim other mentions, and more specific readings (`3pm`, `5kg`) claim them;
 - the place gazetteer (~5k cities, with ambiguity expansion: "Zurich" gives Zürich CH and Zurich, Ontario CA when `canon: "cities"` is set).
 
 Spans that cross a clause boundary are dropped. Labels are the normalized span (WYSIWYG).
@@ -933,7 +935,8 @@ Spans that cross a clause boundary are dropped. Labels are the normalized span (
   - exact token;
   - prefix ≥ 3 characters;
   - trigram similarity ≥ 0.5;
-  - alias.
+  - alias;
+  - **identifier**: a token with a digit (`D-1017`, `INC-1052`, `evt_101`) that equals the key or a whole `match` value, case-insensitively (score 1.0). A bare number is an identifier only after a cue: `#`, the source's item noun (`ticket 1100`), `number`, `no`, `nr`, `id` or `ref`; amounts therefore never anchor rows. With ≥ 3 digits it also matches the keys that end in it after a non-digit (`ticket 1100` → `INC-1100`, score 0.9, described as "numbered"). The words inside a matched identifier make no anchors of their own, so "INC" never anchors every ticket.
 - **Pool.** The union of anchor matches, ranked by match score and then by a recency attribute, and cut to K = 40. Sources with ≤ 12 rows (`send_whole_if_under`) are sent whole.
 - **Labels.** From the source's `label` template (e.g. `{name} <{email}>`). The description comes from the `describe` template plus a match note. The value is the key field.
 - **Probes (tier ≥ external).**
@@ -2500,6 +2503,7 @@ pair_cover = 0.85          # clarify between top-2 tools if they cover ≥ this,
 out_of_pool = 0.30         # NONE_OF_THESE mass → widen / clarify(open)
 ambiguous_cover = 0.90     # top-k real values covering ≥ this → clarify(menu)
 ambiguous_k = 4
+confirm_margin = 0.20      # identity slot top-2 closer than this in the confirm band → clarify(menu)
 flag_band = [0.20, 0.80]   # Noul dead band → clarify(yes/no)
 accept_min = 0.50          # text uncovered below this
 cosmetic_floor = 0.50

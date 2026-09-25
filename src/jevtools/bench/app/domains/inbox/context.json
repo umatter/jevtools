@@ -1,0 +1,8 @@
+{"now": "2026-09-24T14:05:00+02:00", "tz": "Europe/Zurich", "locale": "en-CH",
+ "user": {"name": "Sam Muster", "email": "sam.muster@muster.ch", "home_city": "Zurich"},
+ "sources": [
+  {"name": "contacts", "type": "registry", "path": "data/contacts.json", "key": "email", "label": "{name} <{email}>",
+   "describe": "{notes}", "match": ["name", "aliases", "org"], "provides": ["email", "person"], "attrs": ["name", "org"]},
+  {"name": "events", "type": "registry", "path": "data/events.json", "key": "id", "label": "{title} · {when}",
+   "describe": "Calendar event on {when}", "match": ["title"], "provides": ["event_id"], "attrs": ["title", "start"]}
+ ]}

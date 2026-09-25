@@ -1,0 +1,10 @@
+[
+{"id": "evt_101", "title": "1:1 Lisa Wong", "start": "2026-09-25T09:00:00+02:00", "when": "Fri 25 Sep 09:00"},
+{"id": "evt_102", "title": "Budget review", "start": "2026-09-29T14:00:00+02:00", "when": "Tue 29 Sep 14:00"},
+{"id": "evt_103", "title": "ACME quarterly review", "start": "2026-09-24T14:30:00+02:00", "when": "Thu 24 Sep 14:30"},
+{"id": "evt_104", "title": "Design sync", "start": "2026-09-28T11:00:00+02:00", "when": "Mon 28 Sep 11:00"},
+{"id": "evt_105", "title": "Payments standup", "start": "2026-09-25T08:45:00+02:00", "when": "Fri 25 Sep 08:45"},
+{"id": "evt_106", "title": "Dentist", "start": "2026-10-01T16:00:00+02:00", "when": "Thu 1 Oct 16:00"},
+{"id": "evt_107", "title": "Offsite planning", "start": "2026-10-06T10:00:00+02:00", "when": "Tue 6 Oct 10:00"},
+{"id": "evt_108", "title": "Globex procurement call", "start": "2026-09-30T15:00:00+02:00", "when": "Wed 30 Sep 15:00"}
+]

@@ -1,0 +1,23 @@
+[
+ {"type": "function", "function": {"name": "send_email", "description": "Send an email from the user to one recipient.",
+  "parameters": {"type": "object", "required": ["to", "subject", "body"], "properties": {
+   "to": {"type": "string", "format": "email", "description": "The recipient's email address"},
+   "subject": {"type": "string", "description": "The subject line"},
+   "body": {"type": "string", "description": "The body text of the email"}}}}},
+ {"type": "function", "function": {"name": "create_event", "description": "Create a calendar event and invite attendees.",
+  "parameters": {"type": "object", "required": ["title", "start"], "properties": {
+   "title": {"type": "string", "description": "The event title"},
+   "start": {"type": "string", "format": "date-time", "description": "The start time of the event"},
+   "duration_minutes": {"type": "integer", "minimum": 5, "maximum": 480, "default": 30, "description": "The length of the event in minutes"},
+   "attendees": {"type": "array", "items": {"type": "string", "format": "email"}, "default": [], "description": "The invitees"}}}}},
+ {"type": "function", "function": {"name": "reschedule_event", "description": "Move an existing calendar event to a new start time.",
+  "parameters": {"type": "object", "required": ["event_id", "new_start"], "properties": {
+   "event_id": {"type": "string", "description": "The calendar event to move"},
+   "new_start": {"type": "string", "format": "date-time", "description": "The new start time"}}}}},
+ {"type": "function", "function": {"name": "cancel_event", "description": "Cancel an existing calendar event.",
+  "parameters": {"type": "object", "required": ["event_id"], "properties": {
+   "event_id": {"type": "string", "description": "The calendar event to cancel"}}}}},
+ {"type": "function", "function": {"name": "list_events", "description": "List the calendar events of one day.",
+  "parameters": {"type": "object", "required": ["date"], "properties": {
+   "date": {"type": "string", "format": "date", "description": "The day to list events for"}}}}}
+]

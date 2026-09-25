@@ -4,7 +4,8 @@ Candidates come from the slot's extractors (``x-jev.extract``, else the role def
 
 - ``place``: gazetteer places ("Zurich"); with ``canon: "cities"`` every gazetteer entry the name denotes becomes a
   candidate with its canonical value (``Zürich, CH``, ``Zurich, Ontario, CA``).
-- ``email url uuid ipv4 regex:<re>``: pattern matches (emails normalized: domain lowercased).
+- ``email url uuid ipv4 code regex:<re>``: pattern matches (emails normalized: domain lowercased; ``code``:
+  identifiers and file names such as ``SKU-4411`` or ``notes_old.txt``).
 - ``quote proper_noun noun_phrase clause``: quoted strings, proper-noun runs, noun chunks, message clauses and the
   request minus its command verb.
 - ``examples`` (schema) and literal ``x-jev.values`` become ``author`` candidates.
@@ -27,15 +28,16 @@ from jevtools.kinds.normalize import NormalizationError, normalize_email_value, 
 from jevtools.kinds.ref import is_path_slot
 from jevtools.spec.models import SlotSpec, ToolSpec
 
-PATTERN_EXTRACTORS: dict[str, str] = {"email": "email", "url": "url", "uuid": "uuid", "ipv4": "ipv4"}
+PATTERN_EXTRACTORS: dict[str, str] = {"email": "email", "url": "url", "uuid": "uuid", "ipv4": "ipv4", "code": "code"}
 GENERIC_EXTRACTORS: dict[str, tuple[str, ...]] = {
     "quote": ("quote",),
     "proper_noun": ("proper_noun",),
     "noun_phrase": ("noun_phrase",),
     "clause": ("clause", "command"),
 }
-ROLE_DEFAULTS: dict[str, tuple[str, ...]] = {"generic": ("clause", "quote", "noun_phrase", "proper_noun")}
-"""Undeclared generic spans also take proper-noun runs (§4.2.6 lists them among the span extractors)."""
+ROLE_DEFAULTS: dict[str, tuple[str, ...]] = {"generic": ("clause", "quote", "noun_phrase", "proper_noun", "code")}
+"""Undeclared generic spans also take proper-noun runs (§4.2.6 lists them among the span extractors) and
+identifier-like tokens (``code``)."""
 
 
 def extractors_of(slot: SlotSpec) -> tuple[str, ...]:

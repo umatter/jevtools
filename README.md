@@ -1,22 +1,60 @@
 # jevtools
 
-Tool calling for TypeSafe's [Jev](https://openrouter.ai/docs/guides/community/jev): every argument value is
-**elected** from candidates that code builds, never written by the model.
+**Tool calling for your app's own domain**, driven by TypeSafe's
+[Jev](https://openrouter.ai/docs/guides/community/jev). jevtools lets Jev pick the tool *and every argument* for an
+assistant or agent that works over your app's data: its contacts, accounts, tickets, deals, files and datasets.
+Arguments are **elected** from candidates that code builds from the user's words, your records and closed sets.
+Nothing is written, so a call cannot contain a recipient, account, ID or amount that is not in the user's words or
+in your data.
 
-Jev is a decision model. You send it a `state` and typed questions (Choice, Noul = yes/no, Score); it returns
-calibrated probabilities and no text. That makes it good at picking a tool and unable to write the tool's arguments.
-jevtools removes the need to write them. For every parameter, code builds a finite pool of candidates: spans of the
-user's words, rows of your registries, enum members, every reading of "next Tuesday", fields of earlier tool outputs.
-Jev elects one per slot ("bind, don't write"). The tool question and the questions for every argument of every
-plausible tool go out as one fan-out request, so most requests cost one Jev call. The answers compose into a call
+Jev is a decision model. You send it a `state` and typed questions (Choice, Noul = yes/no, Score), and it returns
+calibrated probabilities and no text. That makes it good at choosing and unable to write a tool's arguments.
+jevtools turns every argument into a choice. For every parameter, code builds a finite pool of candidates: spans of
+the user's words, rows of your registries, enum members, every reading of "next Tuesday", fields of earlier tool
+outputs. Jev elects one per slot ("bind, don't write"). The tool question and the questions for every argument of
+every plausible tool go out as one fan-out request, so most turns cost one Jev call. The answers compose into a call
 confidence C (W, Π or min(L, J), by risk tier), and a risk-tiered policy turns it into execute, confirm, clarify,
 escalate, abstain or refuse, with a trace you can replay. C is a bound, a product or a joint mass built from Jev's
 per-question probabilities, not itself a calibrated probability. It becomes one only after you fit a calibrator on
 labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
 > **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green, but **nothing has been measured
-> against live Jev yet**. Every number in this README comes from the scripted backend or the offline
-> `LexicalSimulator`. Those numbers show the plumbing and are never evidence about Jev's accuracy.
+> against live Jev yet**. Every number in this README comes from the scripted backend, the offline
+> `LexicalSimulator` or the benchmark oracle. Those numbers show what jevtools can produce and are never evidence
+> about Jev's accuracy.
+
+## Where it fits
+
+**A good fit: assistants and agents over an app's own domain**, where arguments come from:
+- the user's words: names, amounts, dates, quoted text, IDs they type (`INC-1052`);
+- the app's data: contacts, accounts, payees, tickets, deals, files, datasets, variables;
+- closed sets: stages, priorities, access levels, model families, currencies.
+
+Think of an inbox and calendar assistant, a CRM copilot, a banking assistant, a helpdesk bot, a workspace assistant
+or an analysis assistant over your datasets. What you get there:
+
+- **No invented values.** A recipient, account, ticket or amount is always one of the candidates code nominated
+  from the user's words or your data. Channel allow-lists keep text from tool outputs out of the identity and
+  amount slots of every tool that changes something, so an address planted in an email cannot become the recipient
+  of your next message.
+- **Ambiguity becomes a menu.** "Email Anna" with two Annas asks "Which Anna?", offering both as complete calls. A
+  coin flip is never presented as a confirm card, and "Move D-1017 to negotiation" anchors deal `D-1017` exactly.
+- **Risk tiers.** Clear reads execute, writes need more confidence, sending and sharing more still, and moving
+  money is confirm-only until you certify that tier on your own labelled traffic.
+- **One cheap call per turn.** The fan-out asks everything at once, at $0.042 per million input tokens.
+- **Replayable decisions.** Every decision carries a trace that `jt.verify` re-checks without the model.
+
+**Not a good fit (use an LLM tool caller, or put one behind `escalate`):**
+- open-world arguments: web search queries, code, SQL, math expressions, translations, new prose (a Filler LLM can
+  draft text for Jev to accept, but then an LLM writes it);
+- values that need reformatting or world knowledge that no source holds (`"New York, NY"` from "New York",
+  `C6H12O6` from "glucose");
+- several calls in one turn, or multi-step plans (one call per turn; `jt.Agent` runs step by step).
+
+The bundled **app-domain benchmark** measures the good fit: six synthetic apps, 99 labelled cases, including
+collisions, typed IDs, relative dates, critical transfers and planted injections. The oracle ceiling is 98 of 99
+(`jevtools bench app`, [docs/BENCH.md](docs/BENCH.md)). **BFCL** is the stress test outside it, with a ceiling of
+35–42% on its single-call categories. See [Benchmarks](#benchmarks).
 
 ## How it works
 
@@ -247,7 +285,7 @@ print(list(ballot.to_requests(router.model)[0].questions))
 
 | Source | Use it for | Channel |
 |---|---|---|
-| `jt.Registry(name, rows, key, label, describe, match, provides, attrs)` | app-owned rows: contacts, accounts, projects. Registries of ≤ 12 rows are sent whole. `attrs` feed constraints, `render` and `order_by`; Jev sees them only if your `label`/`describe` template uses them | registry |
+| `jt.Registry(name, rows, key, label, describe, match, provides, attrs)` | app-owned rows: contacts, accounts, projects, tickets. Registries of ≤ 12 rows are sent whole. A typed ID (`INC-1052`, or `ticket 1052`) anchors its row exactly. `attrs` feed constraints, `render` and `order_by`; Jev sees them only if your `label`/`describe` template uses them | registry |
 | `jt.FileIndex(name, paths, synonyms=…, hierarchy="dirname")` | workspace paths, BM25 over path tokens, widen by directory | registry |
 | `jt.Provider(fn, name, provides)` | any lookup; `fn(SourceQuery)` returns dicts `{value, label, text}`, sync or async | registry |
 | `jt.ToolSource(tool, args, items, key, label, ttl)` | a catalog tool, such as `list_contacts`, called once per session and cached | registry |
@@ -485,23 +523,39 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools eval DATASET [--backend B] [--replays N] [--out report.json]` | run a labelled dataset and report the SPEC §11.2 metrics |
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
 | `jevtools fixtures [--update] [--case NAME]` | check or regenerate the golden conformance fixtures (from a checkout) |
+| `jevtools bench app [--domains …] [--dir DIR] [--backend oracle\|sim\|auto…] [--tags] [--out F]` | run the app-domain benchmark (or your own domains): the ceiling (oracle), or live Jev next to it ([docs/BENCH.md](docs/BENCH.md)) |
 | `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |
 
 `--backend` accepts `auto | typesafe | openrouter_systemone | openrouter_decisions | simulator | cassette:<path>`.
 
-## Benchmark: BFCL
+## Benchmarks
 
-`jevtools bench bfcl --download` runs the single-turn categories of the Berkeley Function Calling Leaderboard and
-scores every decision with a port of BFCL's own checker. By default it runs an **oracle**, a backend that answers
-every Jev question perfectly from the BFCL answer. The oracle's accuracy is the **ceiling** of "bind, don't write":
-how often the right call can come out at all, given the candidates code nominated. With a key,
-`--backend auto` runs live Jev and reports each category's ceiling next to Jev's accuracy.
+Both benchmarks run offline by default on an **oracle**, a backend that answers every Jev question perfectly from
+the gold label. The oracle's accuracy is the **ceiling** of "bind, don't write": how often the right decision can
+come out at all, given the candidates code nominated. With a key, `--backend auto` runs live Jev and reports its
+accuracy next to the ceiling ("within ceiling" is then Jev's judgment on the cases jevtools can get right).
 
-The offline baseline (oracle, not Jev) is 37% on `simple_python`, 38% on `multiple`, 33% on `live_simple` and
-`live_multiple`, and 100% on the irrelevance categories. Almost every miss is a value no extractor nominated, and
-59% of those values appear verbatim in the user's text, so better extraction can close them. Date strings in a
-stated format, single-word spans and numbers with written-out units are the biggest gaps. Details, attribution and
-the full table are in [docs/BENCH.md](docs/BENCH.md).
+**App domains (the good fit).** `jevtools bench app` covers six synthetic apps (inbox, crm, banking, workspace,
+helpdesk, research) with 99 cases. They include collisions ("Email Anna" with two Annas), typed IDs ("Assign ticket
+1100 to Aisha"), relative dates ("since September 1"), described enums ("high priority" → P2), critical transfers
+with balance constraints, coreference and six injections planted in observations.
+
+| | inbox | crm | banking | workspace | helpdesk | research | all |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| cases | 20 | 17 | 16 | 15 | 16 | 15 | 99 |
+| ceiling (oracle, not Jev) | 95% | 100% | 100% | 100% | 100% | 100% | 99% |
+
+The oracle makes no wrong executions and lets no planted value reach a call. The one miss names a contact by a role
+that the app's data does not expose to matching. The cases use the §11.1 format, so the same files are `jevtools
+eval` datasets. `--dir` runs your own domains, which is the fastest way to see what jevtools can do on your tools and
+data before the first API call.
+
+**BFCL (outside the fit).** `jevtools bench bfcl --download` runs the single-turn categories of the Berkeley
+Function Calling Leaderboard, scored by a port of BFCL's own checker. The oracle ceiling is 39% on `simple_python`,
+42% on `multiple`, 36% on `live_simple`, 35% on `live_multiple` and 100% on the irrelevance categories. Almost every
+miss is a value no extractor nominated. 57% of those values appear verbatim in the user's text, and the rest need
+reformatting or world knowledge that selection cannot produce. Details, attribution and the full tables are in
+[docs/BENCH.md](docs/BENCH.md).
 
 ## Backends
 
@@ -527,11 +581,12 @@ These are condensed from SPEC §14.
   illustrative. The live experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been run.
 - **Thresholds are priors.** They mean something only after `jevtools eval` + `tune` on your own labelled traffic,
   and they do not transfer across datasets.
-- **Coverage is the ceiling, and it is low today.** Jev cannot elect a value that code did not nominate. On BFCL's
-  single-call categories the oracle ceiling is 33–38% (docs/BENCH.md), mostly because extractors miss values that
-  are in the text. When a value is missed, the best case is `NONE_OF_THESE`, which leads to widen or clarify. The
-  worst case is a confident wrong election among distractors. Whether the sentinels really absorb mass when the
-  right value is missing is unverified (experiment E2).
+- **Coverage is the ceiling.** Jev cannot elect a value that code did not nominate. Over an app's own data the
+  oracle ceiling is high (98 of 99 on the app-domain bench). Outside that setting it is low: 35–42% on BFCL's
+  single-call categories (docs/BENCH.md), mostly because extractors miss values that are in the text. When a value
+  is missed, the best case is `NONE_OF_THESE`, which leads to widen or clarify. The worst case is a confident wrong
+  election among distractors. Whether the sentinels really absorb mass when the right value is missing is
+  unverified (experiment E2).
 - **Calibration of the new question forms is assumed.** This covers "Suppose…" premises, accept Nouls, joint
   sentences, membership Nouls and sentinels. The compositions are only as honest as their factors.
 - **Text is extractive without a Filler.** Bodies are templates plus the user's clauses and can read stilted. New
@@ -557,7 +612,7 @@ src/jevtools/        the package (module map: docs/ARCHITECTURE.md)
   spec/ sources/ extract/ kinds/     ingest, candidate sources, extractors, one resolver per slot kind
   plan.py decode.py confidence.py policy.py router.py trace.py   the decision pipeline
   adapters/ serve/ eval/ backends/ demo/   integrations, proxy, evaluation, Jev backends, synthetic demo world
-  bench/               BFCL benchmark: data, checker port, oracle, runner (docs/BENCH.md)
+  bench/               benchmarks: app domains (bench/app, 6 bundled domains) and BFCL; oracle, runners (docs/BENCH.md)
 examples/            01–08 runnable scripts (offline by default; --backend scripted|sim|live), proxy/
 tests/               1,000+ offline tests; tests/golden/ holds the conformance fixtures, tests/live/ the live smoke suite
 docs/SPEC.md         the normative protocol (jevtools/0.1)

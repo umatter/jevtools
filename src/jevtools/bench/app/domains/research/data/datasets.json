@@ -1,0 +1,8 @@
+[
+{"id": "ds_101", "name": "survey_2024_wave1", "rows": 4812, "description": "Household survey 2024, wave 1"},
+{"id": "ds_102", "name": "survey_2024_wave2", "rows": 4391, "description": "Household survey 2024, wave 2"},
+{"id": "ds_103", "name": "housing_panel_2015_2025", "rows": 120450, "description": "Housing panel, prices and rents 2015-2025"},
+{"id": "ds_104", "name": "customer_churn_q3", "rows": 25003, "description": "Customer churn data, Q3 2026"},
+{"id": "ds_105", "name": "election_polls_2026", "rows": 612, "description": "Election polls 2026"},
+{"id": "ds_106", "name": "clinical_trial_bp", "rows": 842, "description": "Clinical trial of a blood pressure drug"}
+]

@@ -1,0 +1,6 @@
+{"now": "2026-09-24T14:05:00+02:00", "tz": "Europe/Zurich", "locale": "en-CH",
+ "user": {"name": "Sam Muster", "email": "sam.muster@muster.ch", "home_city": "Zurich"},
+ "sources": [
+  {"name": "accounts", "type": "registry", "path": "data/accounts.json", "key": "id", "label": "{nickname} ({currency}, {iban_masked})", "match": ["nickname"], "provides": ["account_id", "account"], "attrs": ["nickname", "currency", "balance"]},
+  {"name": "payees", "type": "registry", "path": "data/payees.json", "key": "id", "label": "{name}", "describe": "{category}, {iban_masked}", "match": ["name", "category"], "provides": ["payee_id", "payee"], "attrs": ["name", "category"]},
+  {"name": "cards", "type": "registry", "path": "data/cards.json", "key": "id", "label": "{name} ending in {last4}", "match": ["name", "last4"], "provides": ["card_id", "card"], "attrs": ["name", "last4"]}]}

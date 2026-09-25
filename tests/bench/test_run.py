@@ -36,9 +36,11 @@ def test_oracle_reaches_the_answer_when_every_value_is_on_the_ballot() -> None:
 
 def test_oracle_attributes_misses() -> None:
     simple = cases("simple_python")
-    miss = run_case(simple["simple_python_13"], "oracle")  # "x^2" is never nominated as "x**2"
+    miss = run_case(simple["simple_python_7"], "oracle")  # the unit "inches" is never nominated
     assert not miss.proposal and miss.attribution == "value_not_nominated"
-    assert {c.param: c.status for c in miss.coverage}["function"] == "uncovered"
+    assert {c.param: c.status for c in miss.coverage}["unit"] == "uncovered"
+    typed = run_case(simple["simple_python_13"], "oracle")  # "y=x^2" is nominated; [1, 3] fails BFCL's float check
+    assert typed.attribution == "wrong_call" and typed.error_type == "type_error:nested"
     skipped = run_case(simple["simple_python_34"], "oracle")
     assert skipped.attribution == "tool_not_speculated" and skipped.rule.startswith("P6")
 

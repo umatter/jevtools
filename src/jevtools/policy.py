@@ -99,6 +99,9 @@ class ShapePolicy(_Section):
     """``NONE_OF_THESE`` mass at or above this makes a slot ``out_of_pool``."""
     ambiguous_cover: float = 0.90
     ambiguous_k: int = 4
+    confirm_margin: float = 0.20
+    """In the confirm band, an identity slot whose top two real values are closer than this gets a menu instead of
+    a confirm card: a card must not present a coin flip between two people, accounts or records."""
     flag_band: tuple[float, float] = (0.20, 0.80)
     """Noul dead band: strictly inside it a flag or item is uncertain (``flag_band`` shape)."""
     accept_min: float = 0.50
@@ -612,8 +615,21 @@ def _p9(inp: PolicyInput, policy: Policy) -> PolicyResult:
         band = "confirm_always" if caps == ["confirm_always"] else "capped"
         return PolicyResult(outcome=Outcome.CONFIRM, rule=tier_rule(tier, band), caps=caps, ask="confirm")
     if _clears(c, confirm_at, h):
+        tight = _coin_flip(inp, policy)
+        if tight is not None:
+            return PolicyResult(outcome=Outcome.CLARIFY, rule=tier_rule(tier, "ambiguous"), bottleneck=tight.name,
+                                shape="ambiguous", caps=caps, ask="menu", reason="margin")  # fmt: skip
         return PolicyResult(outcome=Outcome.CONFIRM, rule=tier_rule(tier, "confirm_band"), caps=caps, ask="confirm")
     return _shape_routing(inp, policy, tier, caps)
+
+
+def _coin_flip(inp: PolicyInput, policy: Policy) -> SlotState | None:
+    """The first identity slot whose top two real values are within ``shapes.confirm_margin`` (``None``: none)."""
+    margin = policy.shapes.confirm_margin
+    for slot in inp.slots:
+        if slot.stakes == "identity" and len(slot.top) >= 2 and slot.top[0] - slot.top[1] < margin - _EPS:
+            return slot
+    return None
 
 
 def bottleneck_shape(slot: SlotState | None, policy: Policy | None = None) -> tuple[str, int]:

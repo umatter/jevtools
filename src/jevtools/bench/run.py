@@ -27,7 +27,7 @@ from typing import Any
 
 from jevtools.backends.base import Backend
 from jevtools.bench.bfcl import IRRELEVANCE, BfclCase, check
-from jevtools.bench.oracle import OracleBackend, ParamCoverage
+from jevtools.bench.oracle import BfclGold, OracleBackend, ParamCoverage
 from jevtools.context import Context
 from jevtools.decision import Decision
 from jevtools.plan import compile_round
@@ -186,7 +186,7 @@ def _calls(decision: Decision) -> tuple[list[dict[str, Any]], list[dict[str, Any
 
 
 def _oracle_run(case: BfclCase, risk: str | None, now: datetime) -> tuple[OracleBackend, Decision]:
-    oracle = OracleBackend(case)
+    oracle = OracleBackend(BfclGold(case))
     router = _router(case, oracle, risk, now)
     ctx = router.context_for(case.messages)
     oracle.plan = compile_round(router.catalog, ctx, router.policy, mode="turn", limits=router.round_limits())

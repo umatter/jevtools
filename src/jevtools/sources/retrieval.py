@@ -16,12 +16,12 @@ from typing import Any, Literal
 
 from jevtools.extract.tokens import fold, split_identifier, words
 
-MatchHow = Literal["exact", "alias", "prefix", "trigram", "group"]
+MatchHow = Literal["exact", "alias", "number", "prefix", "trigram", "group"]
 ALIAS_FIELDS: frozenset[str] = frozenset({"alias", "aliases"})
 """Match fields whose values are aliases (``Contact whose alias is "Bob"``)."""
 MIN_PREFIX = 3
 MIN_TRIGRAM = 0.5
-SCORES: dict[str, float] = {"exact": 1.0, "alias": 0.95, "group": 0.9}
+SCORES: dict[str, float] = {"exact": 1.0, "alias": 0.95, "group": 0.9, "number": 0.9}
 
 
 @dataclass(frozen=True)

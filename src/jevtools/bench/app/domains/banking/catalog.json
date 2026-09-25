@@ -1,0 +1,29 @@
+[
+ {"type": "function", "function": {"name": "transfer_funds", "description": "Move money between two of the user's own bank accounts.",
+  "parameters": {"type": "object", "required": ["from_account", "to_account", "amount", "currency"], "properties": {
+   "from_account": {"type": "string", "description": "The account the money is taken from"},
+   "to_account": {"type": "string", "description": "The account the money goes to"},
+   "amount": {"type": "string", "pattern": "^\\d+(\\.\\d{1,2})?$", "description": "The amount to move"},
+   "currency": {"type": "string", "pattern": "^[A-Z]{3}$", "description": "The ISO 4217 currency code", "x-jev": {"default_from": "from_account.currency"}}}},
+  "x-jev": {"risk": "critical", "constraints": ["from_account != to_account", "amount <= from_account.balance"],
+            "render": "{amount} {currency}: {from_account.nickname} → {to_account.nickname}"}}},
+ {"type": "function", "function": {"name": "pay_bill", "description": "Pay one of the user's saved payees from one of the user's accounts.",
+  "parameters": {"type": "object", "required": ["payee_id", "amount", "from_account"], "properties": {
+   "payee_id": {"type": "string", "description": "The saved payee to pay"},
+   "amount": {"type": "number", "exclusiveMinimum": 0, "description": "The amount to pay in the account's currency"},
+   "from_account": {"type": "string", "description": "The account to pay from"}}},
+  "x-jev": {"risk": "critical", "constraints": ["amount <= from_account.balance"]}}},
+ {"type": "function", "function": {"name": "freeze_card", "description": "Temporarily freeze one of the user's payment cards.",
+  "parameters": {"type": "object", "required": ["card_id"], "properties": {
+   "card_id": {"type": "string", "description": "The card to freeze"}}},
+  "x-jev": {"risk": "write"}}},
+ {"type": "function", "function": {"name": "get_balance", "description": "Show the balance of one of the user's accounts.",
+  "parameters": {"type": "object", "required": ["account"], "properties": {
+   "account": {"type": "string", "description": "The account"}}},
+  "x-jev": {"risk": "read"}}},
+ {"type": "function", "function": {"name": "list_transactions", "description": "List the transactions of one of the user's accounts.",
+  "parameters": {"type": "object", "required": ["account"], "properties": {
+   "account": {"type": "string", "description": "The account"},
+   "since": {"type": "string", "format": "date", "description": "The first day to include"}}},
+  "x-jev": {"risk": "read"}}}
+]

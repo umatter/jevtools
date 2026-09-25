@@ -175,14 +175,21 @@ class CallMap:
         return self.chosen is not None and self.call_map is not None and self.chosen != self.call_map
 
 
+CALL_MAP_MIN_P = 0.10
+"""A tool competes for the call MAP only from this tool probability: an infeasible call of the tool the user asked
+for is a consistency problem of that call (``infeasible``, P8), not a reason to offer an unrelated tool."""
+
+
 def call_map(tool_p: Mapping[str, float], q: Mapping[str, float]) -> CallMap:
     """``S(t) = P(t)·Q_t`` for every tool with a ``Q_t``; ``t*`` is the argmax of ``tool_p`` (first on ties).
 
-    ``tool_p`` may contain sentinel labels (``NO_TOOL``…); only tools present in ``q`` get a score.
+    ``tool_p`` may contain sentinel labels (``NO_TOOL``…); only tools present in ``q`` get a score. ``t_S`` is the
+    argmax of ``S`` over ``t*`` and the tools with ``P(t) ≥ CALL_MAP_MIN_P``.
     """
     chosen = max(tool_p, key=lambda t: tool_p[t]) if tool_p else None
     scores = {t: tool_p.get(t, 0.0) * qt for t, qt in q.items()}
-    best = max(scores, key=lambda t: scores[t]) if scores else None
+    rivals = {t: s for t, s in scores.items() if t == chosen or tool_p.get(t, 0.0) >= CALL_MAP_MIN_P - 1e-9}
+    best = max(rivals, key=lambda t: rivals[t]) if rivals else None
     return CallMap(chosen=chosen, call_map=best, scores=scores)
 
 
@@ -262,6 +269,7 @@ class IsotonicCalibrator:
 
 
 __all__ = [
+    "CALL_MAP_MIN_P",
     "CallMap",
     "Composition",
     "Factors",

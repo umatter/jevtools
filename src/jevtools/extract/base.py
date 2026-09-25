@@ -29,7 +29,7 @@ from jevtools.extract.tokens import Token, covers, tokenize
 if TYPE_CHECKING:
     from jevtools.spec.catalog import Catalog
 
-PATTERN_KINDS: frozenset[str] = frozenset({"email", "url", "uuid", "ipv4", "regex"})
+PATTERN_KINDS: frozenset[str] = frozenset({"email", "url", "uuid", "ipv4", "code", "regex"})
 SPAN_KINDS: frozenset[str] = frozenset({"quote", "proper_noun", "noun_phrase", "clause", "command"})
 """Generic span kinds: the lowest claiming priority."""
 

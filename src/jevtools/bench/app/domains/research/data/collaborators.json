@@ -1,0 +1,6 @@
+[
+{"name": "Thomas Becker", "email": "thomas.becker@muster.ch", "aliases": ["Tom"], "org": "Muster", "notes": "Engineering lead, goes by Tom"},
+{"name": "Maria Garcia", "email": "maria.garcia@muster.ch", "aliases": [], "org": "Muster", "notes": "Marketing"},
+{"name": "Priya Nair", "email": "priya.nair@muster.ch", "aliases": [], "org": "Muster", "notes": "Data science"},
+{"name": "Leo Tanner", "email": "leo.tanner@uni-example.ch", "aliases": [], "org": "University", "notes": "Co-author, University"}
+]

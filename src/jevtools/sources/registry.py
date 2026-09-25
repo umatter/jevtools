@@ -3,6 +3,11 @@
 - **Anchors.** User words that match ≥ 1 row on the ``match`` fields: exact token, prefix ≥ 3 characters, trigram
   similarity ≥ 0.5 (prefix/trigram only for capitalized words, or when the whole message is lowercase), or an
   alias field. Adjacent matching words form one anchor ("Anna Keller").
+- **Identifiers.** A token with a digit (``D-1017``, ``INC-1052``, ``evt_101``) that equals the key or a whole
+  ``match`` value anchors that row exactly. A bare number is an identifier only after a cue (``#1052``, ``ticket
+  1100``, ``order no. 4411``: the registry's item noun, ``number``, ``no``, ``id``, ``ref``), so amounts never anchor
+  rows; with ≥ 3 digits it also anchors the rows whose key ends in it (``ticket 1100`` → ``INC-1100``). The words
+  inside a matched identifier make no anchors of their own.
 - **Pool.** The union of the anchors' rows, ranked by match score then by the ``recency`` attribute, cut to K.
   A registry with at most ``send_whole_if_under`` (12) rows is sent whole (anchored rows keep their match note).
 - **Labels and descriptions.** ``label`` renders the WYSIWYG label (``"{name} <{email}>"``); the description is a
@@ -13,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import Any
 
@@ -22,7 +28,7 @@ from jevtools.extract.base import Mention
 from jevtools.extract.locales import all_locales
 from jevtools.extract.tokens import Token, fold, tokenize, words
 from jevtools.sources.base import SourceQuery, item_noun
-from jevtools.sources.retrieval import BM25, Match, fuzzy_matches
+from jevtools.sources.retrieval import BM25, SCORES, Match, field_terms, fuzzy_matches
 from jevtools.templates import NEGATION_NOTE
 
 Template = str | Callable[[Mapping[str, Any]], str]
@@ -33,10 +39,17 @@ HOW_PHRASE: dict[str, str] = {
     "bm25": "matching",
     "group": "in the group",
     "alias": "whose alias is",
+    "number": "numbered",
     "prefix": "similar to",
     "trigram": "similar to",
 }
-_HOW_RANK = {"exact": 0, "alias": 1, "group": 2, "bm25": 3, "prefix": 4, "trigram": 5}
+_HOW_RANK = {"exact": 0, "alias": 1, "number": 2, "group": 3, "bm25": 4, "prefix": 5, "trigram": 6}
+_IDENTIFIER = re.compile(r"#?\w[\w\-/.#]*")
+_LAST_WORD = re.compile(r"(\w+)\W*$")
+_NUMBER_CUES = frozenset({"number", "numbers", "no", "nr", "num", "id", "ids", "ref", "nummer"})
+_TRAILING_NUMBER = re.compile(r"(?<=\D)0*(\d+)$")
+MIN_ID_DIGITS = 3
+"""A bare number anchors rows by the number their key ends in only from this many digits (``1100``, not ``10``)."""
 _STOP = frozenset().union(*(loc.stopwords for loc in all_locales()))
 _VERBS = frozenset().union(*(loc.command_verbs for loc in all_locales()))
 
@@ -175,16 +188,67 @@ class Registry:
         if self.retriever != "fuzzy" and self.retriever != "exact":
             return []
         tokens = list(tokens) if tokens is not None else tokenize(text)
+        ids = self._identifier_anchors(text, source_ref, channel)
+        covered = [m.span for m in ids]
         lowercase = text == text.lower()
         per_token: list[tuple[int, list[Match]]] = []
         for i in range(len(tokens)):
-            if not self._candidate_token(tokens, i):
+            if not self._candidate_token(tokens, i) or any(s <= tokens[i].start < e for s, e in covered):
                 continue
             fuzzy = self.retriever == "fuzzy" and (tokens[i].is_capitalized or lowercase)
             matches = self._matches(tokens[i].text, fuzzy=fuzzy)
             if matches:
                 per_token.append((i, matches))
-        return [self._anchor(text, tokens, run, source_ref, channel) for run in self._runs(tokens, per_token)]
+        words_ = [self._anchor(text, tokens, run, source_ref, channel) for run in self._runs(tokens, per_token)]
+        return sorted([*ids, *words_], key=lambda m: m.span)
+
+    def _identifier_anchors(self, text: str, source_ref: str, channel: Channel) -> list[Mention]:
+        """Anchors of identifiers (tokens with a digit) that name rows by their key or a whole ``match`` value."""
+        out: list[Mention] = []
+        for found in _IDENTIFIER.finditer(text):
+            ident = found.group().rstrip(".-/#")
+            if len(ident) < 2 or not any(ch.isdigit() for ch in ident):
+                continue
+            if ident.isdigit() and not self._number_cue(text[: found.start()]):
+                continue
+            matches = self._identifier_matches(ident)
+            if matches:
+                start = found.start()
+                attrs = {"source": self.name, "matches": tuple(matches)}
+                out.append(Mention("anchor", ident, (start, start + len(ident)), None, None, channel, source_ref,
+                                   f"registry/{self.name}", attrs=attrs))  # fmt: skip
+        return out
+
+    def _number_cue(self, before: str) -> bool:
+        """Whether the word before a bare number marks it as an identifier (``ticket 1100``, ``no. 4411``)."""
+        last = _LAST_WORD.search(before)
+        if last is None:
+            return False
+        word = fold(last.group(1))
+        return word in _NUMBER_CUES or word in (fold(self.item), fold(self.item) + "s", fold(self.name))
+
+    def _identifier_matches(self, ident: str) -> list[Match]:
+        folded = fold(ident)
+        bare = folded.lstrip("#")
+        number = bare.lstrip("0") if bare.isdigit() and len(bare) >= MIN_ID_DIGITS else None
+        out: list[Match] = []
+        for index, row in enumerate(self.rows):
+            best: Match | None = None
+            for field in dict.fromkeys((self.key, *self.match)):
+                value = row.get(field)
+                for term in [str(value)] if isinstance(value, (int, str)) else field_terms(value):
+                    t = fold(term)
+                    if t in (folded, bare):
+                        best = Match(index, SCORES["exact"], "exact", field, term, ident)
+                        break
+                    tail = _TRAILING_NUMBER.search(t) if number and field == self.key else None
+                    if best is None and tail is not None and tail.group(1) == number:
+                        best = Match(index, SCORES["number"], "number", field, term, ident)
+                if best is not None and best.how == "exact":
+                    break
+            if best is not None:
+                out.append(best)
+        return sorted(out, key=lambda m: (-m.score, m.index))
 
     def _runs(
         self, tokens: Sequence[Token], per_token: list[tuple[int, list[Match]]]
