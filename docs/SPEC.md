@@ -458,6 +458,9 @@ T_TOOL_LOOP   T_TOOL + " Steps already taken are in `progress`."
   UNSUPPORTED   The user wants an action that none of the listed actions can perform.
   DONE          The steps in `progress` already complete everything `request` asks for.
   <tool label>  <tool description, first sentence, ≤ 200 chars>
+                [+ T_TOOL_MATCHES per identity REF slot, only when `tool.record_hints` = k > 0 (experimental, off):
+                " Existing records that match the request for {noun}: {label}, {label}, {label}." — the k
+                best-anchored records]
 
 PREMISE       Suppose the assistant will {intent} to fulfil `request`.
 T_SLOT        PREMISE + " " + {ask}
@@ -2538,6 +2541,7 @@ shadow = false
 min_p = 0.50
 min_margin = 0.20
 pair_cover = 0.85          # clarify between top-2 tools if they cover ≥ this, else escalate
+record_hints = 0           # experimental, off: name the k best-anchored records in tool options (DECISIONS)
 
 [shapes]
 out_of_pool = 0.30         # NONE_OF_THESE mass → widen / clarify(open)

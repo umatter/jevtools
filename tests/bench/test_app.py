@@ -176,3 +176,13 @@ def test_cli_bench_app_replays_and_controls() -> None:
     assert "Negative controls" in out.getvalue() and "| helpdesk | 13 | 100% | 0 | 0 |" in out.getvalue()
     assert main(["bench", "app", "--domains", "helpdesk", "--replays", "0"], out=io.StringIO(), err=err) == 1
     assert "--replays must be >= 1" in err.getvalue()
+
+
+def test_cli_bench_app_takes_a_policy(tmp_path: Path) -> None:
+    policy = tmp_path / "policy.toml"
+    policy.write_text('version = "hints"\n[tool]\nrecord_hints = 3\n', encoding="utf-8")
+    out, path = io.StringIO(), tmp_path / "app.json"
+    args = ["bench", "app", "--domains", "workspace", "--policy", str(policy), "--out", str(path)]
+    assert main(args, out=out, err=io.StringIO()) == 0
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert doc["meta"]["policy"] == "hints" and doc["summary"]["workspace"]["ceiling"] == 1.0

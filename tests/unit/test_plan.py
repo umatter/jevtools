@@ -226,3 +226,24 @@ def test_speculate_overrides() -> None:
                                                                  "get_auto": True}  # fmt: skip
     again = compile_round(catalog, Context(messages="get a"), speculate_only=["get_never"])
     assert {t.name: t.speculated for t in again.ballot.tools}["get_never"] is True
+
+
+def test_record_hints_name_the_anchored_records_only_when_on() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.bench.app import load_domain
+    from jevtools.eval.harness import router_factory_for
+    from jevtools.policy import Policy
+
+    case = next(c for c in load_domain("workspace") if c.id == "ws-01")  # "Open the Q3 board deck"
+
+    def tool_texts(policy: Policy | None) -> dict[str, str]:
+        ballot = router_factory_for(ScriptedBackend({}), policy=policy)(case).compile(case.messages)
+        return {str(o.value): str(o.text) for o in ballot.question("tool").options}
+
+    off = tool_texts(None)
+    assert not any("Existing records" in text for text in off.values())  # the default sends nothing new
+    on = tool_texts(Policy.from_dict({"tool": {"record_hints": 3}}))
+    hint = on["read_file"].removeprefix(off["read_file"])
+    assert hint.startswith(" Existing records that match the request for the file: ")
+    assert "board/2026-Q3_board_deck.pptx" in hint and hint.count(", ") == 2  # three records
+    assert on["search_files"] == off["search_files"]  # no record slot: no hint

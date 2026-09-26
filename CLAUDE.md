@@ -30,7 +30,7 @@ Generated artifacts, each with a checker that a test enforces:
 jevtools fixtures [--update] [--case R4]                 # golden conformance fixtures in tests/golden/
 python examples/fixtures/regenerate.py [--check]         # examples/fixtures/R*.answers.json + examples/proxy/data/
 python -m jevtools.bench.app._generate [--check]         # app-bench domain data under src/jevtools/bench/app/domains/
-jevtools bench app                                       # oracle ceiling on the 6 app domains (99 cases)
+jevtools bench app                                       # oracle ceiling on the 6 app domains (104 cases)
 jevtools bench bfcl [--download]                         # BFCL stress test (tests use the vendored sample in tests/bench/data)
 ```
 

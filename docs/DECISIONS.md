@@ -1777,3 +1777,26 @@ Extends "Documentation and final merge":
 - Live, 3 replays + controls (2026-09-25): false bindings 6 → **0** of 198; correct 82% → 81% (79/82/83 per replay,
   within run-to-run noise); the gate fired on no true case; 1 decision in 297 needed the follow-up round; input
   tokens per decision 2,817 → 3,315 (+18%).
+
+## Record hints (experimental, off by default)
+
+- Problem (measured): "Open the Q3 board deck" executed the read-only `search_files` in every replay (ws-01, ws-06,
+  ws-07), although the same request's `read_file.path` Choice put 1.00 on the right file. The `tool` Choice sees only
+  tool descriptions, so a request that describes a file instead of naming its path reads like a search.
+- Tried on the tool question alone (5 open-a-file and 5 search requests): a sharper search description moved 1 of 3;
+  "files in the workspace match the request" moved none; naming code's best-anchored file moved 9 of 10 to the right
+  tool, but code's top record is sometimes the wrong one (the Q1 deck for "the Q3 deck"); naming the top 3 kept 9 of
+  10 and put the open-a-file requests at 0.92–1.00, but turned "Is there a doc about the pricing change?" into
+  opening one.
+- `tool.record_hints` = k (default 0): the `tool` option of every considered tool gets `T_TOOL_MATCHES` for each
+  top-level identity REF slot whose pool the user's words anchored, naming its k best-anchored records. Off by
+  default, so Ballots are byte-identical without it; `jevtools bench app --policy` runs it. Five search cases whose
+  words also anchor files (ws-16 … ws-20) were added to the workspace domain first, since the bench had one.
+- Live, 104 cases × 3 replays + 198 controls, off vs k = 3: correct 82% → 83%, calls right 74% → 79%, wrong executions
+  9 → 3, controls 0 false bindings either way. It fixes the open-a-file cases (ws-01/06/07 0/3 → 3/3) and costs the
+  search cases with file words (100% → 67%, as tool menus or a search executed after all; none opened a file) and one
+  negation (bank-15 "Don't pay the gym…" → a tool menu instead of abstain).
+- It also exposed a masked miss: "Open the board deck" (three decks, gold: clarify) was right with hints off only
+  because the tool Choice was unsure (`P5.tool.ambiguous`); the path Choice already elected the newest deck. With the
+  tool certain, it executes the Q3 deck (read tier, no `verify`), and "Share the board deck…" confirms it. That is an
+  identity slot reading "the X" as the most recent X; it needs its own fix before hints can be the default.

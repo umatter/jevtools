@@ -883,6 +883,7 @@ def build_parser() -> argparse.ArgumentParser:
                                                "bundled ones")  # fmt: skip
     p.add_argument("--tags", action="store_true", help="app: also print the per-tag table")
     p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
+    p.add_argument("--policy", help="app: policy.toml for the run and its ceiling (default: Appendix B)")
     p.add_argument("--controls", action="store_true",
                    help="app: also run the negative controls (gold rows removed; counts false bindings)")  # fmt: skip
     p.add_argument("--data", default=None, help="BFCL data directory (default: <cache>/bfcl)")
@@ -952,8 +953,10 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     if args.replays < 1:
         print("jevtools bench: --replays must be >= 1", file=err)
         return 1
-    report = run_app(cases, backend, replays=args.replays, controls=args.controls,
-                     meta={"domains": list(names), "dir": args.dir, "replays": args.replays})  # fmt: skip
+    policy = Policy.from_toml(args.policy) if args.policy else None
+    report = run_app(cases, backend, replays=args.replays, controls=args.controls, policy=policy,
+                     meta={"domains": list(names), "dir": args.dir, "replays": args.replays,
+                           "policy": policy.version if policy is not None else None})  # fmt: skip
     print(f"app bench: {len(cases)} case(s) in {len(names)} domain(s) on {report.mode}", file=out)
     print(report.render(tags=args.tags), file=out)
     if report.mode == "oracle":

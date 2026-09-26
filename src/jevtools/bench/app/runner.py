@@ -31,6 +31,7 @@ from jevtools.eval.experiments import gold_removed, gold_removed_factory
 from jevtools.eval.harness import evaluate_case, router_factory_for
 from jevtools.eval.report import EvalRecord
 from jevtools.plan import compile_round
+from jevtools.policy import Policy
 
 DOMAINS = ("inbox", "crm", "banking", "workspace", "helpdesk", "research")
 """The bundled domains, in report order."""
@@ -225,9 +226,9 @@ def _summarize(records: Sequence[AppRecord]) -> dict[str, Any]:
     }
 
 
-def _oracle(case: EvalCase) -> tuple[EvalRecord, list[ParamCoverage]]:
+def _oracle(case: EvalCase, policy: Policy | None = None) -> tuple[EvalRecord, list[ParamCoverage]]:
     """Decide ``case`` with the oracle: the harness record and the per-parameter coverage."""
-    router = _oracle_router(case, removed=False)
+    router = _oracle_router(case, removed=False, policy=policy)
     return evaluate_case(case, router, keep_traces=False), router.backend.coverage()
 
 
@@ -238,24 +239,25 @@ def run_app(
     ceiling: bool = True,
     replays: int = 1,
     controls: bool = False,
+    policy: Policy | None = None,
     progress: Callable[[int, AppRecord], None] | None = None,
     meta: Mapping[str, Any] | None = None,
 ) -> AppReport:
     """Decide every ``(domain, case)`` with ``backend`` (``"oracle"`` for the ceiling alone) and score it. With
     ``ceiling`` (the default), a non-oracle run also decides each case with the oracle, once. A non-oracle run
     decides each case ``replays`` times; ``controls`` also runs the negative controls (gold rows removed), each
-    ``replays`` times."""
+    ``replays`` times. ``policy`` (default: Appendix B) applies to the backend and the oracle alike."""
     if replays < 1:
         raise ValueError("replays must be >= 1")
     pairs = list(cases)
     runs = 1 if backend == "oracle" else replays
-    factory = router_factory_for(backend) if backend != "oracle" else None
+    factory = router_factory_for(backend, policy=policy) if backend != "oracle" else None
     records: list[AppRecord] = []
     for index, (domain, case) in enumerate(pairs):
         reach: bool | None = None
         coverage: list[ParamCoverage] = []
         if backend == "oracle" or ceiling:
-            oracle_record, coverage = _oracle(case)
+            oracle_record, coverage = _oracle(case, policy)
             reach = oracle_record.correct
         for replay in range(runs):
             if factory is None:
@@ -269,14 +271,14 @@ def run_app(
                 progress(index, item)
     control_records: list[AppRecord] = []
     if controls:
-        control_records = _controls(pairs, backend, runs)
+        control_records = _controls(pairs, backend, runs, policy)
     mode = backend if isinstance(backend, str) else str(getattr(backend, "name", type(backend).__name__))
     return AppReport(mode=mode, records=records, meta=dict(meta or {}), controls=control_records)
 
 
-def _oracle_router(case: EvalCase, *, removed: bool) -> Any:
+def _oracle_router(case: EvalCase, *, removed: bool, policy: Policy | None = None) -> Any:
     oracle = OracleBackend(EvalGold(case, case.catalog_tools() or []))
-    factory = router_factory_for(oracle)
+    factory = router_factory_for(oracle, policy=policy)
     router = (gold_removed_factory(factory) if removed else factory)(case)
     oracle.plan = compile_round(router.catalog, router.context_for(case.messages), router.policy, mode="turn",
                                 limits=router.round_limits())  # fmt: skip
@@ -296,14 +298,16 @@ def control_cases(pairs: Iterable[tuple[str, EvalCase]]) -> list[tuple[str, Eval
     return out
 
 
-def _controls(pairs: Sequence[tuple[str, EvalCase]], backend: Any, runs: int) -> list[AppRecord]:
+def _controls(
+    pairs: Sequence[tuple[str, EvalCase]], backend: Any, runs: int, policy: Policy | None = None
+) -> list[AppRecord]:
     out: list[AppRecord] = []
     for domain, variant in control_cases(pairs):
         for replay in range(runs):
             if backend == "oracle":
-                router = _oracle_router(variant, removed=True)
+                router = _oracle_router(variant, removed=True, policy=policy)
             else:
-                router = gold_removed_factory(router_factory_for(backend))(variant)
+                router = gold_removed_factory(router_factory_for(backend, policy=policy))(variant)
             record = evaluate_case(variant, router, replay=replay, keep_traces=False)
             out.append(AppRecord(domain=domain, record=record, gold_slots=tuple(variant.gold.slots)))
     return out

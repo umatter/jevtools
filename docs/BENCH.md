@@ -35,7 +35,8 @@ From Python: `from jevtools.bench.app import run_domains; print(run_domains(back
 
 ### The domains
 
-Six synthetic apps with 99 labelled cases. The data is generated deterministically
+Six synthetic apps with 104 labelled cases (99 until 2026-09-26, when five search cases were added to
+workspace; the live sections below say which count they ran on). The data is generated deterministically
 (`python -m jevtools.bench.app._generate --check`) and ships with the package. Every domain runs at a fixed clock
 (Thursday 2026-09-24 14:05, Europe/Zurich) for the user Sam Muster.
 
@@ -90,10 +91,10 @@ jevtools 0.1.0 on 2026-09-25. These are the oracle's numbers, **not Jev's**.
 | inbox | 20 | 95% | 0 | 0/1 | plan 1 |
 | crm | 17 | 100% | 0 | 0/1 | |
 | banking | 16 | 100% | 0 | 0/1 | |
-| workspace | 15 | 100% | 0 | 0/1 | |
+| workspace | 20 | 100% | 0 | 0/1 | |
 | helpdesk | 16 | 100% | 0 | 0/1 | |
 | research | 15 | 100% | 0 | 0/1 | |
-| **all** | 99 | 99% | 0 | 0/6 | plan 1 |
+| **all** | 104 | 99% | 0 | 0/6 | plan 1 |
 
 The one miss is kept on purpose. In inbox-17, "Email the head of legal…", the role is only in the contact's
 `notes`, which is not a `match` field, so `send_email` is never asked about. An app would add a `role` field to
@@ -176,6 +177,24 @@ the request refers to; a no turns the card into a menu. Live, same settings (`--
 
 Per domain with `verify`: inbox 67%, crm 94%, banking 85%, workspace 73%, helpdesk 69%, research 100%. The change in
 accuracy is within run-to-run noise; the gate never fired on a case whose right record was present.
+
+### Record hints (experimental)
+
+`tool.record_hints = 3` names the best-anchored records in the tool options (DECISIONS "record hints"), to stop
+`search_files` winning over `read_file` when the user describes a file. Live, 2026-09-26, 104 cases × 3 replays with
+controls, `--policy` off vs on:
+
+| | Off (default) | `record_hints = 3` |
+|---|---:|---:|
+| Correct (pooled) | 82% (82 / 82 / 82) | 83% (83 / 84 / 82) |
+| Calls right | 74% | 79% |
+| Wrong executions | 9 | 3 |
+| Search cases (ws-08, ws-16 … ws-20) | 100% | 67% |
+| False bindings in 198 controls | 0 | 0 |
+
+Per domain, off → on: inbox 68 → 68%, crm 94 → 94%, banking 92 → 88%, workspace 78 → 82%, helpdesk 67 → 69%,
+research 96 → 100%. The 3 wrong executions with hints on are one case: "Open the board deck" opens the newest of
+three decks instead of asking which.
 
 ### What the app bench found and fixed
 

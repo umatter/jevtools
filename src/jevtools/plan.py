@@ -302,10 +302,12 @@ def inject_candidates(pool: Pool, extra: Sequence[Candidate], slot: SlotSpec, la
     })  # fmt: skip
 
 
-def tool_question(tools: Sequence[ToolSpec], *, choice: str, loop: bool, done: bool, label_max: int) -> BallotQuestion:
+def tool_question(tools: Sequence[ToolSpec], *, choice: str, loop: bool, done: bool, label_max: int,
+                  hints: Mapping[str, str] | None = None) -> BallotQuestion:  # fmt: skip
     """The ``tool`` Choice: tools in canonical label order, then ``NO_TOOL`` (unless ``required``),
-    ``UNSUPPORTED`` and ``DONE`` (loop mode after at least one step)."""
-    options = [BallotOption(label=label, value=tool.name, text=_tool_text(tool))
+    ``UNSUPPORTED`` and ``DONE`` (loop mode after at least one step). ``hints`` (tool name → text) are appended to
+    the options' descriptions (``tool.record_hints``)."""
+    options = [BallotOption(label=label, value=tool.name, text=_tool_text(tool) + (hints or {}).get(tool.name, ""))
                for label, tool in tool_labels(tools, label_max).items()]  # fmt: skip
     sentinels: dict[str, SentinelSpec] = {}
     if choice != "required":
@@ -470,11 +472,33 @@ class _Builder:
         if self.considered and self.choice != "named":
             loop = self.loop or is_loop(self.rc.ctx, self.rc.mode)
             done = bool(self.rc.ctx.all_observations())
+            hints = self._record_hints(policy.tool.record_hints)
             questions.append(tool_question(self.considered, choice=self.choice, loop=loop, done=done,
-                                           label_max=self.rc.limits.label_max))  # fmt: skip
+                                           label_max=self.rc.limits.label_max, hints=hints))  # fmt: skip
         for tool in tool_labels(speculated, self.rc.limits.label_max).values():
             questions += self._tool_questions(tool)
         return questions, records
+
+    def _record_hints(self, k: int) -> dict[str, str]:
+        """``tool.record_hints``: per tool, the ``k`` best-anchored records (match score, then pool order) of each
+        top-level identity REF slot whose pool the user's words anchored; empty when off."""
+        if k <= 0:
+            return {}
+        hints: dict[str, str] = {}
+        for tool in self.considered:
+            text = ""
+            for slot in tool.slots:
+                pool = self.pools.get((tool.name, slot.path))
+                if slot.kind != "ref" or slot.stakes != "identity" or len(slot.path) != 1 or pool is None:
+                    continue
+                anchored = [(float(c.prov.get("score", 0.0)), -i, c) for i, c in enumerate(pool.candidates)
+                            if "anchor" in c.prov]  # fmt: skip
+                if anchored:
+                    top = [c.label for _, _, c in sorted(anchored, key=lambda t: (-t[0], -t[1]))[:k]]
+                    text += templates.tool_matches_text(slot.noun, top)
+            if text:
+                hints[tool.name] = text
+        return hints
 
     def _speculate(self, tool: ToolSpec, viable: str) -> bool:
         """Viable tools are speculated; ``x-jev.speculate`` overrides (``never`` yields to an explicit request: a

@@ -19,7 +19,7 @@ per-question probabilities, not itself a calibrated probability. It becomes one 
 labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
 > **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green. **Live Jev has been measured on the
-> app-domain benchmark** (99 cases × 3 replays, OpenRouter, 2026-09-25): 81% correct against a 99% ceiling, no
+> app-domain benchmark** (104 cases × 3 replays, OpenRouter, 2026-09-26): 82% correct against a 99% ceiling, no
 > planted value reaching a call, and no call shown for a wrong record in 198 negative controls (cases whose right
 > record was removed) ([Benchmarks](#benchmarks)). That is one benchmark on synthetic apps, not a calibration. Every
 > other number in this README (probabilities, confidences, token counts in examples and fixtures) comes from the
@@ -54,8 +54,8 @@ or an analysis assistant over your datasets. What you get there:
   `C6H12O6` from "glucose");
 - several calls in one turn, or multi-step plans (one call per turn; `jt.Agent` runs step by step).
 
-The bundled **app-domain benchmark** measures the good fit: six synthetic apps, 99 labelled cases, including
-collisions, typed IDs, relative dates, critical transfers and planted injections. The oracle ceiling is 98 of 99
+The bundled **app-domain benchmark** measures the good fit: six synthetic apps, 104 labelled cases, including
+collisions, typed IDs, relative dates, critical transfers and planted injections. The oracle ceiling is 103 of 104
 (`jevtools bench app`, [docs/BENCH.md](docs/BENCH.md)). **BFCL** is the stress test outside it, with a ceiling of
 35–42% on its single-call categories. See [Benchmarks](#benchmarks).
 
@@ -480,6 +480,9 @@ ticket, deal, account, file…) is the one the request refers to, and not a look
 `verify` question is asked in the same call for the best-matched records, so it rarely costs a second round. A
 record the user typed by its key (`INC-1052`) needs no check; a doubted one becomes a menu (`P9.<tier>.unverified`).
 
+An experimental `tool.record_hints` (off by default) names the matching records in the tool question, so "Open the
+Q3 board deck" is not read as a search; it trades errors, see [docs/BENCH.md](docs/BENCH.md) "Record hints".
+
 These defaults are **priors, not measurements** (SPEC §3.8.3, Appendix B). A value within 0.03 of a threshold
 takes the safer side. The critical tier stays confirm-only until `jevtools tune` has certified it on ≥ 3,000
 labelled cases. Override any part in TOML; everything you leave out keeps its default:
@@ -544,19 +547,19 @@ come out at all, given the candidates code nominated. With a key, `--backend aut
 accuracy next to the ceiling ("within ceiling" is then Jev's judgment on the cases jevtools can get right).
 
 **App domains (the good fit).** `jevtools bench app` covers six synthetic apps (inbox, crm, banking, workspace,
-helpdesk, research) with 99 cases. They include collisions ("Email Anna" with two Annas), typed IDs ("Assign ticket
+helpdesk, research) with 104 cases. They include collisions ("Email Anna" with two Annas), typed IDs ("Assign ticket
 1100 to Aisha"), relative dates ("since September 1"), described enums ("high priority" → P2), critical transfers
 with balance constraints, coreference and six injections planted in observations.
 
 | | inbox | crm | banking | workspace | helpdesk | research | all |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| cases | 20 | 17 | 16 | 15 | 16 | 15 | 99 |
+| cases | 20 | 17 | 16 | 20 | 16 | 15 | 104 |
 | ceiling (oracle, not Jev) | 95% | 100% | 100% | 100% | 100% | 100% | 99% |
-| live Jev, 3 replays (2026-09-25) | 67% | 94% | 85% | 73% | 69% | 100% | 81% |
+| live Jev, 3 replays (2026-09-26) | 68% | 94% | 92% | 78% | 67% | 96% | 82% |
 
 The oracle makes no wrong executions and lets no planted value reach a call; its one miss names a contact by a role
 that the app's data does not expose to matching. Live Jev let no planted value reach a call either (0 of 18). Its
-wrong executions (9 of 297) are all the read-only `search_files` chosen instead of opening a file, and most of its
+wrong executions (9 of 312) are all the read-only `search_files` chosen instead of opening a file, and most of its
 other misses are clarify menus where the right call was bound but fell below the tier's prior thresholds (untuned).
 `--controls` adds **negative controls**, each case with its right record removed: live Jev showed a call for a wrong
 record in none of 198, after the look-alike check (`verify`, below) closed the 6 it made before. The whole-bench
@@ -598,7 +601,7 @@ These are condensed from SPEC §14.
 - **Thresholds are priors.** They mean something only after `jevtools eval` + `tune` on your own labelled traffic,
   and they do not transfer across datasets.
 - **Coverage is the ceiling.** Jev cannot elect a value that code did not nominate. Over an app's own data the
-  oracle ceiling is high (98 of 99 on the app-domain bench). Outside that setting it is low: 35–42% on BFCL's
+  oracle ceiling is high (103 of 104 on the app-domain bench). Outside that setting it is low: 35–42% on BFCL's
   single-call categories (docs/BENCH.md), mostly because extractors miss values that are in the text. When a value
   is missed, the best case is `NONE_OF_THESE`, which leads to widen or clarify. The worst case is a confident wrong
   election among distractors: live, with the right record removed, Jev elected a record sharing one word with the

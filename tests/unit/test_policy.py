@@ -16,6 +16,7 @@ shadow = false
 min_p = 0.50
 min_margin = 0.20
 pair_cover = 0.85
+record_hints = 0
 
 [shapes]
 out_of_pool = 0.30

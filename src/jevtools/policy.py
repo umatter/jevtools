@@ -90,6 +90,10 @@ class ToolPolicy(_Section):
     min_margin: float = 0.20
     pair_cover: float = 0.85
     """Clarify between the top-2 tools if they cover at least this much mass, else escalate."""
+    record_hints: int = 0
+    """Experimental, off (0): name up to this many records the request matches (best-anchored first) in the ``tool``
+    option of each tool that takes one, so the tool Choice knows a matching record exists (§3.5.4 ``T_TOOL_MATCHES``;
+    DECISIONS "record hints")."""
 
 
 class ShapePolicy(_Section):

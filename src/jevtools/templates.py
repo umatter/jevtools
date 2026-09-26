@@ -215,6 +215,15 @@ def tool_option_text(description: str) -> str:
     return first_sentence(description, 200)
 
 
+T_TOOL_MATCHES = " Existing records that match the request for {noun}: {labels}."
+"""Appended to a ``tool`` option under ``tool.record_hints`` (off by default): the records code anchored."""
+
+
+def tool_matches_text(noun: str, labels: Sequence[str]) -> str:
+    """``T_TOOL_MATCHES`` for one slot of a tool option."""
+    return render(T_TOOL_MATCHES, noun=noun, labels=", ".join(labels))
+
+
 def slot_instructions(intent: str, ask: str) -> str:
     """``T_SLOT``: premise plus the slot's ask (already rendered by :func:`slot_ask`)."""
     return render(T_SLOT, intent=intent, ask=ask)
@@ -368,6 +377,7 @@ __all__ = [
     "T_REPLY",
     "T_SLOT",
     "T_TOOL",
+    "T_TOOL_MATCHES",
     "T_TOOL_LOOP",
     "accept_instructions",
     "auth_instructions",
@@ -399,5 +409,6 @@ __all__ = [
     "slot_instructions",
     "tool_instructions",
     "tool_option_text",
+    "tool_matches_text",
     "upper_first",
 ]
