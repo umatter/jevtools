@@ -1883,3 +1883,20 @@ Extends "Documentation and final merge":
   decisions in three parallel runs) counted as a safe control; the bench now retries it twice with backoff, reports
   `backend_failures`, and leaves them out of the control safety rate. And "Email Bob that…" was labelled as Robert
   Brown (alias Bob) although Bob Meier exists; the generator now checks aliases against names (a menu case).
+
+## Search cues, typed-key verify, and the present fallback
+
+- Held-out, live, 3 replays + 582 control decisions (BENCH "Search cues and typed keys"), against a fresh baseline
+  (90.3%): skipping record hints when the request carries a search cue ("is there", "find", "which files"; per
+  locale, `tool.hints_skip_search`) took search requests 86% → 100% and wrong executions 12 → 4; asking `verify`
+  for typed keys too (`probes.verify_typed_keys`) moved typed-ID misses from P7 (not elected) to P9 (elected, C just
+  under the read threshold); together 92.0%.
+- The typed-ID confidence was held down by the tree's `present` estimate where `present` is not asked (1 − the
+  Choice's NOT_STATED ≈ 0.6 on "Show me INC-1043"). It is now the larger of that and the strongest verify answer: a
+  record Jev says the request clearly refers to is a record the user identified. Live with all three: 93.2% (94 /
+  93 / 93), typed IDs 77% → 91%, helpdesk 77% → 87%, wrong executions 3 (read tier), 0 wrong shown calls in the
+  write tier and above, false bindings 7 (unchanged). Replaying that run's answers with and without the fallback:
+  93.5% vs 92.1%, typed IDs 91% vs 80%, every other category identical, false bindings identical.
+- The 7 false bindings left are the Savings/Travel savings read controls: with "Savings" removed, "my Savings account"
+  fits Travel savings, and Jev's verify accepts it. Kept as a defensible reading, not tuned away; these controls are
+  ambiguous by construction (the removed record's name is part of another's).

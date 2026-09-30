@@ -68,7 +68,10 @@ def test_the_verify_candidate_carries_the_match_note() -> None:
 
 def test_a_typed_key_needs_no_verify() -> None:
     case = next(c for c in load_domain("helpdesk") if c.id == "hd-01")  # "Assign INC-1052 to Leo"
-    qids = [q.qid for q in router_factory_for(ScriptedBackend({}))(case).compile(case.messages).questions]
+    policy = Policy.from_dict({"probes": {"verify_typed_keys": False}})
+    qids = [
+        q.qid for q in router_factory_for(ScriptedBackend({}), policy=policy)(case).compile(case.messages).questions
+    ]
     assert any(q.startswith("assign_ticket.assignee.verify.") for q in qids)  # "Leo": a name, verified
     assert not any(q.startswith("assign_ticket.ticket_id.verify.") for q in qids)  # "INC-1052": typed, not
 
@@ -128,3 +131,14 @@ def test_the_oracle_says_not_unique_only_where_the_gold_wants_a_menu() -> None:
     assert ambiguous.trace.gates["unique.path"] < 0.5 and ambiguous.outcome is Outcome.CLARIFY
     several_fine = _oracle_router(cases["ws-05"], removed=False, policy=policy).decide(cases["ws-05"].messages)
     assert several_fine.trace.gates["unique.destination"] > 0.5  # two acceptable folders, but no menu wanted
+
+
+def test_verify_typed_keys_asks_about_a_typed_key_when_on() -> None:
+    case = next(c for c in load_domain("helpdesk") if c.id == "hd-01")  # "Assign INC-1052 to Leo"
+
+    def verified(policy: Policy | None) -> list[str]:
+        ballot = router_factory_for(ScriptedBackend({}), policy=policy)(case).compile(case.messages)
+        return [q.qid for q in ballot.questions if q.family == "verify" and q.qid.startswith("assign_ticket.ticket_id")]
+
+    assert verified(Policy.from_dict({"probes": {"verify_typed_keys": False}})) == []
+    assert verified(None) == ["assign_ticket.ticket_id.verify.0"]  # the default: evidence for the hybrid decoder

@@ -224,6 +224,18 @@ EN = Locale(
         ("cheapest",): "cheapest",
     },
     hedges=_fs("how should would if draft don't not never maybe could"),
+    search_cues=(
+        ("search",),
+        ("find",),
+        ("look", "for"),
+        ("is", "there"),
+        ("are", "there"),
+        ("do", "we", "have"),
+        ("which", "files"),
+        ("which", "documents"),
+        ("anything", "about"),
+        ("anything", "on"),
+    ),  # fmt: skip
     chitchat=(
         ("joke",),
         ("hello",),

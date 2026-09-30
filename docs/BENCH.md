@@ -305,6 +305,25 @@ Per domain: inbox 52 → 87%, crm 98 → 98%, banking 98 → 97%, workspace 91 �
 98%. The 12 wrong executions are the search requests read as opening a file (record hints); the 8 false bindings are
 "my Savings account" with Savings removed shown as Travel savings.
 
+### Search cues and typed keys (the defaults)
+
+Live, 2026-09-30, held-out, 3 replays, 582 control decisions per column, no backend failures:
+
+| | Baseline | Search cue | Typed-key verify | Both | Both + present fallback |
+|---|---:|---:|---:|---:|---:|
+| Correct (pooled) | 90.3% | 90.8% | 90.5% | 92.0% | **93.2%** (94 / 93 / 93) |
+| Calls right | 89.1% | 90.2% | 89.6% | 91.4% | **93.2%** |
+| Search requests | 86% | 100% | 86% | 100% | **100%** |
+| Typed IDs | 77% | 73% | 77% | 78% | **91%** |
+| Wrong executions | 12 | 4 | 11 | 3 | **3** |
+| Wrong calls shown, write tier and above | 0 | 0 | 0 | 0 | **0** |
+| False bindings in controls | 7 | 7 | 7 | 9 | 7 |
+| Input tokens per decision | 4,551 | 4,533 | 4,623 | 4,606 | 4,606 |
+
+Per domain (baseline → final): inbox 86 → 87%, crm 97 → 96%, banking 97 → 100%, workspace 91 → 97%, helpdesk 77 →
+87%, research 99 → 97%. On the final run's recorded answers, removing only the present fallback gives 92.1% (typed
+IDs 80%) with every other category unchanged.
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.

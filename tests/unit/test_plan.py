@@ -247,3 +247,22 @@ def test_record_hints_name_the_anchored_records_unless_off() -> None:
     assert hint.startswith(" Existing records that match the request for the file: ")
     assert "board/2026-Q3_board_deck.pptx" in hint and hint.count(", ") == 2  # three records
     assert on["search_files"] == off["search_files"]  # no record slot: no hint
+
+
+def test_record_hints_skip_requests_that_ask_to_find_records() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.bench.app import load_domain
+    from jevtools.eval.harness import router_factory_for
+    from jevtools.policy import Policy
+
+    policy = Policy()  # the default skips hints on search cues
+    always = Policy.from_dict({"tool": {"hints_skip_search": False}})
+    cases = {c.id: c for c in load_domain("workspace")}
+
+    def hinted(case_id: str, p: Policy | None) -> bool:
+        c = cases[case_id]
+        ballot = router_factory_for(ScriptedBackend({}), policy=p)(c).compile(c.messages)
+        return any("Existing records" in str(o.text) for o in ballot.question("tool").options)
+
+    assert hinted("ws-16", always) and not hinted("ws-16", policy)  # "Is there a doc about the pricing change?"
+    assert hinted("ws-01", policy)  # "Open the Q3 board deck": no search cue, the hints stay

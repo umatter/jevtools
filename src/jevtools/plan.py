@@ -484,6 +484,10 @@ class _Builder:
         top-level identity REF slot whose pool the user's words anchored; empty when off."""
         if k <= 0:
             return {}
+        if self.rc.policy.tool.hints_skip_search and any(
+            m.attrs.get("cue") == "search" for m in self.rc.get_mentions().of("cue", source_ref="request")
+        ):
+            return {}
         hints: dict[str, str] = {}
         for tool in self.considered:
             text = ""

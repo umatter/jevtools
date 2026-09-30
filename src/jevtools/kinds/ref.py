@@ -203,7 +203,9 @@ class RefResolver(ChoiceResolver):
         if real >= 2 and self._probe(slot.probe_reverse, tool, rc.policy.probes.reverse):
             out.append(self.rev_question(tool, base[0]))
         if slot.stakes == "identity" and len(slot.path) == 1 and tool.tier in rc.policy.probes.verify:
-            anchored = [o for o in self.best_anchored(base[0], pool, rc.policy.pools.verify_k) if not self.typed_key(o)]
+            typed_ok = rc.policy.probes.verify_typed_keys
+            anchored = [o for o in self.best_anchored(base[0], pool, rc.policy.pools.verify_k)
+                        if typed_ok or not self.typed_key(o)]  # fmt: skip
             out += [self.verify_question(tool, slot, option, i) for i, option in enumerate(anchored)]
         if slot.stakes == "identity" and len(slot.path) == 1 and real >= 2 and tool.tier in rc.policy.probes.unique:
             out.append(self.unique_question(tool, slot, base[0], pool, rc.policy.pools.unique_k))
@@ -281,6 +283,7 @@ class RefResolver(ChoiceResolver):
         )
 
     def verify(self, tool: ToolSpec, slot: SlotSpec, option: BallotOption, index: int) -> BallotQuestion | None:
+        # the follow-up round keeps skipping typed keys: they are verified in the first round (verify_typed_keys)
         """The :class:`~jevtools.kinds.base.Verifiable` hook: the follow-up ``verify`` Noul (``None``: typed key)."""
         return None if self.typed_key(option) else self.verify_question(tool, slot, option, index)
 
@@ -414,8 +417,10 @@ class RefResolver(ChoiceResolver):
             return None
         present_q = questions.get("present")
         present = answers.get(present_q.qid) if present_q is not None else None
-        p_present = present.noul if isinstance(present, NoulAnswer) else 1.0 - float(
-            choice.probabilities.get(NOT_STATED, 0.0))  # fmt: skip
+        # Without a present Noul: 1 − the Choice's NOT_STATED, or the strongest verify answer when higher (a record
+        # Jev says the request clearly refers to is a record the user identified, e.g. a typed "INC-1043").
+        p_present = present.noul if isinstance(present, NoulAnswer) else max(
+            1.0 - float(choice.probabilities.get(NOT_STATED, 0.0)), max(verified.values()))  # fmt: skip
         weights: dict[str, float] = {}
         for label, v in verified.items():
             others = [1.0 - u for other, u in verified.items() if other != label]

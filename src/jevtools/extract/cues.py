@@ -1,4 +1,4 @@
-"""Cue words (spec §4.2.1, §4.2.8): negation, superlative, hedge, chit-chat and anaphor cues.
+"""Cue words (spec §4.2.1, §4.2.8): negation, superlative, hedge, chit-chat, anaphor and search cues.
 
 Cues are ``cue`` mentions with ``attrs["cue"]`` naming the family and ``attrs["canonical"]`` the normalized cue
 (``most recent`` → ``latest``). They never claim text and are never claimed.
@@ -69,7 +69,7 @@ def extract(source: SourceText) -> list[Mention]:
                 after = tokens[i + len(phrase)].folded if i + len(phrase) < len(tokens) else ""
                 if after not in _TEMPORAL_NEXT:
                     out.append(_cue(source, tokens, i, len(phrase), "superlative", canonical))
-        for family, phrases in (("chitchat", loc.chitchat), ("anaphor", loc.anaphors)):
+        for family, phrases in (("chitchat", loc.chitchat), ("anaphor", loc.anaphors), ("search", loc.search_cues)):
             for phrase in phrases:
                 for i in _positions(tokens, phrase):
                     out.append(_cue(source, tokens, i, len(phrase), family, " ".join(phrase)))

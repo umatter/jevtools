@@ -90,6 +90,9 @@ class ToolPolicy(_Section):
     min_margin: float = 0.20
     pair_cover: float = 0.85
     """Clarify between the top-2 tools if they cover at least this much mass, else escalate."""
+    hints_skip_search: bool = True
+    """No record hints when the request carries a search cue ("find", "is there"): the user wants to
+    know which records exist, and naming the matches pushed such requests to open one (DECISIONS)."""
     record_hints: int = 3
     """Name up to this many records the request matches (best-anchored first) in the ``tool`` option of each tool that
     takes one, so the tool Choice knows a matching record exists (§3.5.4 ``T_TOOL_MATCHES``; DECISIONS "record hints");
@@ -163,6 +166,9 @@ class ProbePolicy(_Section):
 
     present: tuple[Tier, ...] = (Tier.EXTERNAL, Tier.CRITICAL)
     reverse: tuple[Tier, ...] = (Tier.CRITICAL,)
+    verify_typed_keys: bool = True
+    """Ask ``verify`` for a record the user typed by its key too ("INC-1043"), so the hybrid decoder
+    has per-record evidence where the Choice hedges on exact IDs (DECISIONS)."""
     slot_decider: Literal["choice", "tree", "hybrid_max", "hybrid_safe"] = "hybrid_max"
     """What decides an identity REF slot. ``choice``: its Choice. ``tree``: its ``present``
     and ``verify`` Nouls, P(record i) = P(present) · w_i / Σ, w_i = v_i · Π_{j≠i}(1 − v_j), w_none = Π(1 − v_j) for

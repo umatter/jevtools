@@ -115,6 +115,7 @@ FR = Locale(
     and_words=_fs("et -"),
     currency_words={"franc": "CHF", "francs": "CHF", "fr": "CHF", "chf": "CHF", "euro": "EUR", "euros": "EUR"},
     negations=_fs("pas sauf sans ne excepte"),
+    search_cues=(("cherche",), ("trouve",), ("y", "a", "t", "il"), ("avons", "nous"), ("quels",), ("quelles",)),
 )
 
 __all__ = ["FR"]

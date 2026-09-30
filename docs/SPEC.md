@@ -426,7 +426,7 @@ P        := sanitized param path, segments joined by "."; a segment equal to a r
 | probe | `T.P` | Choice: `NOT_STATED`, `NONE_OF_THESE` only | pool empty *and* slot has a default | P(default) vs P(stated but uncovered) |
 | present | `T.P.present` | Noul | REF slots of tier external or critical | consistency check (not a factor) |
 | rev | `T.P.rev` | Choice: same options, real candidates in *reverse* canonical order | REF slots with ≥ 2 real candidates in critical tier (config `probes.reverse`) | f = min(fwd, rev); disagreement flag |
-| verify | `T.P.verify.i` | Noul (`T_VERIFY`; the candidate is the record's label and match note) | top-level identity REF slots in tiers `probes.verify` (all four by default): the `pools.verify_k` = 3 best-anchored records, except a key the user typed; in a follow-up round, the elected record when the first round did not verify it (§3.8.3) | gate on the elected record (not a factor) |
+| verify | `T.P.verify.i` | Noul (`T_VERIFY`; the candidate is the record's label and match note) | top-level identity REF slots in tiers `probes.verify` (all four by default): the `pools.verify_k` = 3 best-anchored records, typed keys included (`probes.verify_typed_keys`); in a follow-up round, the elected record when the first round did not verify it (§3.8.3) | gate on the elected record (not a factor) |
 | unique | `T.P.unique` | Noul (`T_UNIQUE`; `options` lists up to `pools.unique_k` = 10 options, best-anchored first) | experimental, off: top-level identity REF slots with ≥ 2 real candidates in tiers `probes.unique` | gate on the slot (not a factor) |
 | date / time | `T.P.date`, `T.P.time` | Choice each | temporal with > 24 complete readings | f_date · f_time |
 | accept | `T.P.accept.i` | Noul (content or cosmetic template) | TEXT slots: one per candidate (≤ 4 content, ≤ 3 cosmetic) | elected = argmax; f = n(elected) |
@@ -722,7 +722,7 @@ This handles the case "the argmax tool is infeasible but the runner-up is fully 
 
 **Look-alike check (`P9.<tier>.unverified`).** A call about to be shown (execute or confirm, not a click the user
 made) in a tier of `probes.verify` (every tier by default; reads since the held-out bench) needs, for each top-level identity REF slot, a `verify` Noul on its *elected*
-record, unless the user typed that record's key or bound it by a click. The first round asks it for the
+record, unless the user bound it by a click. The first round asks it for the
 `pools.verify_k` best-anchored records; when Jev elects another one, the router asks it in one same-state follow-up
 round. A verify answer below `shapes.verify_min` = 0.50 turns the call into `clarify(menu)` on that slot (reason
 `verify`). It is a gate, not a factor: C is unchanged. It exists because Jev's slot Choice, with the requested record
@@ -732,7 +732,7 @@ missing, can confidently elect a record that merely shares a word with the reque
 **Deciding a record slot (`probes.slot_decider`, default `hybrid_max`).** A top-level identity REF slot has two
 readings: its Choice, and a question tree over its `present` and `verify` Nouls, P(i) = P(present) · w_i / (Σw +
 w_none) with w_i = v_i · Π_{j≠i}(1 − v_j), w_none = Π(1 − v_j) for NONE_OF_THESE and NOT_STATED = 1 − P(present)
-(1 − the Choice's NOT_STATED where `present` is not asked). When their top labels agree, the reading more confident in
+(where `present` is not asked: the larger of 1 − the Choice's NOT_STATED and the strongest verify answer). When their top labels agree, the reading more confident in
 it decides; when they disagree, the tree decides only if the verify Nouls single out one record (P > 0.5, every other
 < 0.5) and it is the tree's top, else the Choice. The Choice hedges on exact names ("Email Lisa Wong…": Lisa Wong
 0.24, NOT_STATED 0.55) where the per-record Nouls do not (0.86 vs 0.10–0.21); it is sharper where it is right.
@@ -2560,6 +2560,7 @@ min_p = 0.50
 min_margin = 0.20
 pair_cover = 0.85          # clarify between top-2 tools if they cover ≥ this, else escalate
 record_hints = 3           # name the k best-anchored records in tool options; 0 = off (DECISIONS)
+hints_skip_search = true   # no hints when the request asks to find records ("is there…", "find…")
 
 [shapes]
 out_of_pool = 0.30         # NONE_OF_THESE mass → widen / clarify(open)
@@ -2605,6 +2606,7 @@ reverse = ["critical"]               # REF slots with ≥ 2 real candidates
 verify = ["read", "write", "external", "critical"]   # identity REF slots of a shown call (§3.8.3)
 unique = []                                  # experimental, off: tiers that ask "does the request single out one?"
 slot_decider = "hybrid_max"   # identity REF slots: Choice and verify tree combined (§3.6); "choice" = Choice alone
+verify_typed_keys = true      # verify also a record the user typed by its key ("INC-1043")
 
 [widen]
 max_rounds = 2

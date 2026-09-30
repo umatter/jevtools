@@ -17,6 +17,7 @@ min_p = 0.50
 min_margin = 0.20
 pair_cover = 0.85
 record_hints = 3
+hints_skip_search = true
 
 [shapes]
 out_of_pool = 0.30
@@ -61,6 +62,7 @@ reverse = ["critical"]
 verify = ["read", "write", "external", "critical"]
 unique = []
 slot_decider = "hybrid_max"
+verify_typed_keys = true
 
 [widen]
 max_rounds = 2

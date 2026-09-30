@@ -129,6 +129,7 @@ DE = Locale(
     and_words=_fs("und bis -"),
     currency_words={"franken": "CHF", "fr": "CHF", "chf": "CHF", "euro": "EUR", "eur": "EUR", "dollar": "USD"},
     negations=_fs("nicht ohne ausser ausser kein keine ausgenommen"),
+    search_cues=(("suche",), ("such",), ("finde",), ("gibt", "es"), ("haben", "wir"), ("welche",)),
 )
 
 __all__ = ["DE"]

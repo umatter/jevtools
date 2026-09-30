@@ -77,6 +77,8 @@ class Locale:
     """Cue phrase → canonical cue (``most recent`` → ``latest``)."""
     hedges: frozenset[str] = frozenset()
     chitchat: tuple[Phrase, ...] = ()
+    search_cues: tuple[Phrase, ...] = ()
+    """Phrases asking to find out which records exist ("find", "is there"), not to act on one the user has in mind."""
     anaphors: tuple[Phrase, ...] = ()
     day_part_homographs: Mapping[str, tuple[int, int]] = field(default_factory=dict)
     """Relative-day words that are also a day-part noun (de ``Morgen``: tomorrow / morning): read as the day part

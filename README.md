@@ -19,8 +19,8 @@ per-question probabilities, not itself a calibrated probability. It becomes one 
 labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
 > **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green. **Live Jev has been measured on the
-> app-domain benchmark**, on its 284 held-out cases (× 3 replays, OpenRouter, 2026-09-30): 90% correct against a 100%
-> ceiling, no wrong call on a write, send or payment tool, and 8 of 582 negative-control decisions (the right record
+> app-domain benchmark**, on its 284 held-out cases (× 3 replays, OpenRouter, 2026-09-30): 93% correct against a 100%
+> ceiling, no wrong call on a write, send or payment tool, and 7 of 582 negative-control decisions (the right record
 > removed) showing a wrong record, all read-only balance look-ups ("my Savings account" → Travel savings)
 > ([Benchmarks](#benchmarks)). That is one benchmark on synthetic apps, not a calibration. Every other number in this
 > README (probabilities, confidences, token counts in examples and fixtures) comes from the scripted backend, the
@@ -478,12 +478,12 @@ notifies people (attendees) is raised to external.
 A record slot is decided by two readings of Jev's answers: its multiple-choice question and the per-record yes/no
 questions ("is this the one the request refers to?"). When they disagree, the yes/no answers win only if they single
 out one record; the multiple-choice question alone hedged on exact names ("Email Lisa Wong…"), and combining them
-took the held-out bench from 82% to 90% at no extra cost ([docs/BENCH.md](docs/BENCH.md) "Hybrid slot decoding").
+took the held-out bench from 82% to 90% at no extra cost (93% with the search cues and typed-key checks) ([docs/BENCH.md](docs/BENCH.md) "Hybrid slot decoding").
 
 In every tier, a call is shown only if Jev also confirms each chosen record (a contact,
 ticket, deal, account, file…) is the one the request refers to, and not a look-alike that shares a word with it. The
-`verify` question is asked in the same call for the best-matched records, so it rarely costs a second round. A
-record the user typed by its key (`INC-1052`) needs no check; a doubted one becomes a menu (`P9.<tier>.unverified`).
+`verify` question is asked in the same call for the best-matched records, typed keys (`INC-1052`) included, so it
+rarely costs a second round; a doubted record becomes a menu (`P9.<tier>.unverified`).
 
 The tool question also names up to three records the request matches (`tool.record_hints = 3`), so "Open the Q3
 board deck" is read as opening that file, not as a search; on the held-out bench it took wrong executions from 29 to
