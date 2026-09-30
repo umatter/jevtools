@@ -19,12 +19,12 @@ per-question probabilities, not itself a calibrated probability. It becomes one 
 labelled traffic (`jevtools tune --calibrate`); until then every Decision reports `confidence.calibrated == False`.
 
 > **Status: v0.1.0, protocol `jevtools/0.1`.** The offline test suite is green. **Live Jev has been measured on the
-> app-domain benchmark** (104 cases × 3 replays, OpenRouter, 2026-09-26): 82% correct against a 99% ceiling, no
-> planted value reaching a call, and no call shown for a wrong record in 198 negative controls (cases whose right
-> record was removed) ([Benchmarks](#benchmarks)). That is one benchmark on synthetic apps, not a calibration. Every
-> other number in this README (probabilities, confidences, token counts in examples and fixtures) comes from the
-> scripted backend, the offline `LexicalSimulator` or the benchmark oracle, and is never evidence about Jev's
-> accuracy.
+> app-domain benchmark**, on its 284 held-out cases (× 3 replays, OpenRouter, 2026-09-30): 90% correct against a 100%
+> ceiling, no wrong call on a write, send or payment tool, and 8 of 582 negative-control decisions (the right record
+> removed) showing a wrong record, all read-only balance look-ups ("my Savings account" → Travel savings)
+> ([Benchmarks](#benchmarks)). That is one benchmark on synthetic apps, not a calibration. Every other number in this
+> README (probabilities, confidences, token counts in examples and fixtures) comes from the scripted backend, the
+> offline `LexicalSimulator` or the benchmark oracle, and is never evidence about Jev's accuracy.
 
 ## Where it fits
 
@@ -474,6 +474,11 @@ notifies people (attendees) is raised to external.
 | write | Π | 0.70 | 0.45 | `authorized` ≥ 0.80; content text accepted ≥ 0.70 |
 | external | Π | 0.80 | 0.50 | `authorized` ≥ 0.90; content text accepted ≥ 0.80 |
 | critical | min(L, J) | never, unless certified | 0.80 | channels ⊆ {user, registry, author}; the joint Choice agrees |
+
+A record slot is decided by two readings of Jev's answers: its multiple-choice question and the per-record yes/no
+questions ("is this the one the request refers to?"). When they disagree, the yes/no answers win only if they single
+out one record; the multiple-choice question alone hedged on exact names ("Email Lisa Wong…"), and combining them
+took the held-out bench from 82% to 90% at no extra cost ([docs/BENCH.md](docs/BENCH.md) "Hybrid slot decoding").
 
 In every tier, a call is shown only if Jev also confirms each chosen record (a contact,
 ticket, deal, account, file…) is the one the request refers to, and not a look-alike that shares a word with it. The

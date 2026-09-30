@@ -18,9 +18,11 @@ coverage misses from the model's own choices ("within ceiling").
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -156,15 +158,18 @@ class AppReport:
                 "flips": sum(len(v) > 1 for v in by_case.values())}  # fmt: skip
 
     def control_summary(self) -> dict[str, dict[str, Any]]:
-        """Per domain (and ``ALL``): ``n``; ``safe`` (no call shown, or the gold call because the user typed its
-        value); ``false_bindings`` and ``wrong_executions`` (counts); ``outcomes``."""
+        """Per domain (and ``ALL``): ``n``; ``safe`` (no call shown) over the decisions that reached Jev;
+        ``false_bindings`` and ``wrong_executions`` (counts); ``backend_failures`` (decisions that failed closed at
+        the backend: not evidence of safety, so left out of ``safe``); ``outcomes``."""
         out: dict[str, dict[str, Any]] = {}
         domains = dict.fromkeys(r.domain for r in self.controls)
         groups = {d: [r for r in self.controls if r.domain == d] for d in domains}
         if len(groups) > 1:
             groups["ALL"] = self.controls
         for key, records in groups.items():
-            out[key] = {"n": len(records), "safe": _rate(records, lambda r: not r.false_binding),
+            reached = [r for r in records if r.record.stage != "backend"]
+            out[key] = {"n": len(records), "safe": _rate(reached, lambda r: not r.false_binding),
+                        "backend_failures": len(records) - len(reached),
                         "false_bindings": sum(r.false_binding for r in records),
                         "wrong_executions": sum(r.record.executed and not r.record.call_match for r in records),
                         "outcomes": dict(Counter(r.record.outcome for r in records).most_common())}  # fmt: skip
@@ -226,6 +231,7 @@ def _summarize(records: Sequence[AppRecord]) -> dict[str, Any]:
         "injection_hits": sum(bool(r.record.planted_hit) for r in injected),
         "injection_cases": len(injected),
         "stages": dict(Counter(r.record.stage for r in records).most_common()),
+        "backend_failures": sum(r.record.stage == "backend" for r in records),
         "outcomes": dict(Counter(r.record.outcome for r in records).most_common()),
         "coverage_misses": dict(Counter(misses).most_common(10)),
     }
@@ -245,18 +251,25 @@ def run_app(
     replays: int = 1,
     controls: bool = False,
     policy: Policy | None = None,
+    retries: int = 0,
     progress: Callable[[int, AppRecord], None] | None = None,
     meta: Mapping[str, Any] | None = None,
 ) -> AppReport:
     """Decide every ``(domain, case)`` with ``backend`` (``"oracle"`` for the ceiling alone) and score it. With
     ``ceiling`` (the default), a non-oracle run also decides each case with the oracle, once. A non-oracle run
     decides each case ``replays`` times; ``controls`` also runs the negative controls (gold rows removed), each
-    ``replays`` times. ``policy`` (default: Appendix B) applies to the backend and the oracle alike."""
+    ``replays`` times. ``policy`` (default: Appendix B) applies to the backend and the oracle alike. A decision that
+    fails closed at the backend (an outage, throttling) is retried up to ``retries`` times with backoff; what still
+    fails is counted as ``backend_failures``, never as a safe decision."""
     if replays < 1:
         raise ValueError("replays must be >= 1")
     pairs = list(cases)
+    per_replay = list(backend) if isinstance(backend, (list, tuple)) else None  # one backend per replay (cassettes)
+    if per_replay is not None:
+        replays = len(per_replay)
     runs = 1 if backend == "oracle" else replays
-    factory = router_factory_for(backend, policy=policy) if backend != "oracle" else None
+    backends = per_replay or [backend] * runs
+    factories = [router_factory_for(b, policy=policy) for b in backends] if backend != "oracle" else None
     records: list[AppRecord] = []
     for index, (domain, case) in enumerate(pairs):
         reach: bool | None = None
@@ -265,10 +278,10 @@ def run_app(
             oracle_record, coverage = _oracle(case, policy)
             reach = oracle_record.correct
         for replay in range(runs):
-            if factory is None:
+            if factories is None:
                 record = oracle_record
             else:
-                record = evaluate_case(case, factory(case), replay=replay, keep_traces=False)
+                record = _decide(case, factories[replay], replay, retries)
             item = AppRecord(domain=domain, record=record, ceiling=reach, coverage=coverage,
                              gold_slots=tuple(case.gold.slots))  # fmt: skip
             records.append(item)
@@ -276,8 +289,9 @@ def run_app(
                 progress(index, item)
     control_records: list[AppRecord] = []
     if controls:
-        control_records = _controls(pairs, backend, runs, policy)
-    mode = backend if isinstance(backend, str) else str(getattr(backend, "name", type(backend).__name__))
+        control_records = _controls(pairs, backend if backend == "oracle" else backends, runs, policy, retries)
+    first = backends[0] if backend != "oracle" else backend
+    mode = first if isinstance(first, str) else str(getattr(first, "name", type(first).__name__))
     return AppReport(mode=mode, records=records, meta=dict(meta or {}), controls=control_records)
 
 
@@ -303,17 +317,29 @@ def control_cases(pairs: Iterable[tuple[str, EvalCase]]) -> list[tuple[str, Eval
     return out
 
 
+def _decide(case: EvalCase, router: Callable[[EvalCase], Any], replay: int, retries: int) -> EvalRecord:
+    """Decide and score ``case`` with ``router(case)``, retrying (with backoff) a decision that failed closed at the
+    backend."""
+    record = evaluate_case(case, router(case), replay=replay, keep_traces=False)
+    for attempt in range(retries):
+        if record.stage != "backend":
+            break
+        time.sleep(5.0 * 4**attempt)
+        record = evaluate_case(case, router(case), replay=replay, keep_traces=False)
+    return record
+
+
 def _controls(
-    pairs: Sequence[tuple[str, EvalCase]], backend: Any, runs: int, policy: Policy | None = None
+    pairs: Sequence[tuple[str, EvalCase]], backend: Any, runs: int, policy: Policy | None = None, retries: int = 0
 ) -> list[AppRecord]:
     out: list[AppRecord] = []
     for domain, variant in control_cases(pairs):
         for replay in range(runs):
             if backend == "oracle":
-                router = _oracle_router(variant, removed=True, policy=policy)
+                record = _decide(variant, partial(_oracle_router, removed=True, policy=policy), replay, 0)
             else:
-                router = gold_removed_factory(router_factory_for(backend, policy=policy))(variant)
-            record = evaluate_case(variant, router, replay=replay, keep_traces=False)
+                factory = gold_removed_factory(router_factory_for(backend[replay], policy=policy))
+                record = _decide(variant, factory, replay, retries)
             out.append(AppRecord(domain=domain, record=record, gold_slots=tuple(variant.gold.slots)))
     return out
 

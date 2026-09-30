@@ -266,7 +266,7 @@ B is the new default; C and D are not adopted (DECISIONS "present sets NOT_STATE
 
 ### Slot question tree (experimental, off)
 
-`probes.verify_decides` decides record slots from `present` and per-record `verify` Nouls instead of the slot Choice
+`probes.slot_decider = "tree"` decides record slots from `present` and per-record `verify` Nouls instead of the slot Choice
 (DECISIONS "slot question tree"). Live, 2026-09-30, held-out, 3 replays with controls:
 
 | | Defaults | Tree (k = 3) | Tree (k = 5) |
@@ -280,6 +280,30 @@ B is the new default; C and D are not adopted (DECISIONS "present sets NOT_STATE
 | Wrong executions | 11 | **0** | 0 |
 | False bindings in controls | 7 | 5 | 4 |
 | Input tokens per decision | 4,551 | 4,786 | 5,149 |
+
+### Hybrid slot decoding (the default)
+
+`--record DIR` stores every Jev answer of a run (one cassette per replay) and `--replay DIR` re-decides them offline
+under another policy, so decoding rules are compared on identical answers at no cost. On one held-out recording:
+`choice` 79.4%, `tree` 74.5%, `hybrid_max` 86.2%, `hybrid_safe` 79.2% (DECISIONS "hybrid slot decoding").
+
+Live, 2026-09-30, held-out, 3 replays, 582 control decisions per column (no backend failures in either):
+
+| | Defaults (Choice) | `hybrid_max` |
+|---|---:|---:|
+| Correct (pooled) | 82.4% (82 / 82 / 83) | **90.0%** (90 / 90 / 90) |
+| Calls right | 78.7% | **88.6%** |
+| Emails to a full name | 0% | **86%** |
+| Aliases | 22% | 89% |
+| Described files | 94% | 93% |
+| Several fitting records | 92% | 93% |
+| Wrong executions | 12 | 12 |
+| False bindings in controls | 8 | 8 |
+| Input tokens per decision | 4,551 | 4,551 |
+
+Per domain: inbox 52 → 87%, crm 98 → 98%, banking 98 → 97%, workspace 91 → 90%, helpdesk 73 → 74%, research 98 →
+98%. The 12 wrong executions are the search requests read as opening a file (record hints); the 8 false bindings are
+"my Savings account" with Savings removed shown as Travel savings.
 
 ### What the app bench found and fixed
 

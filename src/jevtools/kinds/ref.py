@@ -30,7 +30,15 @@ from typing import Any
 
 from jevtools import templates
 from jevtools.ballot import BallotOption, BallotQuestion, slot_qid
-from jevtools.candidates import NONE_OF_THESE, NOT_STATED, Bottom, Candidate, Pool, reverse_order, value_key
+from jevtools.candidates import (
+    NONE_OF_THESE,
+    NOT_STATED,
+    Bottom,
+    Candidate,
+    Pool,
+    reverse_order,
+    value_key,
+)  # fmt: skip
 from jevtools.extract.base import Mention, Mentions
 from jevtools.extract.coref import coref_candidates
 from jevtools.kinds.base import (
@@ -301,9 +309,10 @@ class RefResolver(ChoiceResolver):
         if is_bucket_stage(rc.slot_questions(tool, slot)):
             return decode_buckets(tool, slot, answers, rc, self.normalizer)
         questions = {q.family: q for q in rc.slot_questions(tool, slot)}
-        if rc.policy.probes.verify_decides:
+        decider = rc.policy.probes.slot_decider
+        if decider != "choice":
             verifies = [q for q in rc.slot_questions(tool, slot) if q.family == "verify"]
-            answers = self._verify_decides(questions, verifies, answers)
+            answers = self._decide_slot(decider, questions, verifies, answers)
         elif rc.policy.probes.present_sets_not_stated:
             answers = self._present_sets_not_stated(questions, answers)
         result = super().decode(tool, slot, pool, answers, rc)
@@ -328,18 +337,68 @@ class RefResolver(ChoiceResolver):
                 flags.append("presence_conflict")
         return result.with_(flags=tuple(dict.fromkeys(flags)), probes={**result.probes, **probes})
 
+    @classmethod
+    def _decide_slot(
+        cls, decider: str, questions: Mapping[Any, BallotQuestion], verifies: Sequence[BallotQuestion],
+        answers: Mapping[str, Answer],
+    ) -> Mapping[str, Answer]:  # fmt: skip
+        """``probes.slot_decider``: replace the slot (and ``rev``) Choice by the tree's distribution, or a hybrid of
+        the two (see the policy field). Unchanged when the tree does not apply."""
+        slot_q = questions.get("slot")
+        choice = answers.get(slot_q.qid) if slot_q is not None else None
+        tree = cls._tree_answer(questions, verifies, answers)
+        if tree is None or slot_q is None or not isinstance(choice, ChoiceAnswer):
+            return answers
+        singled = cls._singled_out(slot_q, verifies, answers)
+        decided = tree if decider == "tree" else cls._hybrid(choice, tree, safe=decider == "hybrid_safe",
+                                                             singled=singled)  # fmt: skip
+        out = dict(answers)
+        out[slot_q.qid] = decided
+        rev_q = questions.get("rev")
+        if rev_q is not None and isinstance(answers.get(rev_q.qid), ChoiceAnswer):
+            out[rev_q.qid] = decided
+        return out
+
     @staticmethod
-    def _verify_decides(
+    def _singled_out(
+        slot_q: BallotQuestion, verifies: Sequence[BallotQuestion], answers: Mapping[str, Answer]
+    ) -> str | None:
+        """The label of the one record the verify Nouls single out (P > 0.5 while every other is below 0.5), else
+        ``None``: uninformative answers (all 0.5, or yes to several records) leave the Choice in charge."""
+        label_of = {value_key(o.value): o.label for o in slot_q.options}
+        yes = {label_of.get(value_key(((q.meta or {}).get("candidate") or {}).get("value"))): a.noul
+               for q in verifies if isinstance(a := answers.get(q.qid), NoulAnswer)}  # fmt: skip
+        strong = [label for label, p in yes.items() if label is not None and p > 0.5]
+        weak_rest = all(p < 0.5 for label, p in yes.items() if label not in strong)
+        return strong[0] if len(strong) == 1 and weak_rest else None
+
+    @staticmethod
+    def _hybrid(choice: ChoiceAnswer, tree: ChoiceAnswer, *, safe: bool, singled: str | None = None) -> ChoiceAnswer:
+        """Agreeing top labels: the answer more confident in it. Disagreeing: the tree when the verify Nouls single
+        out one record and it is the tree's top (they found one the Choice missed), else the Choice; or (``safe``)
+        the elementwise minimum of the two, which leaves no label strong and so routes to a menu."""
+        c, t = choice.probabilities, tree.probabilities
+        top_c, top_t = max(c, key=lambda k: c[k]), max(t, key=lambda k: t[k])
+        if top_c == top_t:
+            return choice if c[top_c] >= t[top_t] else tree
+        if not safe:
+            return tree if singled is not None and top_t == singled else choice
+        probabilities = {label: min(float(c.get(label, 0.0)), float(t.get(label, 0.0))) for label in set(c) | set(t)}
+        best = max(probabilities, key=lambda k: probabilities[k])
+        return choice.model_copy(update={"probabilities": probabilities, "choice": best,
+                                         "confidence": probabilities[best]})  # fmt: skip
+
+    @staticmethod
+    def _tree_answer(
         questions: Mapping[Any, BallotQuestion], verifies: Sequence[BallotQuestion], answers: Mapping[str, Answer]
-    ) -> Mapping[str, Answer]:
-        """``probes.verify_decides``: replace the slot (and ``rev``) Choice by the question tree's distribution over the
-        verified records, NONE_OF_THESE and NOT_STATED (see the policy field). Unchanged when no verify Noul was
-        answered, or when the Choice puts at least half its mass on a record no verify Noul asked about (the router's
-        follow-up round then verifies that record, and the next decode includes it)."""
+    ) -> ChoiceAnswer | None:
+        """The question tree's distribution over the verified records, NONE_OF_THESE and NOT_STATED, as a Choice answer.
+        ``None`` when no verify Noul was answered, or when the Choice puts at least half its mass on a record no verify
+        Noul asked about (the router's follow-up round then verifies that record, and the next decode includes it)."""
         slot_q = questions.get("slot")
         choice = answers.get(slot_q.qid) if slot_q is not None else None
         if not isinstance(choice, ChoiceAnswer) or slot_q is None:
-            return answers
+            return None
         label_of = {value_key(o.value): o.label for o in slot_q.options}
         verified: dict[str, float] = {}
         for q in verifies:
@@ -348,11 +407,11 @@ class RefResolver(ChoiceResolver):
             if isinstance(answer, NoulAnswer) and label is not None:
                 verified[label] = max(verified.get(label, 0.0), answer.noul)
         if not verified:
-            return answers
+            return None
         top = max((lb for lb in choice.probabilities if lb in {o.label for o in slot_q.options}),
                   key=lambda lb: choice.probabilities[lb], default=None)  # fmt: skip
         if top is not None and top not in verified and choice.probabilities[top] >= 0.5:
-            return answers
+            return None
         present_q = questions.get("present")
         present = answers.get(present_q.qid) if present_q is not None else None
         p_present = present.noul if isinstance(present, NoulAnswer) else 1.0 - float(
@@ -364,7 +423,7 @@ class RefResolver(ChoiceResolver):
         w_none = math.prod(1.0 - v for v in verified.values())
         total = sum(weights.values()) + w_none
         if total <= 0.0:
-            return answers
+            return None
         probabilities = {label: 0.0 for label in choice.probabilities}
         probabilities.update({label: p_present * w / total for label, w in weights.items()})
         if NONE_OF_THESE in slot_q.sentinels:
@@ -372,14 +431,8 @@ class RefResolver(ChoiceResolver):
         if NOT_STATED in slot_q.sentinels:
             probabilities[NOT_STATED] = 1.0 - p_present
         best = max(probabilities, key=lambda label: probabilities[label])
-        tree = choice.model_copy(update={"probabilities": probabilities, "choice": best,
+        return choice.model_copy(update={"probabilities": probabilities, "choice": best,
                                          "confidence": probabilities[best]})  # fmt: skip
-        out = dict(answers)
-        out[slot_q.qid] = tree
-        rev_q = questions.get("rev")
-        if rev_q is not None and isinstance(answers.get(rev_q.qid), ChoiceAnswer):
-            out[rev_q.qid] = tree
-        return out
 
     @staticmethod
     def _present_sets_not_stated(

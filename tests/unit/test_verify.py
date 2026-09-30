@@ -76,7 +76,7 @@ def test_a_typed_key_needs_no_verify() -> None:
 def test_an_unverified_election_gets_a_follow_up_round() -> None:
     # verify_k = 1 verifies only the best-anchored account per slot in the first round (Checking, for both from and
     # to); electing Savings for from_account then needs the follow-up round, with a fresh qid.
-    policy = Policy.from_dict({"pools": {"verify_k": 1}})
+    policy = Policy.from_dict({"pools": {"verify_k": 1}, "probes": {"slot_decider": "choice"}})  # the gate alone
     router, backend, d = decide(scripts.R3, scripts.R3_REQUEST, policy=policy)
     first = [q for q in backend.requests[0].questions if ".verify." in q]
     assert first == ["transfer_funds.from_account.verify.0", "transfer_funds.to_account.verify.0"]

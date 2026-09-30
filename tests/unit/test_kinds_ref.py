@@ -243,9 +243,10 @@ def test_present_sets_the_not_stated_mass_when_on() -> None:
     pool, (slot_q, present_q, *_) = resolve(tool, slot, rc)
     answers = {slot_q.qid: choice(slot_q, {KELLER: 0.54, NOT_STATED: 0.40, NONE_OF_THESE: 0.06}),
                present_q.qid: noul(0.94)}  # fmt: skip
+    rc.policy = Policy.from_dict({"probes": {"slot_decider": "choice"}})
     off = decode(tool, slot, pool, answers, rc)
-    assert off.factor == pytest.approx(0.54)  # the default: the Choice as answered
-    rc.policy = Policy.from_dict({"probes": {"present_sets_not_stated": True}})
+    assert off.factor == pytest.approx(0.54)  # the Choice as answered
+    rc.policy = Policy.from_dict({"probes": {"present_sets_not_stated": True, "slot_decider": "choice"}})
     on = decode(tool, slot, pool, answers, rc)
     assert on.value == "anna.keller@acme.com" and on.factor == pytest.approx(0.94 * 0.54 / 0.60, abs=1e-3)
     assert on.sentinels[NOT_STATED] == pytest.approx(0.06) and on.sentinels[NONE_OF_THESE] == pytest.approx(0.094)
@@ -253,7 +254,7 @@ def test_present_sets_the_not_stated_mass_when_on() -> None:
     assert decode(tool, slot, pool, unsure, rc).value is Bottom.MISSING
 
 
-def test_verify_decides_the_record_when_on() -> None:
+def test_the_tree_decides_the_record_when_chosen() -> None:
     import math
 
     from jevtools.policy import Policy
@@ -261,7 +262,7 @@ def test_verify_decides_the_record_when_on() -> None:
     catalog, rc = scenario("Email Anna that the contract is signed")
     tool = catalog["send_email"]
     slot = tool.slot("to")
-    rc.policy = Policy.from_dict({"probes": {"verify_decides": True}})
+    rc.policy = Policy.from_dict({"probes": {"slot_decider": "tree"}})
     pool, questions = resolve(tool, slot, rc)
     slot_q, present_q = questions[0], questions[1]
     verifies = [q for q in questions if q.family == "verify"]
@@ -276,14 +277,45 @@ def test_verify_decides_the_record_when_on() -> None:
     assert result.value == "anna.keller@acme.com" and result.factor == pytest.approx(0.97 * w[KELLER] / total, 1e-3)
     assert result.factor > 0.75 and result.sentinels[NOT_STATED] == pytest.approx(0.03)
     # the Choice keeps the say when it clearly prefers a record no verify Noul asked about (verify_k = 1: Keller only)
-    rc.policy = Policy.from_dict({"probes": {"verify_decides": True}, "pools": {"verify_k": 1}})
+    rc.policy = Policy.from_dict({"probes": {"slot_decider": "tree"}, "pools": {"verify_k": 1}})
     pool1, questions1 = resolve(tool, slot, rc)
     (only,) = [q for q in questions1 if q.family == "verify"]
     elsewhere = {slot_q.qid: choice(slot_q, {ROSSI: 0.9, NOT_STATED: 0.1}), present_q.qid: noul(0.97),
                  only.qid: noul(0.2)}  # fmt: skip
     assert decode(tool, slot, pool1, elsewhere, rc).value == "anna.rossi@gmail.com"
-    rc.policy = Policy.from_dict({"probes": {"verify_decides": True}})
+    rc.policy = Policy.from_dict({"probes": {"slot_decider": "tree"}})
     # two records both verified: a coin flip, left to the policy's menu
     both = {**answers, verifies[1].qid: noul(0.86)}
     tied = decode(tool, slot, pool, both, rc)
     assert [round(a.p, 3) for a in tied.alternatives][:1] == [round(tied.factor, 3)]
+
+
+def test_hybrids_keep_the_sharper_answer_on_agreement() -> None:
+    from jevtools.kinds.ref import RefResolver
+    from jevtools.wire import ChoiceAnswer
+
+    def ans(**p: float) -> ChoiceAnswer:
+        top = max(p, key=lambda k: p[k])
+        return ChoiceAnswer(choice=top, confidence=p[top], probabilities=dict(p))
+
+    sharp_choice, tree = ans(a=0.99, b=0.01), ans(a=0.8, b=0.1, NONE_OF_THESE=0.1)
+    assert RefResolver._hybrid(sharp_choice, tree, safe=False) is sharp_choice  # agree: the Choice is sharper
+    hedging_choice = ans(a=0.3, NOT_STATED=0.6, b=0.1)
+    assert RefResolver._hybrid(ans(a=0.6, NOT_STATED=0.4), tree, safe=True) is tree  # agree: the tree is sharper
+    assert RefResolver._hybrid(hedging_choice, tree, safe=False, singled="a") is tree  # disagree, a singled out
+    assert RefResolver._hybrid(hedging_choice, tree, safe=False) is hedging_choice  # the Nouls single out none
+    safe = RefResolver._hybrid(ans(b=0.7, a=0.3), tree, safe=True)  # disagree: elementwise minimum, nothing strong
+    assert safe.probabilities == {"a": 0.3, "b": 0.1, "NONE_OF_THESE": 0.0} and safe.choice == "a"
+
+
+def test_hybrid_max_keeps_the_choice_when_the_tree_only_doubts_presence() -> None:
+    from jevtools.kinds.ref import RefResolver
+    from jevtools.wire import ChoiceAnswer
+
+    def ans(**p: float) -> ChoiceAnswer:
+        top = max(p, key=lambda k: p[k])
+        return ChoiceAnswer(choice=top, confidence=p[top], probabilities=dict(p))
+
+    choice = ans(a=0.95, NOT_STATED=0.05)
+    doubting = ans(a=0.35, NOT_STATED=0.6, NONE_OF_THESE=0.05)  # a lukewarm present: the tree's top is a sentinel
+    assert RefResolver._hybrid(choice, doubting, safe=False) is choice

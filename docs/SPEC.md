@@ -729,6 +729,14 @@ round. A verify answer below `shapes.verify_min` = 0.50 turns the call into `cla
 missing, can confidently elect a record that merely shares a word with the request ("Cancel the budget review" →
 "ACME quarterly review"); the Noul, shown the record's match note, rejects that (DECISIONS "look-alike check").
 
+**Deciding a record slot (`probes.slot_decider`, default `hybrid_max`).** A top-level identity REF slot has two
+readings: its Choice, and a question tree over its `present` and `verify` Nouls, P(i) = P(present) · w_i / (Σw +
+w_none) with w_i = v_i · Π_{j≠i}(1 − v_j), w_none = Π(1 − v_j) for NONE_OF_THESE and NOT_STATED = 1 − P(present)
+(1 − the Choice's NOT_STATED where `present` is not asked). When their top labels agree, the reading more confident in
+it decides; when they disagree, the tree decides only if the verify Nouls single out one record (P > 0.5, every other
+< 0.5) and it is the tree's top, else the Choice. The Choice hedges on exact names ("Email Lisa Wong…": Lisa Wong
+0.24, NOT_STATED 0.55) where the per-record Nouls do not (0.86 vs 0.10–0.21); it is sharper where it is right.
+
 **Several fitting records (`P9.<tier>.ambiguous`, reason `unique`; experimental, off).** In a tier of
 `probes.unique`, a shown call whose identity REF slot's `unique` Noul is below `shapes.unique_min` = 0.50 becomes
 `clarify(menu)` on that slot: the request fits several records, and Jev's election is a prior, not the user's
@@ -2596,6 +2604,7 @@ present = ["external", "critical"]   # REF slots
 reverse = ["critical"]               # REF slots with ≥ 2 real candidates
 verify = ["read", "write", "external", "critical"]   # identity REF slots of a shown call (§3.8.3)
 unique = []                                  # experimental, off: tiers that ask "does the request single out one?"
+slot_decider = "hybrid_max"   # identity REF slots: Choice and verify tree combined (§3.6); "choice" = Choice alone
 
 [widen]
 max_rounds = 2

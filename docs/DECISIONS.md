@@ -1848,7 +1848,7 @@ Extends "Documentation and final merge":
   0.43 and triggers a widen round. The per-record `verify` Nouls of the same request said 0.86 for Lisa Wong and
   0.10–0.21 for the others: on exact names, independent per-record Nouls discriminate where the one Choice hedges.
 
-## Slot question tree (`probes.verify_decides`, measured, not adopted)
+## Slot question tree (`probes.slot_decider = "tree"`, measured, not adopted)
 
 - Idea: decide an identity REF slot by a small tree of Nouls (does the user identify one? `present`; is it this
   record? `verify` per best-anchored record) instead of its Choice: P(i) = P(present) · w_i / (Σw + w_none), with
@@ -1862,3 +1862,24 @@ Extends "Documentation and final merge":
   Choice hedges or errs the tree is right ("Push the Budget review…": Choice elects ACME quarterly review 0.53, verify
   prefers Budget review 0.65 vs 0.41). The two signals are complementary; the next step is a hybrid, compared
   offline on recorded answers (cassettes) before a live confirmation.
+
+## Hybrid slot decoding (`probes.slot_decider = "hybrid_max"`, default)
+
+- Cassettes made the comparison fair and cheap: `jevtools bench app --record DIR` stores every Jev answer (one
+  cassette per replay), `--replay DIR` re-decides the same answers offline under another policy. On one held-out
+  recording (852 decisions, same answers for every rule): `choice` 79.4%, `tree` 74.5%, `hybrid_max` 86.2%,
+  `hybrid_safe` 79.2%.
+- Two corrections before the default: on disagreement the first `hybrid_max` followed the tree even when its top was
+  NOT_STATED (a lukewarm `present` in the read tier threw away correct, confident Choices: described files 94% →
+  79%), and asking `present` in every tier cost files and research on its own. Now the tree overrides the Choice
+  only when the verify Nouls single out one record (P > 0.5, the others < 0.5), which also keeps uninformative
+  answers (all 0.5, or yes to every record, as scripted fixtures give) from overriding it; `present` stays in its
+  default tiers, the tree using 1 − the Choice's NOT_STATED elsewhere.
+- Live, held-out, 3 replays, 582 control decisions (BENCH "Hybrid slot decoding"): correct 82.4% → 90.0% (90 / 90 /
+  90), calls right 78.7% → 88.6%, full-name emails 0% → 86%, inbox 52% → 87%, no category worse by more than one
+  case, false bindings unchanged (8, the Savings/Travel savings read look-alikes), no extra questions or tokens. On
+  that recording's answers, `choice` scores 83.0% and the final rule 90.0%.
+- Bench fixes found on the way: a decision that failed at the backend (an outage window hit 141 of 582 control
+  decisions in three parallel runs) counted as a safe control; the bench now retries it twice with backoff, reports
+  `backend_failures`, and leaves them out of the control safety rate. And "Email Bob that…" was labelled as Robert
+  Brown (alias Bob) although Bob Meier exists; the generator now checks aliases against names (a menu case).

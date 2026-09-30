@@ -882,6 +882,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", default=None, help="app: a directory of domains (<name>/cases.jsonl) instead of the "
                                                "bundled ones")  # fmt: skip
     p.add_argument("--tags", action="store_true", help="app: also print the per-tag table")
+    p.add_argument("--record", metavar="DIR", help="app: record every Jev answer to DIR/replay_<i>.jsonl (cassettes)")
+    p.add_argument("--replay", metavar="DIR", help="app: replay the cassettes in DIR instead of calling Jev (offline;"
+                                                   " one replay per file)")  # fmt: skip
     p.add_argument("--heldout", action="store_true",
                    help="app: the generated held-out cases (same apps; for deciding between variants)")  # fmt: skip
     p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
@@ -946,9 +949,25 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     if names is None:
         names = DOMAINS if args.dir is None else tuple(sorted(p.name for p in Path(args.dir).iterdir()
                                                               if (p / "cases.jsonl").is_file()))  # fmt: skip
-    backend = _bench_backend(args.backend, args.allow_offline, err)
-    if backend is None:
-        return 1
+    from jevtools.backends.cassette import Cassette
+
+    backend: Any
+    if args.replay:
+        files = sorted(Path(args.replay).glob("replay_*.jsonl"))
+        if not files:
+            print(f"jevtools bench: no replay_*.jsonl cassettes in {args.replay}", file=err)
+            return 1
+        backend = [Cassette(f, mode="replay") for f in files]
+    else:
+        backend = _bench_backend(args.backend, args.allow_offline, err)
+        if backend is None:
+            return 1
+        if args.record:
+            if backend == "oracle":
+                print("jevtools bench: --record needs a Jev backend, not the oracle", file=err)
+                return 1
+            backend = [Cassette(Path(args.record) / f"replay_{i}.jsonl", mode="record", inner=backend)
+                       for i in range(args.replays)]  # fmt: skip
     try:
         cases = [(name, case) for name in names for case in load_domain(name, args.dir)]
     except FileNotFoundError as exc:
@@ -960,7 +979,9 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
         print("jevtools bench: --replays must be >= 1", file=err)
         return 1
     policy = Policy.from_toml(args.policy) if args.policy else None
+    live = not args.replay and backend != "oracle" and getattr(backend, "name", "") != "simulator"
     report = run_app(cases, backend, replays=args.replays, controls=args.controls, policy=policy,
+                     retries=2 if live else 0,
                      meta={"domains": list(names), "dir": args.dir, "replays": args.replays,
                            "policy": policy.version if policy is not None else None})  # fmt: skip
     print(f"app bench: {len(cases)} case(s) in {len(names)} domain(s) on {report.mode}", file=out)
@@ -971,6 +992,16 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
               file=out)  # fmt: skip
     elif getattr(backend, "name", "") == "simulator":
         print(OFFLINE_NOTE.format(name="the simulator"), file=out)
+    failed = report.summary().get("ALL", next(iter(report.summary().values()), {})).get("backend_failures", 0) + sum(
+        r.record.stage == "backend" for r in report.controls)  # fmt: skip
+    if failed:
+        print(f"warning: {failed} decision(s) failed at the backend after retries; they are excluded from the control"
+              " safety rate and count as misses above", file=out)  # fmt: skip
+    if args.replay:
+        misses = sum(c.misses for c in backend)
+        print(f"replayed {len(backend)} cassette(s): {sum(c.hits for c in backend)} hits, {misses} misses"
+              + (" (requests the recording never sent, e.g. another follow-up round; those decisions count as errors)"
+                 if misses else ""), file=out)  # fmt: skip
     if args.out:
         report.save(args.out)
         print(f"wrote {args.out}", file=out)

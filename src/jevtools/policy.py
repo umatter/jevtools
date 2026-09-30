@@ -163,11 +163,13 @@ class ProbePolicy(_Section):
 
     present: tuple[Tier, ...] = (Tier.EXTERNAL, Tier.CRITICAL)
     reverse: tuple[Tier, ...] = (Tier.CRITICAL,)
-    verify_decides: bool = False
-    """Experimental: an identity REF slot is decided by its ``present`` and ``verify`` Nouls (a small question tree)
-    instead of its Choice: P(record i) = P(present) · w_i / Σ, w_i = v_i · Π_{j≠i}(1 − v_j), with w_none = Π(1 − v_j)
-    for NONE_OF_THESE and NOT_STATED = 1 − P(present). The Choice decides only when it prefers an unverified record
-    (DECISIONS "slot question tree")."""
+    slot_decider: Literal["choice", "tree", "hybrid_max", "hybrid_safe"] = "hybrid_max"
+    """What decides an identity REF slot. ``choice``: its Choice. ``tree``: its ``present``
+    and ``verify`` Nouls, P(record i) = P(present) · w_i / Σ, w_i = v_i · Π_{j≠i}(1 − v_j), w_none = Π(1 − v_j) for
+    NONE_OF_THESE, NOT_STATED = 1 − P(present) (the Choice still decides when it prefers an unverified record).
+    ``hybrid_max`` (the default): both; when their top labels agree, the one more confident in it; when they
+    disagree, the tree if its top is a record, else the Choice. ``hybrid_safe``: the same on agreement, the
+    elementwise minimum on disagreement (DECISIONS "slot question tree", "hybrid")."""
     present_sets_not_stated: bool = False
     """Experimental: a REF slot's ``NOT_STATED`` mass is taken from its ``present`` Noul (1 − P(present)) and the
     rest of the Choice rescaled to fill the remainder. The Choice keeps ~40% on the sentinels even for "Email Anna

@@ -60,6 +60,7 @@ present = ["external", "critical"]
 reverse = ["critical"]
 verify = ["read", "write", "external", "critical"]
 unique = []
+slot_decider = "hybrid_max"
 
 [widen]
 max_rounds = 2

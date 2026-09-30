@@ -127,7 +127,13 @@ def inbox(b: Builder) -> None:
                   "to", firsts[first], "first_name")  # fmt: skip
     for c in contacts:
         for alias in c["aliases"]:
-            b.one(f"Email {alias} that the numbers are final", "send_email", {"to": c["email"]}, "alias")
+            # an alias can also be someone's name ("Bob" is Robert Brown's alias and Bob Meier's first name)
+            fits = [x["email"] for x in contacts if alias in x["aliases"] or alias.lower() in x["name"].lower().split()]
+            message = f"Email {alias} that the numbers are final"
+            if len(fits) == 1:
+                b.one(message, "send_email", {"to": c["email"]}, "alias")
+            else:
+                b.several(message, "send_email", "to", fits, "alias")
     title = lambda e: e["title"]  # noqa: E731
     for i, e in enumerate(events):
         desc = e["title"]

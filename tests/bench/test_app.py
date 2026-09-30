@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -205,3 +206,48 @@ def test_cli_bench_app_heldout() -> None:
     out = io.StringIO()
     assert main(["bench", "app", "--heldout", "--domains", "banking"], out=out, err=io.StringIO()) == 0
     assert "| banking | 31 | 100% |" in out.getvalue()
+
+
+def test_cli_bench_app_records_and_replays_cassettes(tmp_path: Path) -> None:
+    rec, first, again = tmp_path / "rec", tmp_path / "first.json", tmp_path / "again.json"
+    args = ["bench", "app", "--domains", "helpdesk", "--backend", "sim", "--replays", "2", "--controls"]
+    assert main([*args, "--record", str(rec), "--out", str(first)], out=io.StringIO(), err=io.StringIO()) == 0
+    assert sorted(p.name for p in rec.iterdir()) == ["replay_0.jsonl", "replay_1.jsonl"]
+    out = io.StringIO()
+    assert main(["bench", "app", "--domains", "helpdesk", "--controls", "--replay", str(rec), "--out", str(again)],
+                out=out, err=io.StringIO()) == 0  # fmt: skip
+    assert "misses" in out.getvalue() and ", 0 misses" in out.getvalue()  # the same decisions, fully offline
+    a, b = (json.loads(p.read_text(encoding="utf-8")) for p in (first, again))
+    assert a["summary"] == b["summary"] and a["control_summary"] == b["control_summary"]
+    err = io.StringIO()
+    assert main(["bench", "app", "--replay", str(tmp_path / "none")], out=io.StringIO(), err=err) == 1
+    assert "no replay_*.jsonl" in err.getvalue()
+
+
+def test_backend_failures_are_retried_and_never_count_as_safe(monkeypatch: pytest.MonkeyPatch) -> None:
+    from jevtools.backends.errors import JevUnavailable
+    from jevtools.bench.app import runner
+
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+
+    class Flaky:
+        """The simulator, failing its first ``fail`` calls (an outage), then answering."""
+
+        name, model = "flaky", "lexical-simulator"
+
+        def __init__(self, fail: int) -> None:
+            self.fail, self.inner = fail, LexicalSimulator()
+
+        def decide(self, request: Any) -> Any:
+            if self.fail > 0:
+                self.fail -= 1
+                raise JevUnavailable("outage")
+            return self.inner.decide(request)
+
+    cases = [("inbox", case("inbox", "inbox-01"))]
+    recovered = run_app(cases, Flaky(fail=1), ceiling=False, retries=2)
+    assert recovered.records[0].record.stage != "backend"  # the retry reached the backend
+    down = run_app(cases, Flaky(fail=10**6), ceiling=False, retries=2, controls=True)
+    assert down.records[0].record.stage == "backend" and down.summary()["inbox"]["backend_failures"] == 1
+    control = down.control_summary()["inbox"]
+    assert control["backend_failures"] == control["n"] and control["safe"] is None  # no evidence either way
