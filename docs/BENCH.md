@@ -10,8 +10,7 @@ jevtools ships two benchmarks, and both run offline:
 Both report a **ceiling** first. The ceiling is the accuracy of an **oracle**, a backend that answers every Jev
 question perfectly from the gold label. It shows how often jevtools *can* produce the right decision, given the
 candidates code nominated, the question layout, decoding and policy. **It is not a measurement of Jev.** With an API
-key, the same commands run live Jev and report its accuracy next to the ceiling. One live run of the app bench
-has been made (below); none of BFCL.
+key, the same commands run live Jev and report its accuracy next to the ceiling. Both have been run live (below).
 
 ## App domains
 
@@ -528,6 +527,28 @@ These were fixed, with regression tests:
 - a fractional amount crashed an integer money slot;
 - a text candidate over the 4,000-character accept limit made the pre-send validator reject the whole ballot;
 - list items came out in canonical label order instead of mention order.
+
+### BFCL live
+
+2026-09-30, OpenRouter Decisions, all 3,051 cases of the default categories, one run, recorded (`--record`); no
+backend failures (a failure is now retried, then counted as an error: a fail-closed abstain would otherwise pass
+an irrelevance case). Cost $0.23 (1,759 input tokens per case), median latency 0.36 s, p90 0.48 s.
+
+| Category | n | Ceiling | Proposal | Strict | Within ceiling | Execute | Clarify | Abstain |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| simple_python | 400 | 38.8% | 33.5% | 26.5% | 86.5% | 175 | 223 | 2 |
+| multiple | 200 | 42.0% | 39.0% | 30.5% | 92.9% | 87 | 112 | 1 |
+| live_simple | 258 | 36.0% | 25.6% | 24.0% | 71.0% | 87 | 159 | 12 |
+| live_multiple | 1053 | 34.9% | 29.2% | 25.7% | 83.2% | 428 | 617 | 8 |
+| irrelevance | 240 | 100% | 92.5% | 97.1% | – | 7 | 23 | 210 |
+| live_irrelevance | 884 | 100% | 79.8% | 98.2% | – | 16 | 307 | 561 |
+| live_relevance | 16 | 68.8% | 62.5% | 18.8% | – | 3 | 12 | 1 |
+
+Read it against the ceiling. On the categories that want a call, strict accuracy (what an autonomous agent would
+run) is 24–31%, far below LLM tool callers that write arguments: jevtools can only elect values code nominated, and
+BFCL's values are mostly strings, formats and expressions that no extractor produces. Where the right values were on
+the ballot, Jev chose the right call 71–93% of the time. On the irrelevance categories jevtools almost never executes
+a call where none belongs (97–98% strict); the proposal view (80–92%) counts calls offered on confirm cards and menus.
 
 ## Reading a live run
 

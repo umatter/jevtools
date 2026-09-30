@@ -1933,3 +1933,12 @@ Extends "Documentation and final merge":
   them only by asking in stages (the tool first, the chosen branch's slots next), a second Jev round per turn, to
   save about $0.0002 per decision. Not built: it would fix a handful of genuine confusions and trade latency for a
   cost that is already small. The bench can measure it if catalogs of 100+ tools or token budgets make it worth it.
+
+## BFCL live
+
+- First live run of the external benchmark (BENCH "BFCL live"): all 3,051 default cases, $0.23. It confirms the
+  README's positioning: 24–31% strict on the call categories (the 35–42% coverage ceiling), 71–93% within the
+  ceiling, 97–98% strict on irrelevance.
+- The BFCL runner now treats a decision that failed closed at the backend (P0) as a `BackendFailure` error after two
+  retries with backoff. Before, an outage produced an abstain, which BFCL's checker scores as correct on the
+  irrelevance categories. `--record DIR` keeps the run's answers for offline re-scoring.

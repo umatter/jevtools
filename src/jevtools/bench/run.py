@@ -31,6 +31,7 @@ from jevtools.bench.oracle import BfclGold, OracleBackend, ParamCoverage
 from jevtools.context import Context
 from jevtools.decision import Decision
 from jevtools.plan import compile_round
+from jevtools.policy import RULE_FAIL_CLOSED
 from jevtools.router import Router
 
 BENCH_NOW = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc)
@@ -216,6 +217,8 @@ def run_case(
         else:
             started = time.perf_counter()
             decision = _router(case, backend, risk, now).decide(case.messages)
+            if decision.rule == RULE_FAIL_CLOSED:  # an outage: never an abstain that passes an irrelevance case
+                raise BackendFailure(decision.trace.notes[-1] if decision.trace and decision.trace.notes else "")
     except Exception as exc:  # noqa: BLE001 - a crash is a failed case, reported with its message
         return CaseRecord(id=case.id, category=case.category, outcome="error", rule="", strict=False,
                           proposal=False, ceiling=reachable, error=f"{type(exc).__name__}: {exc}"[:300])  # fmt: skip
@@ -247,6 +250,10 @@ def run_case(
     )
 
 
+class BackendFailure(Exception):
+    """A live decision failed closed at the backend (P0): an outage, not an answer."""
+
+
 def run_bfcl(
     cases: Iterable[BfclCase],
     backend: Backend | str,
@@ -254,13 +261,21 @@ def run_bfcl(
     risk: str | None = "read",
     now: datetime = BENCH_NOW,
     ceiling: bool = True,
+    retries: int = 0,
     progress: Callable[[int, CaseRecord], None] | None = None,
     meta: Mapping[str, Any] | None = None,
 ) -> BenchReport:
-    """Run every case and return the report (``backend="oracle"`` for the ceiling alone)."""
+    """Run every case and return the report (``backend="oracle"`` for the ceiling alone). A decision that fails
+    closed at the backend is retried up to ``retries`` times with backoff; one that still fails is an ``error``
+    (``BackendFailure``), never an abstain that would pass an irrelevance case."""
     records: list[CaseRecord] = []
     for index, case in enumerate(cases):
         record = run_case(case, backend, risk=risk, now=now, ceiling=ceiling)
+        for attempt in range(retries):
+            if not (record.error or "").startswith("BackendFailure"):
+                break
+            time.sleep(5.0 * 4**attempt)
+            record = run_case(case, backend, risk=risk, now=now, ceiling=ceiling)
         records.append(record)
         if progress is not None:
             progress(index, record)
@@ -268,4 +283,4 @@ def run_bfcl(
     return BenchReport(mode=mode, records=records, meta={"risk": risk, "now": now.isoformat(), **dict(meta or {})})
 
 
-__all__ = ["BENCH_NOW", "BenchReport", "CaseRecord", "bench_tools", "run_bfcl", "run_case"]
+__all__ = ["BENCH_NOW", "BackendFailure", "BenchReport", "CaseRecord", "bench_tools", "run_bfcl", "run_case"]

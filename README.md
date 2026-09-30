@@ -579,8 +579,10 @@ data before the first API call.
 Function Calling Leaderboard, scored by a port of BFCL's own checker. The oracle ceiling is 39% on `simple_python`,
 42% on `multiple`, 36% on `live_simple`, 35% on `live_multiple` and 100% on the irrelevance categories. Almost every
 miss is a value no extractor nominated. 57% of those values appear verbatim in the user's text, and the rest need
-reformatting or world knowledge that selection cannot produce. Details, attribution and the full tables are in
-[docs/BENCH.md](docs/BENCH.md).
+reformatting or world knowledge that selection cannot produce. Live (all 3,051 cases, one run, $0.23): strict
+accuracy 24–31% on the categories that want a call, far below LLM tool callers that write arguments, with Jev right
+71–93% of the time where the values were on the ballot; on the irrelevance categories it executes a call in 2–3% of
+cases. Details, attribution and the full tables are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends
 

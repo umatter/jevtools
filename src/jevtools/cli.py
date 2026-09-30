@@ -1047,7 +1047,16 @@ def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
             print(f"  {index + 1}/{len(cases)}", file=err)
 
     risk = None if args.risk == "infer" else args.risk
-    report = run_bfcl(cases, backend, risk=risk, progress=progress, meta={"data": str(data), "ref": args.ref})
+    live = backend != "oracle" and getattr(backend, "name", "") != "simulator"
+    if args.record and live:
+        from jevtools.backends.cassette import Cassette
+
+        backend = Cassette(Path(args.record) / "replay_0.jsonl", mode="record", inner=backend)
+    report = run_bfcl(cases, backend, risk=risk, progress=progress, retries=2 if live else 0,
+                      meta={"data": str(data), "ref": args.ref})  # fmt: skip
+    failed = sum((r.error or "").startswith("BackendFailure") for r in report.records)
+    if failed:
+        print(f"warning: {failed} case(s) failed at the backend after retries; they count as errors", file=out)
     print(f"BFCL {len(cases)} case(s) on {report.mode} (risk {risk or 'inferred'})", file=out)
     print(report.render(), file=out)
     if report.mode == "oracle":

@@ -102,3 +102,24 @@ def test_cli_bench_missing_data(tmp_path: Path) -> None:
     err = io.StringIO()
     assert main(["bench", "bfcl", "--data", str(tmp_path)], out=io.StringIO(), err=err) == 1
     assert "--download" in err.getvalue()
+
+
+def test_an_outage_is_an_error_not_a_passed_irrelevance_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from jevtools.backends.errors import JevUnavailable
+    from jevtools.bench import run as bench_run
+
+    monkeypatch.setattr(bench_run.time, "sleep", lambda _s: None)
+
+    class Down:
+        name, model = "down", "down"
+        calls = 0
+
+        def decide(self, request):  # type: ignore[no-untyped-def]
+            Down.calls += 1
+            raise JevUnavailable("outage")
+
+    case = next(iter(cases("irrelevance").values()))
+    report = run_bfcl([case], Down(), ceiling=False, retries=2)
+    (record,) = report.records
+    assert not record.proposal and (record.error or "").startswith("BackendFailure")  # an abstain would have passed
+    assert record.attribution == "error" and Down.calls >= 3  # the first attempt and two retries
