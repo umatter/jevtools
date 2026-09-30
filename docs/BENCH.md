@@ -571,6 +571,40 @@ Accuracy 65.7%, macro F1 64.8%; predicted calls name the target tool 98.9% of th
 the cannot-answer cases. The weak side is making the call: 804 tool-call cases became questions, mostly because a
 value was not on the ballot (P7, 513) or the tool was not asked about (P6, 199), BFCL's coverage ceiling again.
 
+## τ²-bench, reduced to next calls
+
+[τ²-bench](https://github.com/sierra-research/tau2-bench) (Sierra, MIT) runs customer-service agents against an
+LLM-simulated customer; it also publishes complete successful conversations of reference agents, with every tool
+call, its arguments and its actual output. `jevtools bench tau2 --tau2 CHECKOUT --data DIR` turns one successful
+conversation per task (Claude 3.7 Sonnet as the reference agent, GPT-4.1 as the customer) into single decisions:
+a **call** case per tool call (the conversation and earlier tool results as context, the call as gold: tool plus
+every argument, id lists as sets) and a **talk** case per assistant turn without a call (right unless jevtools
+executes one there). jevtools gets the tool schemas and the conversation, not the domain policy. The tool schemas
+come from a τ² install (`tau2.EXPORT_TOOLS`); τ² data is not vendored.
+
+Live, 2026-09-30, retail (106 tasks) and airline (34), 994 cases, no backend failures:
+
+| | n | Trust `none` (default) | Trust `reads` |
+|---|---:|---:|---:|
+| Read calls exactly right | 341 | 21.7% | 22.0% |
+| Write calls exactly right (shown / executed) | 173 | 1.2% / 1.2% | 15.6% / 9.8% |
+| Right tool chosen (read / write) | | 83.9% / 90.2% | 84.2% / 93.1% |
+| Talk turns without an executed call | 480 | 97.9% | 96.9% |
+| Cost | | $1.47 | $2.38 |
+
+Coverage (compiled offline: every gold value on the ballot): reads 59%, writes 38% with trusted lookups. Missing
+most often: `first_name`/`last_name`/`zip` of `find_user_id_by_name_zip` (the user's "Mei Kovacs … 28236" offers the
+whole name and a number, not the parts and a string), `new_item_ids` (the new item's id is an `item_id` field),
+`email`, and free text or objects no extractor writes (`summary`, `reason`, flights, passengers). Among the covered
+cases 37% of reads and 42% of writes (3% without trust) come out exactly right; a next-call case often has several
+valid next calls ("I have two orders"), and jevtools asks which.
+
+Executed calls in talk turns that the reference agent never made: two cancellations with the user's words as the
+reason ("I ordered it by mistake") where the tool's description asks for "ordered by mistake", two airline
+cancellations the reference agent did not make (the policy restricts cancellations; jevtools does not see it), and
+reads with a malformed id. With trusted lookups, six more were the reference agent's next call, made a turn early.
+Requests are large (median 19k input tokens, 82 questions): long conversations with 16 tools expand most of them.
+
 ## Reading a live run
 
 Run with a key, then compare:

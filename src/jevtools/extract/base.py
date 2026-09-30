@@ -212,10 +212,12 @@ def source_texts(ctx: Context) -> list[SourceText]:
         else:
             ref, channel = f"assistant:{i}", Channel.HISTORY
         texts.append(SourceText(ref, turn.text, channel, tuple(tokenize(turn.text))))
+    trusted = set(getattr(ctx, "trusted_tools", ()))
     for observation in ctx.all_observations():
+        channel = Channel.REGISTRY if observation.tool in trusted else Channel.TOOL_OUTPUT
         for path, text in _leaves(jsonable(observation.content), "$"):
             ref = f"obs:{observation.step}" + ("" if path == "$" else f":{path}")
-            texts.append(SourceText(ref, text, Channel.TOOL_OUTPUT, tuple(tokenize(text))))
+            texts.append(SourceText(ref, text, channel, tuple(tokenize(text))))
     return texts
 
 

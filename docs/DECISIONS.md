@@ -1951,3 +1951,18 @@ Extends "Documentation and final merge":
   six-case CC-BY-4.0 sample lives in tests/bench/data/when2call with its NOTICE.
 - Live, all 3,652 cases (BENCH "When2Call"): accuracy 65.7%, macro F1 64.8%, tool hallucination 3.9%, tool-call
   recall 35.4%, the same coverage ceiling as BFCL, whose live categories When2Call is built from.
+
+## Trusted first-party tool output and field candidates (τ²)
+
+- `Context.trusted_tools` names tools whose results are the app's own records. Their observations are extracted with
+  the `registry` channel, which write tools' identity slots admit; everything else stays `tool_output`, blocked from
+  those slots (the injection defence). Registry values found in text count as evidence, and `registry` mentions
+  enter pools (they exist only for trusted observations). Empty by default; the context hash and every golden
+  fixture are unchanged.
+- Span pools gain **field candidates**: a scalar field of an earlier tool result whose name matches the slot (stems
+  without `_id(s)` and plurals: `item_ids` ← `item_id`, `order_id` ← `orders`), described by its sibling fields
+  ("name: Water Bottle") so Jev can tell which one it is, with the observation's channel.
+- τ², reduced to next calls (BENCH): with trusted lookups, exactly right write calls rose from 1.2% to 15.6% (9.8%
+  executed) with talk-turn safety at 96.9% (97.9%), and six of the extra talk-turn executions were the reference
+  agent's next call made a turn early. It is app configuration, not a default: an app lists the tools that return its
+  own data. Coverage gaps it exposed (split names, digit strings, prefixed field names, emails) are next.

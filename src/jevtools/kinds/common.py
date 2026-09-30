@@ -77,9 +77,10 @@ def mention_text(m: Mention, *, note: str | None = None) -> str:
     return text if m.channel is Channel.TOOL_OUTPUT and len(parts) == 1 else text + "."
 
 
-POOL_CHANNELS: frozenset[Channel] = frozenset({Channel.USER, Channel.TOOL_OUTPUT})
-"""Channels whose mentions enter pools directly. Assistant-turn (``history``) mentions enter only when the request
-is anaphoric ("book it then"); otherwise history reaches pools through the entity store (§4.2.1, §6.4)."""
+POOL_CHANNELS: frozenset[Channel] = frozenset({Channel.USER, Channel.TOOL_OUTPUT, Channel.REGISTRY})
+"""Channels whose mentions enter pools directly (``registry`` mentions come only from the observations of
+``Context.trusted_tools``). Assistant-turn (``history``) mentions enter only when the request is anaphoric ("book it
+then"); otherwise history reaches pools through the entity store (§4.2.1, §6.4)."""
 
 
 def pool_mentions(rc: ResolveContext, *kinds: str) -> list[Mention]:

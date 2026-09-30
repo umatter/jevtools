@@ -17,16 +17,19 @@ stripped); the pattern and bounds of the schema drop invalid spans at pool time.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import re
+from collections.abc import Iterator, Sequence
+from typing import Any
 
 from jevtools.candidates import Candidate, Channel
+from jevtools.canonical import jsonable
 from jevtools.extract.base import Mention
 from jevtools.extract.catalogs import Place
 from jevtools.kinds.base import ResolveContext, register_resolver
 from jevtools.kinds.common import ChoiceResolver, mention_candidate, pool_mentions
 from jevtools.kinds.normalize import NormalizationError, normalize_email_value, normalize_path, normalize_span
 from jevtools.kinds.ref import is_path_slot
-from jevtools.spec.models import SlotSpec, ToolSpec
+from jevtools.spec.models import ITEM, SlotSpec, ToolSpec
 
 PATTERN_EXTRACTORS: dict[str, str] = {"email": "email", "url": "url", "uuid": "uuid", "ipv4": "ipv4", "code": "code"}
 GENERIC_EXTRACTORS: dict[str, tuple[str, ...]] = {
@@ -80,6 +83,64 @@ def span_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
     return out
 
 
+_ID_SUFFIX = re.compile(r"_(?:ids?|numbers?|codes?|keys?)$")
+
+
+def field_stem(name: str) -> str:
+    """A field or slot name without an id suffix or plural: ``item_ids``, ``item_id`` → ``item``; ``orders`` →
+    ``order``; ``flight_number`` → ``flight``."""
+    stem = _ID_SUFFIX.sub("", name.lower())
+    return stem[:-1] if len(stem) > 3 and stem.endswith("s") and not stem.endswith("ss") else stem
+
+
+def _fields(value: Any, path: str, key: str | None, siblings: str = "") -> Iterator[tuple[str, str | None, Any, str]]:
+    """Scalar leaves of a JSON value with their path, the name of the field that holds them (a list item keeps its
+    list's field name) and the other short scalar fields of the same object ("name: Water Bottle"), which say what
+    the value belongs to."""
+    if isinstance(value, dict):
+        for k, item in value.items():
+            others = ", ".join(f"{name}: {v}" for name, v in value.items() if name != k and _short(v))
+            yield from _fields(item, f"{path}.{k}", str(k), others[:160])
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            yield from _fields(item, f"{path}[{i}]", key, siblings)
+    else:
+        yield path, key, value, siblings
+
+
+def _short(value: Any) -> bool:
+    return isinstance(value, (str, int, float)) and not isinstance(value, bool) and len(str(value)) <= 40
+
+
+def field_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
+    """Fields of earlier tool results whose name matches the slot (``order_id`` ← an ``order_id`` or ``orders``
+    field): an id a lookup returned is how an agent names a record in the next call. The channel is the
+    observation's: ``tool_output``, or ``registry`` for a tool in ``Context.trusted_tools``."""
+    name = next((part for part in reversed(slot.path) if part != ITEM), slot.name)
+    stem = field_stem(name)
+    trusted = set(rc.ctx.trusted_tools)
+    out: list[Candidate] = []
+    seen: set[str] = set()
+    for obs in rc.ctx.all_observations():
+        if obs.status != "ok":
+            continue
+        channel = Channel.REGISTRY if obs.tool in trusted else Channel.TOOL_OUTPUT
+        for path, key, value, siblings in _fields(jsonable(obs.content), "$", None):
+            if key is None or field_stem(key) != stem or isinstance(value, bool) or not isinstance(value, (str, int)):
+                continue
+            text = str(value)
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            ref = f"obs:{obs.step}:{path}"
+            out.append(Candidate(
+                value=text, channel=channel,
+                text=f'The "{key}" of {siblings or "an entry"} in the {obs.tool} result (step {obs.step}).',
+                prov={"extractor": "field", "mention": {"text": text, "ref": ref}, "field": path, "tool": obs.tool},
+            ))  # fmt: skip
+    return out
+
+
 def _places(slot: SlotSpec, mentions: Sequence[Mention]) -> list[Candidate]:
     out: list[Candidate] = []
     for m in mentions:
@@ -128,7 +189,7 @@ class SpanResolver(ChoiceResolver):
     normalizer = "span@1"
 
     def candidates(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
-        out = span_candidates(slot, rc) + author_candidates(slot)
+        out = span_candidates(slot, rc) + field_candidates(slot, rc) + author_candidates(slot)
         return path_candidates(out) if is_path_slot(slot) else out
 
     def normalizer_for(self, slot: SlotSpec) -> str:

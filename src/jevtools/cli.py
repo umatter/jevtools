@@ -875,7 +875,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--case", action="append", help="only this case (repeatable)")
 
     p = sub.add_parser("bench", help="run a tool-calling benchmark (BFCL, or the app-domain benchmark)")
-    p.add_argument("suite", choices=("bfcl", "app", "when2call"),
+    p.add_argument("suite", choices=("bfcl", "app", "when2call", "tau2"),
                    help="bfcl: Berkeley Function Calling Leaderboard; app: the bundled app-domain benchmark "
                         "(assistants over an app's own data)")  # fmt: skip
     p.add_argument("--domains", default=None, help="app: comma-separated domains (default: all bundled domains)")
@@ -887,6 +887,9 @@ def build_parser() -> argparse.ArgumentParser:
                                                    " one replay per file)")  # fmt: skip
     p.add_argument("--merged-catalog", action="store_true",
                    help="app: give every case the tools of all bundled domains (a 31-tool catalog)")  # fmt: skip
+    p.add_argument("--tau2", metavar="CHECKOUT", help="tau2: a τ²-bench checkout to build the cases from")
+    p.add_argument("--trust", choices=("none", "reads"), default="none",
+                   help="tau2: which tools' results are first-party data (Context.trusted_tools)")  # fmt: skip
     p.add_argument("--heldout", action="store_true",
                    help="app: the generated held-out cases (same apps; for deciding between variants)")  # fmt: skip
     p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
@@ -1050,7 +1053,53 @@ def _cmd_bench_when2call(args: argparse.Namespace, out: TextIO, err: TextIO) -> 
     return 0
 
 
+def _cmd_bench_tau2(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    from jevtools.bench import tau2
+
+    data = Path(args.data) if args.data else Path(".")
+    names = tuple(d.strip() for d in args.domains.split(",")) if args.domains else tau2.DOMAINS
+    tools: dict[str, list[dict[str, Any]]] = {}
+    cases: list[tau2.Tau2Case] = []
+    for name in names:
+        tools_file, cases_file = data / f"{name}_tools.json", data / f"{name}_cases.jsonl"
+        if not tools_file.is_file():
+            print(f"jevtools bench: {tools_file} not found; export it with τ²'s Python: python -c "
+                  f"\"{tau2.EXPORT_TOOLS.format(domain=name)}\"", file=err)  # fmt: skip
+            return 1
+        if not cases_file.is_file():
+            if not args.tau2:
+                print(f"jevtools bench: {cases_file} not found; build it with --tau2 CHECKOUT", file=err)
+                return 1
+            tau2.save_cases(tau2.build_cases(args.tau2, name), cases_file)
+        tools[name] = tau2.load_tools(data, name)
+        domain_cases = tau2.load_cases(cases_file)
+        cases += domain_cases[: args.limit] if args.limit is not None else domain_cases
+    backend = _bench_backend(args.backend, args.allow_offline, err)
+    if backend is None:
+        return 1
+    if backend == "oracle":
+        print("jevtools bench: τ² has no oracle here; use a Jev backend or sim", file=err)
+        return 1
+    live = getattr(backend, "name", "") != "simulator"
+    if args.record and live:
+        from jevtools.backends.cassette import Cassette
+
+        backend = Cassette(Path(args.record) / "replay_0.jsonl", mode="record", inner=backend)
+    report = tau2.run_tau2(cases, tools, backend, trust=args.trust, retries=2 if live else 0,
+                           meta={"domains": list(names), "data": str(data)})  # fmt: skip
+    print(f"τ² next-call cases: {len(cases)} in {len(names)} domain(s), trust {args.trust}", file=out)
+    print(report.render(), file=out)
+    if not live:
+        print(OFFLINE_NOTE.format(name="the simulator"), file=out)
+    if args.out:
+        Path(args.out).write_text(report.to_json(), encoding="utf-8")
+        print(f"wrote {args.out}", file=out)
+    return 0
+
+
 def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    if args.suite == "tau2":
+        return _cmd_bench_tau2(args, out, err)
     if args.suite == "app":
         return _cmd_bench_app(args, out, err)
     if args.suite == "when2call":

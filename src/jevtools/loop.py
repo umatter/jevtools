@@ -546,14 +546,15 @@ class EntityStore:
                 return entity.origin
         return channel
 
-    def add_observation(self, observation: Observation, *, turn: int = 0) -> list[Entity]:
-        """Remember an observation's typed items and text entities (``origin = tool_output``; leaves are not
-        remembered)."""
+    def add_observation(self, observation: Observation, *, turn: int = 0, trusted: bool = False) -> list[Entity]:
+        """Remember an observation's typed items and text entities (``origin = tool_output``, or ``registry`` for a
+        tool in ``Context.trusted_tools``; leaves are not remembered)."""
+        origin = Channel.REGISTRY if trusted else Channel.TOOL_OUTPUT
         added: list[Entity] = []
         for item in getattr(observation, "items", ()):
             if item.type == "leaf":
                 continue
-            added.append(self.remember(item.type, item.value, label=item.label, origin=Channel.TOOL_OUTPUT,
+            added.append(self.remember(item.type, item.value, label=item.label, origin=origin,
                                        source_ref=item.ref, turn=turn, step=observation.step, tool=observation.tool,
                                        attrs=item.attrs))  # fmt: skip
         return added
@@ -1160,7 +1161,8 @@ class Agent:
             run.steps.append(record.model_copy(update=executed))
             if observation.status == "ok":
                 self.entities.pin_call(call, tool, decision=decision, turn=run.turn, step=observation.step)
-            self.entities.add_observation(observation, turn=run.turn)
+            self.entities.add_observation(observation, turn=run.turn,
+                                          trusted=observation.tool in self._context(run).trusted_tools)  # fmt: skip
             content_key = sha256_of({"tool": observation.tool, "status": observation.status,
                                      "content": jsonable(observation.content)})  # fmt: skip
             run.stale = run.stale + 1 if content_key in run.contents else 0

@@ -195,7 +195,9 @@ class Candidate(BaseModel):
         """Whether this candidate is evidence-backed for viability (spec §5.1)."""
         if self.channel in EVIDENCE_CHANNELS:
             return True
-        return self.channel is Channel.REGISTRY and bool(self.prov.get("anchor") or self.prov.get("whole"))
+        # a registry value is evidence when anchored, sent whole, or found in text (a trusted tool's output)
+        return self.channel is Channel.REGISTRY and bool(
+            self.prov.get("anchor") or self.prov.get("whole") or self.prov.get("mention"))  # fmt: skip
 
 
 class Pool(BaseModel):

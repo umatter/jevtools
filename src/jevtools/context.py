@@ -214,6 +214,11 @@ class Context(BaseModel):
     shareable: tuple[str, ...] | None = None
     sources: dict[str, Any] = Field(default_factory=dict)
     observations: list[Observation] = Field(default_factory=list)
+    trusted_tools: tuple[str, ...] = ()
+    """Tools whose results are the app's own data (its database, its lookups): values in their observations enter
+    with the ``registry`` channel instead of ``tool_output``, so a write tool may use an order or item id a lookup
+    returned. Tools that return outside content (mail, web pages, files others wrote) must stay off this list: the
+    tool-output barrier is the injection defence (§3.4.2)."""
     entities: Any = None
     include_system: bool = False
     clock: Clock | None = None
@@ -374,6 +379,7 @@ class Context(BaseModel):
             "observations": [jsonable(o) for o in self.observations],
             "entities": to_json() if callable(to_json) else None,
             "include_system": self.include_system,
+            **({"trusted_tools": list(self.trusted_tools)} if self.trusted_tools else {}),
         }
 
     @property
