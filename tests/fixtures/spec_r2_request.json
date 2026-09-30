@@ -27,7 +27,7 @@
     "get_weather": "Get the current weather for a city.",
     "read_file": "Open a file in the user's workspace.",
     "search_web": "Search the public web.",
-    "send_email": "Send an email from the user to one recipient.",
+    "send_email": "Send an email from the user to one recipient. Existing records that match the request for the recipient: Anna Keller <anna.keller@acme.com>, Anna Rossi <anna.rossi@gmail.com>, Annabel Frey <annabel.frey@muster.ch>.",
     "transfer_funds": "Move money between two of the user's own bank accounts.",
     "NO_TOOL": "No action is needed: conversation, small talk, a joke, or something the assistant can answer by itself.",
     "UNSUPPORTED": "The user wants an action that none of the listed actions can perform."

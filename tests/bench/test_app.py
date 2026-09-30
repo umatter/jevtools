@@ -186,3 +186,22 @@ def test_cli_bench_app_takes_a_policy(tmp_path: Path) -> None:
     assert main(args, out=out, err=io.StringIO()) == 0
     doc = json.loads(path.read_text(encoding="utf-8"))
     assert doc["meta"]["policy"] == "hints" and doc["summary"]["workspace"]["ceiling"] == 1.0
+
+
+def test_heldout_cases_match_their_generator_and_the_oracle_solves_them() -> None:
+    from jevtools.bench.app._heldout import main as generate_heldout
+    from jevtools.bench.app.runner import heldout_dir
+
+    assert generate_heldout(["--check"]) == 0
+    pairs = [(name, c) for name in DOMAINS for c in load_domain(name, heldout_dir())]
+    assert len(pairs) >= 250 and {c.id.split("-")[1] for _, c in pairs} >= {"inbox", "crm", "ws", "hd", "rs", "bank"}
+    dev = {str(c.messages[-1]["content"]).casefold() for name in DOMAINS for c in load_domain(name)}
+    assert not any(str(c.messages[-1]["content"]).casefold() in dev for _, c in pairs)  # no development message
+    report = run_app(pairs[::4], "oracle", controls=True)  # a quarter of it, with its controls, is fast enough
+    assert report.summary()["ALL"]["ceiling"] == 1.0 and all(not r.false_binding for r in report.controls)
+
+
+def test_cli_bench_app_heldout() -> None:
+    out = io.StringIO()
+    assert main(["bench", "app", "--heldout", "--domains", "banking"], out=out, err=io.StringIO()) == 0
+    assert "| banking | 31 | 100% |" in out.getvalue()

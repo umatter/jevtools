@@ -43,6 +43,11 @@ def domains_dir() -> Path:
     return Path(str(resources.files("jevtools.bench.app") / "domains"))
 
 
+def heldout_dir() -> Path:
+    """The generated held-out cases (``_heldout.py``): the same apps, for deciding between engine variants."""
+    return Path(str(resources.files("jevtools.bench.app") / "heldout"))
+
+
 def load_domain(name: str, directory: str | Path | None = None) -> list[EvalCase]:
     """The cases of one domain (``directory`` defaults to the bundled domains)."""
     base = Path(directory) if directory is not None else domains_dir()
@@ -325,4 +330,7 @@ def run_domains(
     return run_app(cases, backend, meta={"domains": list(domains)}, **kw)
 
 
-__all__ = ["DOMAINS", "AppRecord", "AppReport", "control_cases", "domains_dir", "load_domain", "run_app", "run_domains"]
+__all__ = [
+    "DOMAINS", "AppRecord", "AppReport", "control_cases", "domains_dir", "heldout_dir", "load_domain", "run_app",
+    "run_domains",
+]  # fmt: skip

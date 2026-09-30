@@ -882,6 +882,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", default=None, help="app: a directory of domains (<name>/cases.jsonl) instead of the "
                                                "bundled ones")  # fmt: skip
     p.add_argument("--tags", action="store_true", help="app: also print the per-tag table")
+    p.add_argument("--heldout", action="store_true",
+                   help="app: the generated held-out cases (same apps; for deciding between variants)")  # fmt: skip
     p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
     p.add_argument("--policy", help="app: policy.toml for the run and its ceiling (default: Appendix B)")
     p.add_argument("--controls", action="store_true",
@@ -936,6 +938,10 @@ def _bench_backend(name: str, allow_offline: bool, err: TextIO) -> Any:
 def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     from jevtools.bench.app import DOMAINS, load_domain, run_app
 
+    if args.heldout:
+        from jevtools.bench.app.runner import heldout_dir
+
+        args.dir = str(heldout_dir())
     names = tuple(d.strip() for d in args.domains.split(",") if d.strip()) if args.domains else None
     if names is None:
         names = DOMAINS if args.dir is None else tuple(sorted(p.name for p in Path(args.dir).iterdir()

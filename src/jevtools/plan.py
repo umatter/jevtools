@@ -651,7 +651,7 @@ def family_units(questions: Sequence[BallotQuestion]) -> list[list[BallotQuestio
     ``verify`` Nouls, which stand alone (a gate on one record, decoded by value, so any call can carry it)."""
     units: list[list[BallotQuestion]] = []
     for question in questions:
-        slot_level = question.tool is not None and bool(question.path) and question.family != "verify"
+        slot_level = question.tool is not None and bool(question.path) and question.family not in ("verify", "unique")
         previous = units[-1][-1] if units else None
         same_slot = (previous is not None and slot_level and previous.tool == question.tool
                      and previous.path == question.path)  # fmt: skip

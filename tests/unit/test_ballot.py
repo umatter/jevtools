@@ -32,6 +32,19 @@ SEND = "send an email from the user to one recipient"
 WEB = "search the public web"
 
 
+R2_HINTS = {
+    "send_email": t.tool_matches_text(
+        "the recipient",
+        [
+            "Anna Keller <anna.keller@acme.com>",
+            "Anna Rossi <anna.rossi@gmail.com>",
+            "Annabel Frey <annabel.frey@muster.ch>",
+        ],
+    )
+}
+"""The R2 tool options' record hints (``tool.record_hints``): the three contacts "Anna" anchors."""
+
+
 def _tool_question(catalog: Catalog) -> BallotQuestion:
     tools = sorted(catalog, key=lambda tool: tool.name)
     return BallotQuestion(
@@ -40,7 +53,12 @@ def _tool_question(catalog: Catalog) -> BallotQuestion:
         primitive="choice",
         instructions=t.tool_instructions(),
         options=[
-            BallotOption(label=tool.name, value=tool.name, text=t.tool_option_text(tool.description)) for tool in tools
+            BallotOption(
+                label=tool.name,
+                value=tool.name,
+                text=t.tool_option_text(tool.description) + R2_HINTS.get(tool.name, ""),
+            )
+            for tool in tools
         ],
         sentinels={
             NO_TOOL: SentinelSpec(decodes_to="no_tool", text=t.TOOL_SENTINEL_TEXT[NO_TOOL]),

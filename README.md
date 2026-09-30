@@ -480,8 +480,11 @@ ticket, deal, account, file…) is the one the request refers to, and not a look
 `verify` question is asked in the same call for the best-matched records, so it rarely costs a second round. A
 record the user typed by its key (`INC-1052`) needs no check; a doubted one becomes a menu (`P9.<tier>.unverified`).
 
-An experimental `tool.record_hints` (off by default) names the matching records in the tool question, so "Open the
-Q3 board deck" is not read as a search; it trades errors, see [docs/BENCH.md](docs/BENCH.md) "Record hints".
+The tool question also names up to three records the request matches (`tool.record_hints = 3`), so "Open the Q3
+board deck" is read as opening that file, not as a search; on the held-out bench it took wrong executions from 29 to
+12 and cost some search requests a menu ([docs/BENCH.md](docs/BENCH.md) "Held-out"). An experimental
+`probes.unique` (off) asks whether the request singles out one record, so "Open the board deck" with three decks
+asks which instead of opening the newest.
 
 These defaults are **priors, not measurements** (SPEC §3.8.3, Appendix B). A value within 0.03 of a threshold
 takes the safer side. The critical tier stays confirm-only until `jevtools tune` has certified it on ≥ 3,000
@@ -534,7 +537,7 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools eval DATASET [--backend B] [--replays N] [--out report.json]` | run a labelled dataset and report the SPEC §11.2 metrics |
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
 | `jevtools fixtures [--update] [--case NAME]` | check or regenerate the golden conformance fixtures (from a checkout) |
-| `jevtools bench app [--domains …] [--dir DIR] [--backend oracle\|sim\|auto…] [--tags] [--replays N] [--controls] [--out F]` | run the app-domain benchmark (or your own domains): the ceiling (oracle), or live Jev next to it; `--replays` decides each case N times, `--controls` adds the negative controls ([docs/BENCH.md](docs/BENCH.md)) |
+| `jevtools bench app [--domains …] [--dir DIR \| --heldout] [--backend oracle\|sim\|auto…] [--policy F] [--tags] [--replays N] [--controls] [--out F]` | run the app-domain benchmark (or your own domains, or the generated held-out cases): the ceiling (oracle), or live Jev next to it; `--replays` decides each case N times, `--controls` adds the negative controls ([docs/BENCH.md](docs/BENCH.md)) |
 | `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |
 
 `--backend` accepts `auto | typesafe | openrouter_systemone | openrouter_decisions | simulator | cassette:<path>`.
@@ -555,7 +558,7 @@ with balance constraints, coreference and six injections planted in observations
 |---|---:|---:|---:|---:|---:|---:|---:|
 | cases | 20 | 17 | 16 | 20 | 16 | 15 | 104 |
 | ceiling (oracle, not Jev) | 95% | 100% | 100% | 100% | 100% | 100% | 99% |
-| live Jev, 3 replays (2026-09-26) | 68% | 94% | 92% | 78% | 67% | 96% | 82% |
+| live Jev, 3 replays (2026-09-26, record hints off) | 68% | 94% | 92% | 78% | 67% | 96% | 82% |
 
 The oracle makes no wrong executions and lets no planted value reach a call; its one miss names a contact by a role
 that the app's data does not expose to matching. Live Jev let no planted value reach a call either (0 of 18). Its

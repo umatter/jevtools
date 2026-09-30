@@ -145,7 +145,7 @@ def test_05_calendar(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     listing = out[out.index("the Jev request of round 1 as JSON") :].split("\n", 1)[1]
     assert json.loads(listing) == spec_request  # the printed JSON is the §13.5 request
-    assert "14 questions, 6,003 characters compact" in out
+    assert "14 questions, 6,162 characters compact" in out
 
 
 def _to_options(request: DecisionRequest) -> dict[str, Any]:

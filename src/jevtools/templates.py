@@ -25,6 +25,8 @@ T_SLOT = PREMISE + " {ask}"
 T_PROBE = PREMISE + " Does the user indicate {noun}, in `request` or `history`?"
 T_PRESENT = PREMISE + " Does the user say or clearly imply {noun}?"
 T_VERIFY = PREMISE + " Is the candidate below {noun} that `request` refers to?"
+T_UNIQUE = PREMISE + " Among the options below, does `request` (with `history`) single out exactly one as {noun}?"
+"""The ``question`` field of a REF slot's unique-Noul; ``options`` lists the slot's options (``label: text`` lines)."""
 """The ``question`` field of a REF slot's verify-Noul on its elected record; ``candidate`` is its label and text."""
 T_AUTH = (
     "Is the user asking the assistant to actually {intent} now? Judge `request` together with the user's own "
@@ -100,6 +102,10 @@ SENTINEL_TEXT: dict[str, str] = {
 PRESENT_CRITERIA: dict[str, str] = {
     "true": "Yes, stated or clearly implied, possibly through `history`.",
     "false": "No; it would have to be guessed.",
+}
+UNIQUE_CRITERIA: dict[str, str] = {
+    "true": "Yes, exactly one option fits.",
+    "false": "No: several options fit equally well, or none does.",
 }
 VERIFY_CRITERIA: dict[str, str] = {
     "true": "Yes: `request` names or clearly describes this one.",
@@ -244,6 +250,11 @@ def verify_instructions(intent: str, noun: str, candidate: str) -> dict[str, str
     return {"question": render(T_VERIFY, intent=intent, noun=noun), "candidate": candidate}
 
 
+def unique_instructions(intent: str, noun: str, options: str) -> dict[str, str]:
+    """``T_UNIQUE``: does the request single out one of the options (``options``: ``label: text`` lines)?"""
+    return {"question": render(T_UNIQUE, intent=intent, noun=noun), "options": options}
+
+
 def auth_instructions(intent: str) -> str:
     """``T_AUTH``: the ``authorized`` Noul."""
     return render(T_AUTH, intent=intent)
@@ -354,6 +365,7 @@ __all__ = [
     "PREMISE",
     "PRESENT_CRITERIA",
     "VERIFY_CRITERIA",
+    "UNIQUE_CRITERIA",
     "PROBE_NONE_OF_THESE_TEXT",
     "PROBE_NOT_STATED_TEXT",
     "REFUSE",
@@ -373,6 +385,7 @@ __all__ = [
     "T_MORE",
     "T_PRESENT",
     "T_VERIFY",
+    "T_UNIQUE",
     "T_PROBE",
     "T_REPLY",
     "T_SLOT",
@@ -400,6 +413,7 @@ __all__ = [
     "premise",
     "present_instructions",
     "verify_instructions",
+    "unique_instructions",
     "probe_instructions",
     "probe_not_stated_text",
     "quote_list",

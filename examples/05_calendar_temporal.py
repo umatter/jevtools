@@ -58,7 +58,7 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
             first = False
     compact = json.dumps(request, ensure_ascii=False, separators=(",", ":"))
     _show.kv("request", f"{len(request['questions'])} questions, {len(compact):,} characters compact "
-                        f"(spec §13.5: 14 questions, 6,003 characters)")  # fmt: skip
+                        f"(spec §13.5: 14 questions, 6,162 characters)")  # fmt: skip
 
     _show.step(f'R5 "{scripts.R5_REQUEST}"   (spec [I]: confirm, PI = 0.550)')
     d = router.decide(messages)

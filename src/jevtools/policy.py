@@ -90,10 +90,10 @@ class ToolPolicy(_Section):
     min_margin: float = 0.20
     pair_cover: float = 0.85
     """Clarify between the top-2 tools if they cover at least this much mass, else escalate."""
-    record_hints: int = 0
-    """Experimental, off (0): name up to this many records the request matches (best-anchored first) in the ``tool``
-    option of each tool that takes one, so the tool Choice knows a matching record exists (§3.5.4 ``T_TOOL_MATCHES``;
-    DECISIONS "record hints")."""
+    record_hints: int = 3
+    """Name up to this many records the request matches (best-anchored first) in the ``tool`` option of each tool that
+    takes one, so the tool Choice knows a matching record exists (§3.5.4 ``T_TOOL_MATCHES``; DECISIONS "record hints");
+    0 turns it off."""
 
 
 class ShapePolicy(_Section):
@@ -111,6 +111,9 @@ class ShapePolicy(_Section):
     accept_min: float = 0.50
     cosmetic_floor: float = 0.50
     verify_min: float = 0.50
+    unique_min: float = 0.50
+    """A shown call whose identity REF slot's ``unique`` Noul is below this gets a menu: the request fits several
+    records and Jev's election is a guess, e.g. the newest of three "board decks" (§3.8.3)."""
     """A shown call (execute or confirm) whose elected record's ``verify`` Noul is below this gets a menu: the request
     may name a different record than the look-alike Jev elected (§3.8.3)."""
     alt_show_min: float = 0.10
@@ -161,6 +164,8 @@ class ProbePolicy(_Section):
     present: tuple[Tier, ...] = (Tier.EXTERNAL, Tier.CRITICAL)
     reverse: tuple[Tier, ...] = (Tier.CRITICAL,)
     verify: tuple[Tier, ...] = (Tier.WRITE, Tier.EXTERNAL, Tier.CRITICAL)
+    unique: tuple[Tier, ...] = ()
+    """Experimental, off: tiers whose identity REF slots get a ``unique`` Noul (does the request single out one?)."""
 
 
 class WidenPolicy(_Section):
@@ -182,6 +187,8 @@ class PoolPolicy(_Section):
     members_max: int = 40
     joint_max: int = 24
     verify_k: int = 3
+    unique_k: int = 10
+    """Options listed in a ``unique`` Noul: the best-anchored first, then the rest of the pool in option order."""
     """First-round ``verify`` Nouls per identity REF slot: its best-anchored records (§3.8.3)."""
 
 
@@ -391,6 +398,8 @@ class PolicyInput(BaseModel):
     present: dict[str, float] = Field(default_factory=dict)
     verify: dict[str, float] = Field(default_factory=dict)
     """``verify`` Nouls on the elected records of identity REF slots (slot name → P(yes))."""
+    unique: dict[str, float] = Field(default_factory=dict)
+    """``unique`` Nouls of identity REF slots (slot name → P(the request singles out one record))."""
     loop: bool = False
     escalator: bool = False
     widen_ok: list[str] = Field(default_factory=list)
@@ -624,6 +633,10 @@ def _p9(inp: PolicyInput, policy: Policy) -> PolicyResult:
     if inp.confirmed and _clears(c, confirm_at if confirm_at is not None else execute_at, h):
         return PolicyResult(outcome=Outcome.EXECUTE, rule=tier_rule(tier, "confirmed"), caps=caps)
     if _clears(c, execute_at, h) or _clears(c, confirm_at, h):
+        several = next((n for n, p in inp.unique.items() if p < policy.shapes.unique_min - _EPS), None)
+        if several is not None:
+            return PolicyResult(outcome=Outcome.CLARIFY, rule=tier_rule(tier, "ambiguous"), bottleneck=several,
+                                shape="ambiguous", caps=caps, ask="menu", reason="unique")  # fmt: skip
         doubted = _unverified(inp, policy)
         if doubted is not None:
             return PolicyResult(outcome=Outcome.CLARIFY, rule=tier_rule(tier, "unverified"), bottleneck=doubted,

@@ -344,6 +344,9 @@ class OracleBackend:
             return P_NO
         if q.family == "present":  # consistent with the slot's own election: a real value is stated
             return P_YES if self._elects_value(q) else 0.2
+        if q.family == "unique":  # not singled out: the gold accepts several values for this slot and wants a menu
+            wants_menu = isinstance(self.gold, EvalGold) and set(self.gold.case.gold.outcomes_ok) <= {"clarify"}
+            return P_NO if wants_menu and acceptable is not None and len(acceptable) > 1 else P_YES
         if acceptable is None:
             return 0.5
         if q.family == "slot" and q.kind == "flag":  # a flag without a default is a Noul: P(true)

@@ -197,7 +197,30 @@ class RefResolver(ChoiceResolver):
         if slot.stakes == "identity" and len(slot.path) == 1 and tool.tier in rc.policy.probes.verify:
             anchored = [o for o in self.best_anchored(base[0], pool, rc.policy.pools.verify_k) if not self.typed_key(o)]
             out += [self.verify_question(tool, slot, option, i) for i, option in enumerate(anchored)]
+        if slot.stakes == "identity" and len(slot.path) == 1 and real >= 2 and tool.tier in rc.policy.probes.unique:
+            out.append(self.unique_question(tool, slot, base[0], pool, rc.policy.pools.unique_k))
         return out
+
+    def unique_question(
+        self, tool: ToolSpec, slot: SlotSpec, question: BallotQuestion, pool: Pool, k: int
+    ) -> BallotQuestion:
+        """``T.P.unique``: does the request single out one of the slot's options? Lists up to ``k`` options, the
+        best-anchored first (§3.8.3; experimental, ``probes.unique``)."""
+        first = self.best_anchored(question, pool, k)
+        keys = {value_key(o.value) for o in first}
+        shown = (first + [o for o in question.options if value_key(o.value) not in keys])[:k]
+        lines = "\n".join(f"{o.label}: {o.text}" if isinstance(o.text, str) and o.text else o.label for o in shown)
+        return BallotQuestion(
+            qid=slot_qid(tool.id, slot.qpath, "unique"),
+            family="unique",
+            tool=tool.name,
+            path=slot.path,
+            kind=slot.kind,
+            stakes=slot.stakes,
+            primitive="noul",
+            instructions=templates.unique_instructions(tool.intent, slot.noun, lines),
+            criteria=dict(templates.UNIQUE_CRITERIA),
+        )
 
     @staticmethod
     def best_anchored(question: BallotQuestion, pool: Pool, k: int) -> list[BallotOption]:

@@ -196,6 +196,56 @@ Per domain, off → on: inbox 68 → 68%, crm 94 → 94%, banking 92 → 88%, wo
 research 96 → 100%. The 3 wrong executions with hints on are one case: "Open the board deck" opens the newest of
 three decks instead of asking which.
 
+### Several fitting records (experimental)
+
+`probes.unique` (off by default) asks whether the request singles out one record, and turns a shown call into a menu
+when it does not (DECISIONS "unique"). Live, 2026-09-26, 104 cases × 3 replays with controls:
+
+| | Off | `record_hints = 3` | `unique` (all tiers) | Both |
+|---|---:|---:|---:|---:|
+| Correct (pooled) | 82% | 83% | 83% | 83% |
+| Calls right | 74% | 79% | 77% | 77% |
+| Wrong executions | 9 | 3 | 9 | **0** |
+| Search cases (ws-08, ws-16 … ws-20) | 100% | 67% | 100% | 53% |
+| False bindings in 198 controls | 0 | 0 | 1 | 0 |
+| Input tokens per decision | 3,461 | 3,594 | 4,206 | 4,345 |
+
+With `unique`, "Open the board deck" and "Share the board deck…" become menus for the right reason in both columns.
+The one false binding is the budget-review look-alike passing `verify` in one replay.
+
+### Held-out
+
+`jevtools bench app --heldout` runs 284 generated cases over the same six apps (`python -m jevtools.bench.app._heldout`):
+templates over each domain's rows, so the gold follows from the data. A description that fits exactly one record
+expects it; one that fits several with nothing to tell them apart expects a menu; a search request expects the
+search tool. Generation fails if a description does not fit the records its label claims, and no message repeats
+the development bench. The oracle solves all 284; its controls (194) are all safe. Features are not tuned on it.
+
+Live, 2026-09-26, 284 cases × 3 replays with 582 control decisions per column:
+
+| | Off | `record_hints = 3` | `unique` | Both |
+|---|---:|---:|---:|---:|
+| Correct (pooled) | 79.5% | **82.5%** | 78.6% | 82.2% |
+| Calls right | 75.4% | **79.1%** | 74.0% | 77.4% |
+| Wrong executions | 29 | 12 | 28 | **9** |
+| Open a described file | 46% | 94% | 49% | **100%** |
+| Several fitting records | 90% | 92% | 92% | **98%** |
+| Search requests | 100% | 86% | 100% | 86% |
+| Accounts by name | 100% | 100% | 80% | 80% |
+| False bindings in controls | 12 | 12 | 11 | 11 |
+| Input tokens per decision | 4,185 | 4,331 | 5,120 | 5,267 |
+
+Per domain (off / hints / unique / both): inbox 53 / 52 / 53 / 52%, crm 98 / 96 / 98 / 98%, banking 100 / 98 / 94
+/ 90%, workspace 75 / 91 / 76 / 93%, helpdesk 76 / 76 / 75 / 74%, research 92 / 98 / 91 / 97%.
+
+Decision: record hints on by default; `unique` stays off (it helps its own cases but not overall, and costs 22%
+more tokens). Two problems the development bench had understated, the same in every column:
+
+- **Emails to a full name: 0% of 22.** "Email Anna Keller that …" leaves ~45% of the recipient Choice on the
+  sentinels although the name is exact, so C ≈ 0.40 and the decision is a menu (the first live run's inbox-01).
+- **Read-tier look-alikes: 12 false bindings.** "What's the balance of my Savings account?" with Savings removed shows
+  Travel savings, and the reverse, in every replay: `verify` covers write tiers and above only.
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.

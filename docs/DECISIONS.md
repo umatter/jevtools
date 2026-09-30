@@ -1800,3 +1800,37 @@ Extends "Documentation and final merge":
   because the tool Choice was unsure (`P5.tool.ambiguous`); the path Choice already elected the newest deck. With the
   tool certain, it executes the Q3 deck (read tier, no `verify`), and "Share the board deck…" confirms it. That is an
   identity slot reading "the X" as the most recent X; it needs its own fix before hints can be the default.
+
+## Several fitting records (`unique`, experimental, off by default)
+
+- Problem (measured): "Open the board deck" with three decks elected the newest (Q3, 0.80) although all three had the
+  same match note; Jev reads "the X" as the current X. With hints off it still ended in a menu, but only because the
+  tool Choice was unsure; `verify` cannot catch it (the Q3 deck *is* a board deck). A code rule ("the anchors tie")
+  would be wrong: in R2 the history singles out Anna Keller, and "my savings" names the account called Savings.
+- Wording, measured on every bench slot with a known answer (8 whose gold accepts several records and wants a menu,
+  69 whose gold names one): "Could `request` refer to more than one of the options?" flagged 8/8 but 15/69 false
+  alarms; "does `request` (with `history`) single out exactly one?" flagged 7/8 with 4/69 (two of them defensible:
+  "the household survey" has two waves, "savings" two accounts; one real, "Cancel the budget review" at 0.18).
+- §3.5.3 family `unique` (`T.P.unique`, a Noul whose `options` field lists up to `pools.unique_k` = 10 options,
+  best-anchored first), asked in the first round for top-level identity REF slots with ≥ 2 real candidates in tiers
+  `probes.unique` (default: none). §3.8.3: below `shapes.unique_min` = 0.50, a shown call becomes `clarify(menu)`
+  (`P9.<tier>.ambiguous`, reason `unique`), checked before `verify`; a click wins. Split units treat it like `verify`.
+- The oracle answers no only when the gold accepts several values *and* wants a menu (ws-05 accepts two destination
+  folders because either is fine).
+- Live, 104 cases × 3 replays + 198 controls, all four tiers: correct 82% → 83%, calls right 74% → 77%, search cases
+  unchanged (100%), the deck cases become menus for the right reason; input tokens per decision +22% (3,461 → 4,206).
+  With `tool.record_hints = 3` as well: 83%, calls right 77%, wrong executions 9 → 0, search cases 53%.
+- The `unique` run had one false binding in 198 controls: the original look-alike (inbox-09, budget review removed)
+  passed `verify` in one of three replays. `verify` is not airtight under a changed request (0/198 when measured,
+  1/198 here).
+
+## Held-out bench and the defaults
+
+- The development bench had shaped every feature since the first live run, so decisions between variants now use a
+  generated held-out set (`bench/app/_heldout.py`, 284 cases over the same apps; `--heldout`). Its gold follows from
+  the data and each description is checked against the rows when generated (two slips were caught that way: "the
+  Alpha project notes" fits four files, and a `pay_bill` gold that named no account). The oracle solves every case.
+- Live (BENCH "Held-out"): record hints +3 points and wrong executions 29 → 12, at a cost to search requests (100% →
+  86%, as menus); `unique` +0 overall (+6 points on several fitting records, −20 on accounts, +22% tokens). Defaults:
+  `tool.record_hints = 3`, `probes.unique = []`. The spec's §13.4/§13.5 requests now carry the send_email hint (R2
+  7,629 characters, R5 6,162); golden fixtures were regenerated with no outcome, rule or round change.

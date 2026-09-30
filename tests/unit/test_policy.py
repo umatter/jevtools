@@ -16,7 +16,7 @@ shadow = false
 min_p = 0.50
 min_margin = 0.20
 pair_cover = 0.85
-record_hints = 0
+record_hints = 3
 
 [shapes]
 out_of_pool = 0.30
@@ -26,6 +26,7 @@ flag_band = [0.20, 0.80]
 accept_min = 0.50
 cosmetic_floor = 0.50
 verify_min = 0.50
+unique_min = 0.50
 alt_show_min = 0.10
 
 [tiers.read]
@@ -58,6 +59,7 @@ require_present = 0.80
 present = ["external", "critical"]
 reverse = ["critical"]
 verify = ["write", "external", "critical"]
+unique = []
 
 [widen]
 max_rounds = 2
@@ -73,6 +75,7 @@ items_max = 60
 members_max = 40
 joint_max = 24
 verify_k = 3
+unique_k = 10
 
 [loop]
 max_steps = 6

@@ -228,7 +228,7 @@ def test_speculate_overrides() -> None:
     assert {t.name: t.speculated for t in again.ballot.tools}["get_never"] is True
 
 
-def test_record_hints_name_the_anchored_records_only_when_on() -> None:
+def test_record_hints_name_the_anchored_records_unless_off() -> None:
     from jevtools.backends.scripted import ScriptedBackend
     from jevtools.bench.app import load_domain
     from jevtools.eval.harness import router_factory_for
@@ -240,9 +240,9 @@ def test_record_hints_name_the_anchored_records_only_when_on() -> None:
         ballot = router_factory_for(ScriptedBackend({}), policy=policy)(case).compile(case.messages)
         return {str(o.value): str(o.text) for o in ballot.question("tool").options}
 
-    off = tool_texts(None)
-    assert not any("Existing records" in text for text in off.values())  # the default sends nothing new
-    on = tool_texts(Policy.from_dict({"tool": {"record_hints": 3}}))
+    off = tool_texts(Policy.from_dict({"tool": {"record_hints": 0}}))
+    assert not any("Existing records" in text for text in off.values())  # 0 turns hints off
+    on = tool_texts(None)  # the default: 3
     hint = on["read_file"].removeprefix(off["read_file"])
     assert hint.startswith(" Existing records that match the request for the file: ")
     assert "board/2026-Q3_board_deck.pptx" in hint and hint.count(", ") == 2  # three records

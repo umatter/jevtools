@@ -408,7 +408,7 @@ qid      := "tool" | "reply" | "segmentation" | seg? T "." F
 seg      := "s" DIGIT+ "."                           ; multi-intent segment (ext.parallel)
 T        := sanitized tool name                      ; lowercase, [^a-z0-9_]→"_", leading digit → "t_", collisions → "_2"
 F        := "authorized" | "joint" ("." G)? | "done_after"
-          | P ( "" | ".present" | ".rev" | ".date" | ".time" | ".branch" | ".more" | ".group"
+          | P ( "" | ".present" | ".rev" | ".unique" | ".date" | ".time" | ".branch" | ".more" | ".group"
                   | ".accept." N | ".verify." N | ".m" N | ".item." N | ".member." N | ".bucket." N )
 P        := sanitized param path, segments joined by "."; a segment equal to a reserved suffix word gets "_" appended
 ```
@@ -427,6 +427,7 @@ P        := sanitized param path, segments joined by "."; a segment equal to a r
 | present | `T.P.present` | Noul | REF slots of tier external or critical | consistency check (not a factor) |
 | rev | `T.P.rev` | Choice: same options, real candidates in *reverse* canonical order | REF slots with ≥ 2 real candidates in critical tier (config `probes.reverse`) | f = min(fwd, rev); disagreement flag |
 | verify | `T.P.verify.i` | Noul (`T_VERIFY`; the candidate is the record's label and match note) | top-level identity REF slots in tiers `probes.verify` (write, external, critical): the `pools.verify_k` = 3 best-anchored records, except a key the user typed; in a follow-up round, the elected record when the first round did not verify it (§3.8.3) | gate on the elected record (not a factor) |
+| unique | `T.P.unique` | Noul (`T_UNIQUE`; `options` lists up to `pools.unique_k` = 10 options, best-anchored first) | experimental, off: top-level identity REF slots with ≥ 2 real candidates in tiers `probes.unique` | gate on the slot (not a factor) |
 | date / time | `T.P.date`, `T.P.time` | Choice each | temporal with > 24 complete readings | f_date · f_time |
 | accept | `T.P.accept.i` | Noul (content or cosmetic template) | TEXT slots: one per candidate (≤ 4 content, ≤ 3 cosmetic) | elected = argmax; f = n(elected) |
 | mention | `T.P.mi` | Choice: matches + `EXCLUDE` + `NONE_OF_THESE` | anchored lists: one per user mention (≤ 8) | per-anchor value |
@@ -458,7 +459,7 @@ T_TOOL_LOOP   T_TOOL + " Steps already taken are in `progress`."
   UNSUPPORTED   The user wants an action that none of the listed actions can perform.
   DONE          The steps in `progress` already complete everything `request` asks for.
   <tool label>  <tool description, first sentence, ≤ 200 chars>
-                [+ T_TOOL_MATCHES per identity REF slot, only when `tool.record_hints` = k > 0 (experimental, off):
+                [+ T_TOOL_MATCHES per identity REF slot when `tool.record_hints` = k > 0 (default 3):
                 " Existing records that match the request for {noun}: {label}, {label}, {label}." — the k
                 best-anchored records]
 
@@ -473,6 +474,10 @@ T_PROBE       PREMISE + " Does the user indicate {noun}, in `request` or `histor
 T_PRESENT     PREMISE + " Does the user say or clearly imply {noun}?"
   true          Yes, stated or clearly implied, possibly through `history`.
   false         No; it would have to be guessed.
+T_UNIQUE      instructions = {"question": PREMISE + " Among the options below, does `request` (with `history`) single out
+              exactly one as {noun}?", "options": "<label>: <text>\n…"}
+  true          Yes, exactly one option fits.
+  false         No: several options fit equally well, or none does.
 T_VERIFY      instructions = {"question": PREMISE + " Is the candidate below {noun} that `request` refers to?",
               "candidate": "<label>. <match note and description>"}
   true          Yes: `request` names or clearly describes this one.
@@ -723,6 +728,11 @@ round. A verify answer below `shapes.verify_min` = 0.50 turns the call into `cla
 `verify`). It is a gate, not a factor: C is unchanged. It exists because Jev's slot Choice, with the requested record
 missing, can confidently elect a record that merely shares a word with the request ("Cancel the budget review" →
 "ACME quarterly review"); the Noul, shown the record's match note, rejects that (DECISIONS "look-alike check").
+
+**Several fitting records (`P9.<tier>.ambiguous`, reason `unique`; experimental, off).** In a tier of
+`probes.unique`, a shown call whose identity REF slot's `unique` Noul is below `shapes.unique_min` = 0.50 becomes
+`clarify(menu)` on that slot: the request fits several records, and Jev's election is a prior, not the user's
+choice ("Open the board deck" with three decks → the newest). It is checked before `verify`; a click wins.
 
 #### 3.8.4 Prompts (no generated text)
 
@@ -2113,7 +2123,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
 
 ### 13.4 Full request JSON: R2 (OpenRouter Decisions backend; TypeSafe direct would send `"model": "jev-latest"`)
 
-16 questions, 7,460 characters, **≈2k tokens [I]**, ≈ $0.00008.
+16 questions, 7,629 characters, **≈2k tokens [I]**, ≈ $0.00008.
 
 ```json
 {
@@ -2136,7 +2146,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
         "get_weather": "Get the current weather for a city.",
         "read_file": "Open a file in the user's workspace.",
         "search_web": "Search the public web.",
-        "send_email": "Send an email from the user to one recipient.",
+        "send_email": "Send an email from the user to one recipient. Existing records that match the request for the recipient: Anna Keller <anna.keller@acme.com>, Anna Rossi <anna.rossi@gmail.com>, Annabel Frey <annabel.frey@muster.ch>.",
         "transfer_funds": "Move money between two of the user's own bank accounts.",
         "NO_TOOL": "No action is needed: conversation, small talk, a joke, or something the assistant can answer by itself.",
         "UNSUPPORTED": "The user wants an action that none of the listed actions can perform."
@@ -2253,7 +2263,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
 
 ### 13.5 Full request JSON: R5
 
-14 questions, 6,003 characters, **≈1.7k tokens [I]**, ≈ $0.00007.
+14 questions, 6,162 characters, **≈1.7k tokens [I]**, ≈ $0.00007.
 
 ```json
 {
@@ -2273,7 +2283,7 @@ All answers are [I]. "Questions" lists only the speculated tools. Every request 
         "get_weather": "Get the current weather for a city.",
         "read_file": "Open a file in the user's workspace.",
         "search_web": "Search the public web.",
-        "send_email": "Send an email from the user to one recipient.",
+        "send_email": "Send an email from the user to one recipient. Existing records that match the request for the recipient: Bob Meier <bob.meier@muster.ch>, Carol Liu <carol.liu@muster.ch>, Robert Brown <rbrown@partner.io>.",
         "transfer_funds": "Move money between two of the user's own bank accounts.",
         "NO_TOOL": "No action is needed: conversation, small talk, a joke, or something the assistant can answer by itself.",
         "UNSUPPORTED": "The user wants an action that none of the listed actions can perform."
@@ -2541,7 +2551,7 @@ shadow = false
 min_p = 0.50
 min_margin = 0.20
 pair_cover = 0.85          # clarify between top-2 tools if they cover ≥ this, else escalate
-record_hints = 0           # experimental, off: name the k best-anchored records in tool options (DECISIONS)
+record_hints = 3           # name the k best-anchored records in tool options; 0 = off (DECISIONS)
 
 [shapes]
 out_of_pool = 0.30         # NONE_OF_THESE mass → widen / clarify(open)
@@ -2552,6 +2562,7 @@ flag_band = [0.20, 0.80]   # Noul dead band → clarify(yes/no)
 accept_min = 0.50          # text uncovered below this
 cosmetic_floor = 0.50
 verify_min = 0.50          # a shown call's elected record doubted below this → clarify(menu) (§3.8.3)
+unique_min = 0.50          # experimental: a slot the request does not single out → clarify(menu) (§3.8.3)
 alt_show_min = 0.10        # runner-ups shown on confirm cards
 
 [tiers.read]
@@ -2584,6 +2595,7 @@ require_present = 0.80     # until E2 passes (§11.2)
 present = ["external", "critical"]   # REF slots
 reverse = ["critical"]               # REF slots with ≥ 2 real candidates
 verify = ["write", "external", "critical"]   # identity REF slots of a shown call (§3.8.3)
+unique = []                                  # experimental, off: tiers that ask "does the request single out one?"
 
 [widen]
 max_rounds = 2
@@ -2599,6 +2611,7 @@ items_max = 60
 members_max = 40
 joint_max = 24
 verify_k = 3                         # first-round verify Nouls per identity REF slot
+unique_k = 10                        # options listed in a unique Noul
 
 [loop]
 max_steps = 6

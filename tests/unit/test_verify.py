@@ -91,3 +91,40 @@ def test_verify_can_be_switched_off() -> None:
     policy = Policy.from_dict({"probes": {"verify": []}})
     _, backend, d = decide(scripts.R3, scripts.R3_REQUEST, policy=policy)
     assert not any(".verify." in q for q in backend.requests[0].questions) and d.rounds == 1
+
+
+# -- unique (experimental, off by default) -------------------------------------------------------------------------
+
+
+def test_several_fitting_records_turn_a_shown_call_into_a_menu() -> None:
+    several = evaluate(shown({}).model_copy(update={"unique": {"owner": 0.2}}))
+    assert (several.outcome, several.rule, several.reason) == (Outcome.CLARIFY, "P9.write.ambiguous", "unique")
+    assert evaluate(shown({}).model_copy(update={"unique": {"owner": 0.9}})).outcome is Outcome.EXECUTE
+    clicked = shown({}, confirmed=True).model_copy(update={"unique": {"owner": 0.2}})
+    assert evaluate(clicked).rule == "P9.write.confirmed"  # the user's click picked one
+
+
+def test_unique_lists_the_options_best_anchored_first_only_when_on() -> None:
+    case = next(c for c in load_domain("workspace") if c.id == "ws-02")  # "Open the board deck": three decks
+
+    def unique_of(policy: Policy | None) -> Any:
+        ballot = router_factory_for(ScriptedBackend({}), policy=policy)(case).compile(case.messages)
+        return next((q for q in ballot.questions if q.family == "unique"), None)
+
+    assert unique_of(None) is None  # off by default
+    question = unique_of(Policy.from_dict({"probes": {"unique": ["read"]}}))
+    assert question is not None and question.qid == "read_file.path.unique"
+    options = question.instructions["options"].splitlines()
+    assert len(options) == 10 and all("board_deck" in line for line in options[:3])  # the three anchored decks first
+    assert "single out exactly one as the file" in question.instructions["question"]
+
+
+def test_the_oracle_says_not_unique_only_where_the_gold_wants_a_menu() -> None:
+    from jevtools.bench.app.runner import _oracle_router
+
+    policy = Policy.from_dict({"probes": {"unique": ["read", "write"]}})
+    cases = {c.id: c for c in load_domain("workspace")}
+    ambiguous = _oracle_router(cases["ws-02"], removed=False, policy=policy).decide(cases["ws-02"].messages)
+    assert ambiguous.trace.gates["unique.path"] < 0.5 and ambiguous.outcome is Outcome.CLARIFY
+    several_fine = _oracle_router(cases["ws-05"], removed=False, policy=policy).decide(cases["ws-05"].messages)
+    assert several_fine.trace.gates["unique.destination"] > 0.5  # two acceptable folders, but no menu wanted

@@ -233,20 +233,21 @@ def account(key: str, nickname: str, currency: str, iban: str, balance: float, a
     )
 
 
-def accounts(savings_balance: float = 12000.0) -> list[Candidate]:
-    """The four scenario accounts; ``savings``/``checking`` mentions anchor three of them."""
-    return [account("acc_7731", "Savings", "CHF", "CH93…2957", savings_balance, "savings"),
-            account("acc_2210", "Checking", "CHF", "CH56…1180", 2300.0, "checking"),
-            account("acc_4410", "Travel savings", "EUR", "CH08…4410", 800.0, "savings"),
+def accounts(savings_balance: float = 12000.0, *, anchored: bool = True) -> list[Candidate]:
+    """The four scenario accounts; ``savings``/``checking`` mentions anchor three of them (``anchored=False``: a
+    request that mentions no account, as in R2)."""
+    return [account("acc_7731", "Savings", "CHF", "CH93…2957", savings_balance, "savings" if anchored else None),
+            account("acc_2210", "Checking", "CHF", "CH56…1180", 2300.0, "checking" if anchored else None),
+            account("acc_4410", "Travel savings", "EUR", "CH08…4410", 800.0, "savings" if anchored else None),
             account("acc_5102", "Joint household", "CHF", "CH12…5102", 5100.0, None)]  # fmt: skip
 
 
 def scenario_resolvers(*, savings_balance: float = 12000.0, city: Sequence[Candidate] = (),
                        amount: Sequence[Candidate] = (cand("250.00", "user"),),
                        verify: bool = False) -> list[Any]:  # fmt: skip
-    """Stubs for every non-enum kind of the §13.2 catalog, loaded with the scenario rows (``verify``: also the
-    first-round ``send_email.to.verify.i`` Nouls of the spec's R2 request)."""
-    rows = accounts(savings_balance)
+    """Stubs for every non-enum kind of the §13.2 catalog, loaded with the scenario rows (``verify``: the spec's R2
+    request, with its first-round ``send_email.to.verify.i`` Nouls and no account anchored)."""
+    rows = accounts(savings_balance, anchored=not verify)
     ref = StubChoice("ref", {"send_email.to": ANNAS, "transfer_funds.from_account": rows,
                              "transfer_funds.to_account": rows}, present=["send_email.to"],
                      verify=["send_email.to"] if verify else ())  # fmt: skip
