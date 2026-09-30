@@ -1917,3 +1917,19 @@ Extends "Documentation and final merge":
   and verify (`candidates.anchor_rank`). Live: card requests 100% in both runs since.
 - Live after all three (held-out, 3 replays): 93.2% (93 / 93 / 93), 1 wrong execution ("Open the budget": the newer
   of two budgets), 0 wrong calls shown in the write tier and above, false bindings 8 (the Savings controls).
+
+## A 31-tool catalog, and why there is no tool tree (yet)
+
+- `jevtools bench app --merged-catalog` gives every case the tools of all six apps (31, names distinct) with its own
+  context and data. Live, held-out, 3 replays (BENCH "A 31-tool catalog"): correct 93.2% → 91.2%, the tool
+  question's top wrong in 21 of 852 decisions (6 with one app), input tokens per decision 4,573 → 9,807, one
+  decision lost to a service outage (retried, then counted as a miss).
+- Most wrong picks are near-duplicate tools from two apps that a real catalog would not carry side by side:
+  `share_file` → `share_report` (6; the one wrong call shown in the write tier is this: the right file shared with the
+  right person by the other app's tool) and `summarize_dataset` → `read_file` (3). Genuine confusions: `search_files`
+  → `list_events` (5, "Look for anything on the kickoff"); the rest are cautious (NO_TOOL ↔ UNSUPPORTED).
+- The large-catalog cost is tokens: tools of other apps become viable with the case's own data (`send_email` finds
+  recipients in the workspace's people), so a request carries 46 questions instead of 17. A tool tree could prune
+  them only by asking in stages (the tool first, the chosen branch's slots next), a second Jev round per turn, to
+  save about $0.0002 per decision. Not built: it would fix a handful of genuine confusions and trade latency for a
+  cost that is already small. The bench can measure it if catalogs of 100+ tools or token budgets make it worth it.

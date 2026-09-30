@@ -251,3 +251,15 @@ def test_backend_failures_are_retried_and_never_count_as_safe(monkeypatch: pytes
     assert down.records[0].record.stage == "backend" and down.summary()["inbox"]["backend_failures"] == 1
     control = down.control_summary()["inbox"]
     assert control["backend_failures"] == control["n"] and control["safe"] is None  # no evidence either way
+
+
+def test_merged_catalog_gives_every_case_all_tools() -> None:
+    from jevtools.bench.app.runner import merged_catalog, with_catalog
+
+    tools = merged_catalog()
+    names = [t["function"]["name"] for t in tools]
+    assert len(names) == len(set(names)) == 31
+    pairs = with_catalog([("helpdesk", case("helpdesk", "hd-01"))], tools)
+    assert len(pairs[0][1].catalog_tools() or []) == 31 and pairs[0][1].build_context().sources  # own data kept
+    report = run_app(pairs, "oracle")
+    assert report.summary()["helpdesk"]["ceiling"] == 1.0

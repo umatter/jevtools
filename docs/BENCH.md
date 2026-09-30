@@ -324,6 +324,26 @@ Per domain (baseline → final): inbox 86 → 87%, crm 97 → 96%, banking 97 �
 87%, research 99 → 97%. On the final run's recorded answers, removing only the present fallback gives 92.1% (typed
 IDs 80%) with every other category unchanged.
 
+### A 31-tool catalog
+
+`--merged-catalog` gives every case the tools of all six apps (31) while it keeps its own context and data. Live,
+2026-09-30, held-out, 3 replays with controls:
+
+| | One app (6–7 tools) | All apps (31 tools) |
+|---|---:|---:|
+| Correct (pooled) | 93.2% | 91.2% |
+| Calls right | 92.8% | 89.8% |
+| Tool question's top wrong | 6 of 852 | 21 of 852 |
+| Misses caused by the tool | 0 of 58 | 17 of 75 |
+| Wrong calls shown, write tier and above | 0 | 3 (one case: `share_report` for `share_file`, same file, same person) |
+| False bindings in controls | 8 | 13 |
+| Questions per request (median) | 17 | 46 |
+| Input tokens per decision | 4,573 | 9,807 |
+
+Wrong tool picks: `share_file` → `share_report` 6 and `summarize_dataset` → `read_file` 3 (near-duplicate tools of two
+apps), `search_files` → `list_events` 5, `search_files` → NO_TOOL 3, NO_TOOL → UNSUPPORTED 3. One decision was lost to
+a 26-minute service outage (retried, then counted as a miss).
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.

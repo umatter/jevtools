@@ -33,8 +33,17 @@ python -m jevtools.bench.app._generate [--check]         # app-bench domain data
 python -m jevtools.bench.app._heldout [--check]          # generated held-out cases under src/jevtools/bench/app/heldout/
 jevtools bench app                                       # oracle ceiling on the 6 app domains (104 cases)
 jevtools bench app --heldout --backend auto --replays 3 --controls --policy F   # decide variants on held-out cases
+jevtools bench app --heldout ... --record DIR            # keep every Jev answer (one cassette per replay)
+jevtools bench app --heldout --controls --replay DIR --policy F   # re-decide recorded answers offline, no API cost
+jevtools bench app --heldout --merged-catalog ...        # every case sees all 31 tools (large-catalog behaviour)
 jevtools bench bfcl [--download]                         # BFCL stress test (tests use the vendored sample in tests/bench/data)
 ```
+
+**Live bench practice.** Decide between variants on `--heldout` with `--controls` and 3 replays; a single domain
+moves by ±10 points between replays. A decoding-only change can be compared on a recording (`--replay`) at no cost;
+a change to the questions sent needs a live run. Decisions that fail at the backend (outages happen) are retried and
+reported as `backend_failures`, never counted as safe. Results and their costs go in `docs/BENCH.md`, decisions in
+`docs/DECISIONS.md`.
 
 **Golden fixtures depend on the Python version.** They were generated on Python ≤ 3.11. Python 3.12 changed float
 `sum()` to compensated summation, which moves the last digit of some probabilities, so on 3.12

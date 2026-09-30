@@ -542,7 +542,7 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools eval DATASET [--backend B] [--replays N] [--out report.json]` | run a labelled dataset and report the SPEC §11.2 metrics |
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
 | `jevtools fixtures [--update] [--case NAME]` | check or regenerate the golden conformance fixtures (from a checkout) |
-| `jevtools bench app [--domains …] [--dir DIR \| --heldout] [--backend oracle\|sim\|auto…] [--policy F] [--tags] [--replays N] [--controls] [--out F]` | run the app-domain benchmark (or your own domains, or the generated held-out cases): the ceiling (oracle), or live Jev next to it; `--replays` decides each case N times, `--controls` adds the negative controls ([docs/BENCH.md](docs/BENCH.md)) |
+| `jevtools bench app [--domains …] [--dir DIR \| --heldout] [--merged-catalog] [--backend oracle\|sim\|auto…] [--policy F] [--tags] [--replays N] [--controls] [--record DIR \| --replay DIR] [--out F]` | run the app-domain benchmark (or your own domains, or the generated held-out cases): the ceiling (oracle), or live Jev next to it; `--replays` decides each case N times, `--controls` adds the negative controls ([docs/BENCH.md](docs/BENCH.md)) |
 | `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |
 
 `--backend` accepts `auto | typesafe | openrouter_systemone | openrouter_decisions | simulator | cassette:<path>`.
