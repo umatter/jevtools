@@ -46,7 +46,11 @@ HOW_PHRASE: dict[str, str] = {
 _HOW_RANK = {"exact": 0, "alias": 1, "number": 2, "group": 3, "bm25": 4, "prefix": 5, "trigram": 6}
 _IDENTIFIER = re.compile(r"#?\w[\w\-/.#]*")
 _LAST_WORD = re.compile(r"(\w+)\W*$")
-_NUMBER_CUES = frozenset({"number", "numbers", "no", "nr", "num", "id", "ids", "ref", "nummer"})
+_NUMBER_CUES = frozenset({"number", "numbers", "no", "nr", "num", "id", "ids", "ref", "nummer", "digits", "ziffern"})
+_ENDING_CUES = frozenset({("ending", "in"), ("ends", "in"), ("ending", "with"), ("ends", "with"), ("endet", "auf"),
+                          ("endend", "auf"), ("terminant", "par"), ("termine", "par")})  # fmt: skip
+"""Two-word cues before a number that names a record by its last digits ("the card ending in 4421")."""
+_LAST_TWO = re.compile(r"(\w+)\W+(\w+)\W*$")
 _TRAILING_NUMBER = re.compile(r"(?<=\D)0*(\d+)$")
 MIN_ID_DIGITS = 3
 """A bare number anchors rows by the number their key ends in only from this many digits (``1100``, not ``10``)."""
@@ -220,11 +224,15 @@ class Registry:
         return out
 
     def _number_cue(self, before: str) -> bool:
-        """Whether the word before a bare number marks it as an identifier (``ticket 1100``, ``no. 4411``)."""
+        """Whether the words before a bare number mark it as an identifier (``ticket 1100``, ``no. 4411``, ``ending in
+        4421``)."""
         last = _LAST_WORD.search(before)
         if last is None:
             return False
         word = fold(last.group(1))
+        two = _LAST_TWO.search(before)
+        if two is not None and (fold(two.group(1)), fold(two.group(2))) in _ENDING_CUES:
+            return True
         return word in _NUMBER_CUES or word in (fold(self.item), fold(self.item) + "s", fold(self.name))
 
     def _identifier_matches(self, ident: str) -> list[Match]:

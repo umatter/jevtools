@@ -96,6 +96,14 @@ def unique(rows: Sequence[Any], description: str, fields: Callable[[Any], str]) 
     return found[0]
 
 
+def named_exactly(paths: Sequence[str], description: str) -> str | None:
+    """The one fitting file whose own name (the file name, without extension) adds no word to the description: the
+    file *called* that, where the others merely contain it ("notes.txt" vs "meeting_notes_1.md" for "the notes")."""
+    wanted = words(description)
+    exact = [f for f in paths if words(f.rsplit("/", 1)[-1].rsplit(".", 1)[0]) <= wanted]
+    return exact[0] if len(exact) == 1 else None
+
+
 def ambiguous(rows: Sequence[Any], description: str, fields: Callable[[Any], str]) -> list[Any]:
     found = fitting(rows, description, fields)
     assert len(found) >= 2, f"{description!r} fits {len(found)} rows, expected several"
@@ -325,8 +333,13 @@ def workspace(b: Builder) -> None:
             b.one(f"Share {desc} with {p['name']}", "share_file", {"path": f, "recipient": p["email"]}, "file")
     for i, desc in enumerate(FILES_SEVERAL):
         rows = ambiguous(files, desc, path)
-        b.several(["Open {d}", "Show me {d}"][i % 2].format(d=desc), "read_file", "path", rows, "file")
+        exact = named_exactly(rows, desc)
         p = people[i % len(people)]
+        if exact is not None:  # "the Alpha project notes": notes.txt is named that; meeting_notes_1.md is not
+            b.one(["Open {d}", "Show me {d}"][i % 2].format(d=desc), "read_file", {"path": exact}, "file")
+            b.one(f"Share {desc} with {p['name']}", "share_file", {"path": exact, "recipient": p["email"]}, "file")
+            continue
+        b.several(["Open {d}", "Show me {d}"][i % 2].format(d=desc), "read_file", "path", rows, "file")
         b.several(f"Share {desc} with {p['name']}", "share_file", "path", rows, "file",
                   args={"recipient": p["email"]})  # fmt: skip
     for i, topic in enumerate(TOPICS):

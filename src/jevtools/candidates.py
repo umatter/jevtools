@@ -8,7 +8,7 @@ candidate shows to Jev is WYSIWYG whenever possible and always obeys the label g
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any, Literal, TypeVar
 
@@ -472,7 +472,16 @@ def reverse_order(items: Iterable[T], *, key: Callable[[T], str] | None = None) 
     return real[::-1] + ordered[len(real) :]
 
 
+def anchor_rank(prov: Mapping[str, Any]) -> tuple[bool, float]:
+    """How strongly the user's words anchor a candidate: a key the user typed (an identifier anchor with a digit,
+    ``INC-1043``, ``ending in 4421``) first, then the match score. Sort descending."""
+    anchor = prov.get("anchor")
+    typed = prov.get("match") in ("exact", "number") and isinstance(anchor, str) and any(ch.isdigit() for ch in anchor)
+    return typed, float(prov.get("score", 0.0))
+
+
 __all__ = [
+    "anchor_rank",
     "BOTTOM_OF",
     "CANCEL",
     "DESCRIPTION_MAX",

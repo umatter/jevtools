@@ -1900,3 +1900,20 @@ Extends "Documentation and final merge":
 - The 7 false bindings left are the Savings/Travel savings read controls: with "Savings" removed, "my Savings account"
   fits Travel savings, and Jev's verify accepts it. Kept as a defensible reading, not tuned away; these controls are
   ambiguous by construction (the removed record's name is part of another's).
+
+## Remaining misses, one by one
+
+- Wrong executions: all three were one held-out case, "Show me the Alpha project notes", labelled ambiguous because
+  its words also fit three `meeting_notes_*.md` files; Jev opened `projects/alpha/notes.txt`, the file named that.
+  The generator now treats a description as unique when exactly one fitting file's own name adds no word to it
+  (`named_exactly`); no other case changes. A label fix, noted as such: the wrong-execution count falls because of it.
+- Typed tickets under the threshold: the ones left are all "Open ticket INC-…", where Jev splits between the ticket
+  and NONE_OF_THESE and doubts the tool. In helpdesk language "open a ticket" usually means creating one; asking is
+  a defensible answer. Not tuned.
+- "Freeze the card ending in 4421" → tool menu: a bug. A bare number anchored a record only after a cue word, so
+  "ending in 4421" matched nothing, and the only anchor was the word "card" in "Debit card ending in 7702": the hint
+  and the verify Noul named the wrong card and Jev read the request as unsupported. "ending in / ends in / ending
+  with / digits" (and de/fr forms) are now number cues, and a typed key ranks first among anchored records in hints
+  and verify (`candidates.anchor_rank`). Live: card requests 100% in both runs since.
+- Live after all three (held-out, 3 replays): 93.2% (93 / 93 / 93), 1 wrong execution ("Open the budget": the newer
+  of two budgets), 0 wrong calls shown in the write tier and above, false bindings 8 (the Savings controls).

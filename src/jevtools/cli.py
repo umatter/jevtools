@@ -885,6 +885,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--record", metavar="DIR", help="app: record every Jev answer to DIR/replay_<i>.jsonl (cassettes)")
     p.add_argument("--replay", metavar="DIR", help="app: replay the cassettes in DIR instead of calling Jev (offline;"
                                                    " one replay per file)")  # fmt: skip
+    p.add_argument("--merged-catalog", action="store_true",
+                   help="app: give every case the tools of all bundled domains (a 31-tool catalog)")  # fmt: skip
     p.add_argument("--heldout", action="store_true",
                    help="app: the generated held-out cases (same apps; for deciding between variants)")  # fmt: skip
     p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
@@ -975,6 +977,10 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
         return 1
     if args.limit is not None:
         cases = [c for name in names for c in [x for x in cases if x[0] == name][: args.limit]]
+    if args.merged_catalog:
+        from jevtools.bench.app.runner import merged_catalog, with_catalog
+
+        cases = with_catalog(cases, merged_catalog())
     if args.replays < 1:
         print("jevtools bench: --replays must be >= 1", file=err)
         return 1
@@ -983,6 +989,7 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     report = run_app(cases, backend, replays=args.replays, controls=args.controls, policy=policy,
                      retries=2 if live else 0,
                      meta={"domains": list(names), "dir": args.dir, "replays": args.replays,
+                           "merged_catalog": bool(args.merged_catalog),
                            "policy": policy.version if policy is not None else None})  # fmt: skip
     print(f"app bench: {len(cases)} case(s) in {len(names)} domain(s) on {report.mode}", file=out)
     print(report.render(tags=args.tags), file=out)

@@ -50,6 +50,25 @@ def heldout_dir() -> Path:
     return Path(str(resources.files("jevtools.bench.app") / "heldout"))
 
 
+def merged_catalog() -> list[dict[str, Any]]:
+    """The tools of every bundled domain in one catalog (31 tools, names distinct): a large catalog for the tool
+    question, used with each case's own context (``with_catalog``)."""
+    tools: list[dict[str, Any]] = []
+    for name in DOMAINS:
+        tools += json.loads((domains_dir() / name / "catalog.json").read_text(encoding="utf-8"))
+    return tools
+
+
+def with_catalog(cases: Iterable[tuple[str, EvalCase]], tools: Sequence[dict[str, Any]]) -> list[tuple[str, EvalCase]]:
+    """The cases with ``tools`` as their catalog (their context, data and gold unchanged)."""
+    out = []
+    for domain, case in cases:
+        copy = case.model_copy(update={"catalog": [dict(t) for t in tools]})
+        copy._base_dir = case._base_dir
+        out.append((domain, copy))
+    return out
+
+
 def load_domain(name: str, directory: str | Path | None = None) -> list[EvalCase]:
     """The cases of one domain (``directory`` defaults to the bundled domains)."""
     base = Path(directory) if directory is not None else domains_dir()
@@ -357,6 +376,6 @@ def run_domains(
 
 
 __all__ = [
-    "DOMAINS", "AppRecord", "AppReport", "control_cases", "domains_dir", "heldout_dir", "load_domain", "run_app",
-    "run_domains",
+    "DOMAINS", "AppRecord", "AppReport", "control_cases", "domains_dir", "heldout_dir", "load_domain", "merged_catalog",
+    "run_app", "run_domains", "with_catalog",
 ]  # fmt: skip

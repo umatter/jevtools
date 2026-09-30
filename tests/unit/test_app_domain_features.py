@@ -48,6 +48,17 @@ def test_a_bare_number_after_a_cue_anchors_the_key_that_ends_in_it() -> None:
     assert anchors("ticket 17") == []  # fewer than 3 digits: no suffix match
 
 
+def test_the_last_digits_of_a_card_anchor_it() -> None:
+    cards = Registry("cards", [{"id": "card_4421", "name": "Visa Platinum", "last4": "4421"},
+                               {"id": "card_7702", "name": "Debit card", "last4": "7702"}],
+                     key="id", match=["name", "last4"])  # fmt: skip
+    found = {
+        m.text: [x.index for x in m.attrs["matches"]] for m in cards.find_anchors("Freeze the card ending in 4421")
+    }
+    assert found.get("4421") == [0]  # "ending in" marks the number as naming a record by its last digits
+    assert "4421" not in {m.text for m in cards.find_anchors("Transfer 4421 to savings")}  # no cue: an amount
+
+
 def test_a_bare_number_without_a_cue_is_never_an_identifier() -> None:
     assert anchors("Transfer 1100 to savings") == []
     assert anchors("pay 10 CHF") == []

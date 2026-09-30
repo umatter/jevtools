@@ -30,6 +30,7 @@ from jevtools.candidates import (
     Candidate,
     Channel,
     Pool,
+    anchor_rank,
     apply_allow_list,
     assign_labels,
     canonical_order,
@@ -495,10 +496,10 @@ class _Builder:
                 pool = self.pools.get((tool.name, slot.path))
                 if slot.kind != "ref" or slot.stakes != "identity" or len(slot.path) != 1 or pool is None:
                     continue
-                anchored = [(float(c.prov.get("score", 0.0)), -i, c) for i, c in enumerate(pool.candidates)
-                            if "anchor" in c.prov]  # fmt: skip
+                anchored = [(i, c) for i, c in enumerate(pool.candidates) if "anchor" in c.prov]
                 if anchored:
-                    top = [c.label for _, _, c in sorted(anchored, key=lambda t: (-t[0], -t[1]))[:k]]
+                    order = sorted(anchored, key=lambda t: (tuple(-x for x in anchor_rank(t[1].prov)), t[0]))
+                    top = [c.label for _, c in order[:k]]
                     text += templates.tool_matches_text(slot.noun, top)
             if text:
                 hints[tool.name] = text

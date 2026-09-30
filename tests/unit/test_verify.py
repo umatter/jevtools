@@ -7,6 +7,7 @@ from typing import Any
 
 from jevtools.backends.scripted import ScriptedBackend
 from jevtools.bench.app import load_domain
+from jevtools.bench.app.runner import heldout_dir
 from jevtools.eval.experiments import gold_removed, gold_removed_factory
 from jevtools.eval.harness import router_factory_for
 from jevtools.policy import Outcome, Policy, PolicyInput, SlotState, Tier, evaluate
@@ -142,3 +143,12 @@ def test_verify_typed_keys_asks_about_a_typed_key_when_on() -> None:
 
     assert verified(Policy.from_dict({"probes": {"verify_typed_keys": False}})) == []
     assert verified(None) == ["assign_ticket.ticket_id.verify.0"]  # the default: evidence for the hybrid decoder
+
+
+def test_a_typed_key_ranks_first_in_hints_and_verify() -> None:
+    case = next(c for c in load_domain("banking", heldout_dir()) if c.request == "Freeze the card ending in 4421")
+    ballot = router_factory_for(ScriptedBackend({}))(case).compile(case.messages)
+    hint = next(str(o.text) for o in ballot.question("tool").options if o.value == "freeze_card")
+    assert hint.endswith("the card to freeze: Visa Platinum ending in 4421, Debit card ending in 7702.")
+    verify = [q.meta["candidate"]["label"] for q in ballot.questions if q.family == "verify"]  # type: ignore[index]
+    assert verify[0] == "Visa Platinum ending in 4421"  # the typed digits outrank the shared word "card"

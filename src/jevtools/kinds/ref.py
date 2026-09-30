@@ -36,6 +36,7 @@ from jevtools.candidates import (
     Bottom,
     Candidate,
     Pool,
+    anchor_rank,
     reverse_order,
     value_key,
 )  # fmt: skip
@@ -237,9 +238,10 @@ class RefResolver(ChoiceResolver):
         """The options of the pool's ``k`` best-anchored candidates (highest match score, pool order on ties): the
         records Jev most likely elects, collisions and a registry shared by two slots included. Their ``verify``
         Nouls ride in the first round, so a call on one of them needs no follow-up round (§3.8.3)."""
-        scored = [(float(c.prov.get("score", 0.0)), -i, c) for i, c in enumerate(pool.candidates) if "anchor" in c.prov]
+        anchored = [(i, c) for i, c in enumerate(pool.candidates) if "anchor" in c.prov]
+        order = sorted(anchored, key=lambda t: (tuple(-x for x in anchor_rank(t[1].prov)), t[0]))
         by_value = {value_key(o.value): o for o in question.options}
-        ranked = [by_value.get(value_key(c.value)) for _, _, c in sorted(scored, key=lambda t: (-t[0], -t[1]))]
+        ranked = [by_value.get(value_key(c.value)) for _, c in order]
         return [o for o in ranked if o is not None][:k]
 
     @staticmethod
@@ -291,9 +293,7 @@ class RefResolver(ChoiceResolver):
     def typed_key(option: BallotOption) -> bool:
         """Whether the user typed the record's key (``INC-1052``, ``ticket 1100``): an identifier anchor, which
         cannot name a look-alike, so it needs no ``verify``."""
-        anchor = option.prov.get("anchor")
-        return option.prov.get("match") in ("exact", "number") and isinstance(anchor, str) and any(
-            ch.isdigit() for ch in anchor)  # fmt: skip
+        return anchor_rank(option.prov)[0]
 
     @staticmethod
     def rev_question(tool: ToolSpec, forward: BallotQuestion) -> BallotQuestion:
