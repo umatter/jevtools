@@ -1942,3 +1942,12 @@ Extends "Documentation and final merge":
 - The BFCL runner now treats a decision that failed closed at the backend (P0) as a `BackendFailure` error after two
   retries with backoff. Before, an outage produced an abstain, which BFCL's checker scores as correct on the
   irrelevance categories. `--record DIR` keeps the run's answers for offline re-scoring.
+
+## When2Call
+
+- `jevtools bench when2call` (bench/when2call.py) maps a decision to When2Call's categories: a shown call is a tool
+  call, a clarify is a request for information, an abstain/refuse/escalate is a decline (jevtools never answers
+  directly, and `direct` is never the correct answer in the test set). An outage is retried, then an error. A
+  six-case CC-BY-4.0 sample lives in tests/bench/data/when2call with its NOTICE.
+- Live, all 3,652 cases (BENCH "When2Call"): accuracy 65.7%, macro F1 64.8%, tool hallucination 3.9%, tool-call
+  recall 35.4%, the same coverage ceiling as BFCL, whose live categories When2Call is built from.

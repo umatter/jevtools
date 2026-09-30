@@ -543,7 +543,8 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
 | `jevtools fixtures [--update] [--case NAME]` | check or regenerate the golden conformance fixtures (from a checkout) |
 | `jevtools bench app [--domains …] [--dir DIR \| --heldout] [--merged-catalog] [--backend oracle\|sim\|auto…] [--policy F] [--tags] [--replays N] [--controls] [--record DIR \| --replay DIR] [--out F]` | run the app-domain benchmark (or your own domains, or the generated held-out cases): the ceiling (oracle), or live Jev next to it; `--replays` decides each case N times, `--controls` adds the negative controls ([docs/BENCH.md](docs/BENCH.md)) |
-| `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |
+| `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--record DIR] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |
+| `jevtools bench when2call [--download] [--backend sim\|auto…] [--limit N] [--risk read\|infer] [--record DIR] [--out F]` | run When2Call: whether each decision calls, asks or declines as the case wants ([docs/BENCH.md](docs/BENCH.md)) |
 
 `--backend` accepts `auto | typesafe | openrouter_systemone | openrouter_decisions | simulator | cassette:<path>`.
 
@@ -582,7 +583,9 @@ miss is a value no extractor nominated. 57% of those values appear verbatim in t
 reformatting or world knowledge that selection cannot produce. Live (all 3,051 cases, one run, $0.23): strict
 accuracy 24–31% on the categories that want a call, far below LLM tool callers that write arguments, with Jev right
 71–93% of the time where the values were on the ballot; on the irrelevance categories it executes a call in 2–3% of
-cases. Details, attribution and the full tables are in [docs/BENCH.md](docs/BENCH.md).
+cases. On **When2Call** (3,652 cases on when to call, ask or decline) it calls a tool on 3.9% of the cases where none
+fits and makes the call on 35% of those that want one (the rest become questions). Details, attribution and the full
+tables are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends
 

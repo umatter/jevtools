@@ -875,7 +875,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--case", action="append", help="only this case (repeatable)")
 
     p = sub.add_parser("bench", help="run a tool-calling benchmark (BFCL, or the app-domain benchmark)")
-    p.add_argument("suite", choices=("bfcl", "app"),
+    p.add_argument("suite", choices=("bfcl", "app", "when2call"),
                    help="bfcl: Berkeley Function Calling Leaderboard; app: the bundled app-domain benchmark "
                         "(assistants over an app's own data)")  # fmt: skip
     p.add_argument("--domains", default=None, help="app: comma-separated domains (default: all bundled domains)")
@@ -1015,9 +1015,46 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     return 0
 
 
+def _cmd_bench_when2call(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    from jevtools.bench import when2call
+    from jevtools.validate import cache_dir
+
+    data = Path(args.data) if args.data else cache_dir() / "when2call"
+    if args.download:
+        when2call.download(data, ref=args.ref)
+    path = data / when2call.FILE
+    if not path.is_file():
+        print(f"jevtools bench: {path} not found; run with --download (or --data DIR)", file=err)
+        return 1
+    backend = _bench_backend(args.backend, args.allow_offline, err)
+    if backend is None:
+        return 1
+    if backend == "oracle":
+        print("jevtools bench: When2Call has no gold arguments for an oracle; use a Jev backend or sim", file=err)
+        return 1
+    live = getattr(backend, "name", "") != "simulator"
+    if args.record and live:
+        from jevtools.backends.cassette import Cassette
+
+        backend = Cassette(Path(args.record) / "replay_0.jsonl", mode="record", inner=backend)
+    cases = when2call.load(path, per_category=args.limit)
+    risk = None if args.risk == "infer" else args.risk
+    report = when2call.run_when2call(cases, backend, risk=risk, retries=2 if live else 0,
+                                     meta={"data": str(path), "limit_per_category": args.limit})  # fmt: skip
+    print(report.render(), file=out)
+    if not live:
+        print(OFFLINE_NOTE.format(name="the simulator"), file=out)
+    if args.out:
+        Path(args.out).write_text(report.to_json(), encoding="utf-8")
+        print(f"wrote {args.out}", file=out)
+    return 0
+
+
 def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     if args.suite == "app":
         return _cmd_bench_app(args, out, err)
+    if args.suite == "when2call":
+        return _cmd_bench_when2call(args, out, err)
     from jevtools.bench.bfcl import CATEGORIES, DEFAULT_CATEGORIES, download, load_category
     from jevtools.bench.run import run_bfcl
     from jevtools.validate import cache_dir

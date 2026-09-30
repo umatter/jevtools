@@ -550,6 +550,27 @@ BFCL's values are mostly strings, formats and expressions that no extractor prod
 the ballot, Jev chose the right call 71–93% of the time. On the irrelevance categories jevtools almost never executes
 a call where none belongs (97–98% strict); the proposal view (80–92%) counts calls offered on confirm cards and menus.
 
+## When2Call
+
+[When2Call](https://huggingface.co/datasets/nvidia/When2Call) (NVIDIA, CC-BY-4.0) tests *when* to call a tool: its
+3,652 test cases, built from BFCL's live categories, want a tool call, a question for missing information, or a
+decline because no available tool fits. `jevtools bench when2call --download --backend auto` maps each decision to the
+category it amounts to (a shown call → tool call, clarify → ask, abstain/refuse/escalate → decline). The published
+evaluation scores a language model's probabilities over four written answers, so the numbers below are not directly
+comparable with the paper's; the categories and cases are.
+
+Live, 2026-09-30, all 3,652 cases, one run, no backend failures, $0.28:
+
+| Correct answer | n | Precision | Recall | F1 | → tool call | → ask | → decline |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| tool call | 1,295 | 78.0% | 35.4% | 48.7% | 458 | 804 | 33 |
+| ask for information | 1,062 | 47.2% | 86.3% | 61.1% | 78 | 917 | 67 |
+| cannot answer | 1,295 | 91.1% | 79.1% | 84.7% | 51 | 220 | 1,024 |
+
+Accuracy 65.7%, macro F1 64.8%; predicted calls name the target tool 98.9% of the time; a tool is called on 3.9% of
+the cannot-answer cases. The weak side is making the call: 804 tool-call cases became questions, mostly because a
+value was not on the ballot (P7, 513) or the tool was not asked about (P6, 199), BFCL's coverage ceiling again.
+
 ## Reading a live run
 
 Run with a key, then compare:

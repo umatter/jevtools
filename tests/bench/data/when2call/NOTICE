@@ -1,0 +1,7 @@
+This directory holds six cases (two per correct answer) of the When2Call test set, used only by the jevtools bench
+tests. The lines are copied unchanged from
+
+  https://huggingface.co/datasets/nvidia/When2Call (test/when2call_test_mcq.jsonl)
+
+When2Call is © NVIDIA and licensed under the Creative Commons Attribution 4.0 International License
+(https://creativecommons.org/licenses/by/4.0/). It is derived from the Berkeley Function Calling Leaderboard (BFCL).

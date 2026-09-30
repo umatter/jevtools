@@ -123,3 +123,32 @@ def test_an_outage_is_an_error_not_a_passed_irrelevance_case(monkeypatch: pytest
     (record,) = report.records
     assert not record.proposal and (record.error or "").startswith("BackendFailure")  # an abstain would have passed
     assert record.attribution == "error" and Down.calls >= 3  # the first attempt and two retries
+
+
+def test_when2call_maps_decisions_to_its_categories(tmp_path: Path) -> None:
+    from jevtools.bench import when2call
+
+    cases = when2call.load(DATA / "when2call" / when2call.FILE)
+    assert [c.answer for c in cases].count("tool_call") == 2 and all(c.tools or c.answer != "tool_call" for c in cases)
+    assert when2call.category_of("execute", True) == "tool_call"
+    assert when2call.category_of("confirm", True) == "tool_call"
+    assert when2call.category_of("clarify", True) == "request_for_info"
+    assert {when2call.category_of(o, False) for o in ("abstain", "refuse", "escalate")} == {"cannot_answer"}
+    report = when2call.run_when2call(cases, LexicalSimulator())
+    summary = report.summary()
+    assert summary["n"] == 6 and summary["errors"] == 0 and set(summary["confusion"]) == set(when2call.CATEGORIES)
+    out = io.StringIO()
+    args = [
+        "bench",
+        "when2call",
+        "--data",
+        str(DATA / "when2call"),
+        "--backend",
+        "sim",
+        "--out",
+        str(tmp_path / "w.json"),
+    ]
+    assert main(args, out=out, err=io.StringIO()) == 0
+    assert (
+        "When2Call: 6 case(s)" in out.getvalue() and json.loads((tmp_path / "w.json").read_text())["summary"]["n"] == 6
+    )
