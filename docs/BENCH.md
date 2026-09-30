@@ -264,6 +264,23 @@ hints on, `verify` for write tiers and above):
 
 B is the new default; C and D are not adopted (DECISIONS "present sets NOT_STATED").
 
+### Slot question tree (experimental, off)
+
+`probes.verify_decides` decides record slots from `present` and per-record `verify` Nouls instead of the slot Choice
+(DECISIONS "slot question tree"). Live, 2026-09-30, held-out, 3 replays with controls:
+
+| | Defaults | Tree (k = 3) | Tree (k = 5) |
+|---|---:|---:|---:|
+| Correct (pooled) | **82.3%** | 74.2% | 73.0% |
+| Emails to a full name | 0% | **88%** | 68% |
+| Several fitting records | 93% | **100%** | 100% |
+| Described files | 94% | 52% | 49% |
+| Events by title | 74% | 30% | 30% |
+| Payee payments | 100% | 17% | 17% |
+| Wrong executions | 11 | **0** | 0 |
+| False bindings in controls | 7 | 5 | 4 |
+| Input tokens per decision | 4,551 | 4,786 | 5,149 |
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.

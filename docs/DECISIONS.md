@@ -1847,3 +1847,18 @@ Extends "Documentation and final merge":
   a note…" the Choice gave NOT_STATED 0.55, Lisa Wong 0.24, NONE_OF_THESE 0.20; rescaled, NONE_OF_THESE still takes
   0.43 and triggers a widen round. The per-record `verify` Nouls of the same request said 0.86 for Lisa Wong and
   0.10–0.21 for the others: on exact names, independent per-record Nouls discriminate where the one Choice hedges.
+
+## Slot question tree (`probes.verify_decides`, measured, not adopted)
+
+- Idea: decide an identity REF slot by a small tree of Nouls (does the user identify one? `present`; is it this
+  record? `verify` per best-anchored record) instead of its Choice: P(i) = P(present) · w_i / (Σw + w_none), with
+  w_i = v_i · Π_{j≠i}(1 − v_j) and w_none = Π(1 − v_j). The Choice still decides when it puts ≥ 0.5 on a record no
+  verify Noul asked about. Asked with `present` in every tier.
+- Held-out, live, 3 replays (BENCH "Slot question tree"): full-name emails 0% → 88%, several fitting records 93% →
+  100%, wrong executions 11 → 0, false bindings 7 → 5; but correct 82.3% → 74.2%: described files 94% → 52%,
+  events 74% → 30%, payee payments 100% → 17%. Misses moved to the policy stage (54 → 152).
+- Why: where the Choice is sharp the tree is duller (Choice 0.99–1.00 vs verify 0.93–0.97, times `present`
+  0.67–0.96), and the critical tier's L sums every factor's shortfall, so payments fall below confirm. Where the
+  Choice hedges or errs the tree is right ("Push the Budget review…": Choice elects ACME quarterly review 0.53, verify
+  prefers Budget review 0.65 vs 0.41). The two signals are complementary; the next step is a hybrid, compared
+  offline on recorded answers (cassettes) before a live confirmation.

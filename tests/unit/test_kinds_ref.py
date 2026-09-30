@@ -251,3 +251,39 @@ def test_present_sets_the_not_stated_mass_when_on() -> None:
     assert on.sentinels[NOT_STATED] == pytest.approx(0.06) and on.sentinels[NONE_OF_THESE] == pytest.approx(0.094)
     unsure = {**answers, present_q.qid: noul(0.2)}  # present doubts it: NOT_STATED takes 0.8 and wins
     assert decode(tool, slot, pool, unsure, rc).value is Bottom.MISSING
+
+
+def test_verify_decides_the_record_when_on() -> None:
+    import math
+
+    from jevtools.policy import Policy
+
+    catalog, rc = scenario("Email Anna that the contract is signed")
+    tool = catalog["send_email"]
+    slot = tool.slot("to")
+    rc.policy = Policy.from_dict({"probes": {"verify_decides": True}})
+    pool, questions = resolve(tool, slot, rc)
+    slot_q, present_q = questions[0], questions[1]
+    verifies = [q for q in questions if q.family == "verify"]
+    assert [q.meta["candidate"]["label"] for q in verifies] == [KELLER, ROSSI, FREY]
+    v = {KELLER: 0.86, ROSSI: 0.21, FREY: 0.1}
+    hedged = choice(slot_q, {KELLER: 0.24, NOT_STATED: 0.55, NONE_OF_THESE: 0.21})  # the Choice hedges
+    answers = {slot_q.qid: hedged, present_q.qid: noul(0.97), **{q.qid: noul(v[q.meta["candidate"]["label"]])
+                                                                for q in verifies}}  # fmt: skip
+    w = {k: p * math.prod(1 - u for o, u in v.items() if o != k) for k, p in v.items()}
+    total = sum(w.values()) + math.prod(1 - u for u in v.values())
+    result = decode(tool, slot, pool, answers, rc)
+    assert result.value == "anna.keller@acme.com" and result.factor == pytest.approx(0.97 * w[KELLER] / total, 1e-3)
+    assert result.factor > 0.75 and result.sentinels[NOT_STATED] == pytest.approx(0.03)
+    # the Choice keeps the say when it clearly prefers a record no verify Noul asked about (verify_k = 1: Keller only)
+    rc.policy = Policy.from_dict({"probes": {"verify_decides": True}, "pools": {"verify_k": 1}})
+    pool1, questions1 = resolve(tool, slot, rc)
+    (only,) = [q for q in questions1 if q.family == "verify"]
+    elsewhere = {slot_q.qid: choice(slot_q, {ROSSI: 0.9, NOT_STATED: 0.1}), present_q.qid: noul(0.97),
+                 only.qid: noul(0.2)}  # fmt: skip
+    assert decode(tool, slot, pool1, elsewhere, rc).value == "anna.rossi@gmail.com"
+    rc.policy = Policy.from_dict({"probes": {"verify_decides": True}})
+    # two records both verified: a coin flip, left to the policy's menu
+    both = {**answers, verifies[1].qid: noul(0.86)}
+    tied = decode(tool, slot, pool, both, rc)
+    assert [round(a.p, 3) for a in tied.alternatives][:1] == [round(tied.factor, 3)]

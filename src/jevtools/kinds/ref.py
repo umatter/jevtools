@@ -30,7 +30,7 @@ from typing import Any
 
 from jevtools import templates
 from jevtools.ballot import BallotOption, BallotQuestion, slot_qid
-from jevtools.candidates import NOT_STATED, Bottom, Candidate, Pool, reverse_order, value_key
+from jevtools.candidates import NONE_OF_THESE, NOT_STATED, Bottom, Candidate, Pool, reverse_order, value_key
 from jevtools.extract.base import Mention, Mentions
 from jevtools.extract.coref import coref_candidates
 from jevtools.kinds.base import (
@@ -301,7 +301,10 @@ class RefResolver(ChoiceResolver):
         if is_bucket_stage(rc.slot_questions(tool, slot)):
             return decode_buckets(tool, slot, answers, rc, self.normalizer)
         questions = {q.family: q for q in rc.slot_questions(tool, slot)}
-        if rc.policy.probes.present_sets_not_stated:
+        if rc.policy.probes.verify_decides:
+            verifies = [q for q in rc.slot_questions(tool, slot) if q.family == "verify"]
+            answers = self._verify_decides(questions, verifies, answers)
+        elif rc.policy.probes.present_sets_not_stated:
             answers = self._present_sets_not_stated(questions, answers)
         result = super().decode(tool, slot, pool, answers, rc)
         flags = list(result.flags)
@@ -324,6 +327,59 @@ class RefResolver(ChoiceResolver):
             ):
                 flags.append("presence_conflict")
         return result.with_(flags=tuple(dict.fromkeys(flags)), probes={**result.probes, **probes})
+
+    @staticmethod
+    def _verify_decides(
+        questions: Mapping[Any, BallotQuestion], verifies: Sequence[BallotQuestion], answers: Mapping[str, Answer]
+    ) -> Mapping[str, Answer]:
+        """``probes.verify_decides``: replace the slot (and ``rev``) Choice by the question tree's distribution over the
+        verified records, NONE_OF_THESE and NOT_STATED (see the policy field). Unchanged when no verify Noul was
+        answered, or when the Choice puts at least half its mass on a record no verify Noul asked about (the router's
+        follow-up round then verifies that record, and the next decode includes it)."""
+        slot_q = questions.get("slot")
+        choice = answers.get(slot_q.qid) if slot_q is not None else None
+        if not isinstance(choice, ChoiceAnswer) or slot_q is None:
+            return answers
+        label_of = {value_key(o.value): o.label for o in slot_q.options}
+        verified: dict[str, float] = {}
+        for q in verifies:
+            answer = answers.get(q.qid)
+            label = label_of.get(value_key(((q.meta or {}).get("candidate") or {}).get("value")))
+            if isinstance(answer, NoulAnswer) and label is not None:
+                verified[label] = max(verified.get(label, 0.0), answer.noul)
+        if not verified:
+            return answers
+        top = max((lb for lb in choice.probabilities if lb in {o.label for o in slot_q.options}),
+                  key=lambda lb: choice.probabilities[lb], default=None)  # fmt: skip
+        if top is not None and top not in verified and choice.probabilities[top] >= 0.5:
+            return answers
+        present_q = questions.get("present")
+        present = answers.get(present_q.qid) if present_q is not None else None
+        p_present = present.noul if isinstance(present, NoulAnswer) else 1.0 - float(
+            choice.probabilities.get(NOT_STATED, 0.0))  # fmt: skip
+        weights: dict[str, float] = {}
+        for label, v in verified.items():
+            others = [1.0 - u for other, u in verified.items() if other != label]
+            weights[label] = v * math.prod(others)
+        w_none = math.prod(1.0 - v for v in verified.values())
+        total = sum(weights.values()) + w_none
+        if total <= 0.0:
+            return answers
+        probabilities = {label: 0.0 for label in choice.probabilities}
+        probabilities.update({label: p_present * w / total for label, w in weights.items()})
+        if NONE_OF_THESE in slot_q.sentinels:
+            probabilities[NONE_OF_THESE] = p_present * w_none / total
+        if NOT_STATED in slot_q.sentinels:
+            probabilities[NOT_STATED] = 1.0 - p_present
+        best = max(probabilities, key=lambda label: probabilities[label])
+        tree = choice.model_copy(update={"probabilities": probabilities, "choice": best,
+                                         "confidence": probabilities[best]})  # fmt: skip
+        out = dict(answers)
+        out[slot_q.qid] = tree
+        rev_q = questions.get("rev")
+        if rev_q is not None and isinstance(answers.get(rev_q.qid), ChoiceAnswer):
+            out[rev_q.qid] = tree
+        return out
 
     @staticmethod
     def _present_sets_not_stated(

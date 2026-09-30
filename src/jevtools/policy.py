@@ -163,6 +163,11 @@ class ProbePolicy(_Section):
 
     present: tuple[Tier, ...] = (Tier.EXTERNAL, Tier.CRITICAL)
     reverse: tuple[Tier, ...] = (Tier.CRITICAL,)
+    verify_decides: bool = False
+    """Experimental: an identity REF slot is decided by its ``present`` and ``verify`` Nouls (a small question tree)
+    instead of its Choice: P(record i) = P(present) · w_i / Σ, w_i = v_i · Π_{j≠i}(1 − v_j), with w_none = Π(1 − v_j)
+    for NONE_OF_THESE and NOT_STATED = 1 − P(present). The Choice decides only when it prefers an unverified record
+    (DECISIONS "slot question tree")."""
     present_sets_not_stated: bool = False
     """Experimental: a REF slot's ``NOT_STATED`` mass is taken from its ``present`` Noul (1 − P(present)) and the
     rest of the Choice rescaled to fill the remainder. The Choice keeps ~40% on the sentinels even for "Email Anna
