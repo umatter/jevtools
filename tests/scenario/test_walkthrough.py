@@ -193,8 +193,17 @@ def test_r3_toctou_balance_drop_blocks_execution() -> None:
 
 def test_r4_opens_the_payments_config() -> None:
     router, backend, d = decide(scripts.R4, scripts.R4_REQUEST)
-    assert qids(backend) == ["tool", "get_weather.city", "get_weather.unit", "read_file.path",
-                             "search_web.query.accept.0", "search_web.query.accept.1"]  # fmt: skip
+    assert qids(backend) == [
+        "tool",
+        "get_weather.city",
+        "get_weather.unit",
+        "read_file.path",
+        "read_file.path.verify.0",
+        "read_file.path.verify.1",
+        "read_file.path.verify.2",
+        "search_web.query.accept.0",
+        "search_web.query.accept.1",
+    ]  # fmt: skip  (read tier: verify)
     path = criteria(backend, "read_file.path")
     assert len(path) == 40 + 2 and scripts.APP_YAML in path and scripts.PROD_YAML in path
     assert (d.outcome, d.rule) == (Outcome.EXECUTE, "P9.read.execute")

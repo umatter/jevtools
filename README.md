@@ -475,7 +475,7 @@ notifies people (attendees) is raised to external.
 | external | Π | 0.80 | 0.50 | `authorized` ≥ 0.90; content text accepted ≥ 0.80 |
 | critical | min(L, J) | never, unless certified | 0.80 | channels ⊆ {user, registry, author}; the joint Choice agrees |
 
-In the write, external and critical tiers, a call is shown only if Jev also confirms each chosen record (a contact,
+In every tier, a call is shown only if Jev also confirms each chosen record (a contact,
 ticket, deal, account, file…) is the one the request refers to, and not a look-alike that shares a word with it. The
 `verify` question is asked in the same call for the best-matched records, so it rarely costs a second round. A
 record the user typed by its key (`INC-1052`) needs no check; a doubted one becomes a menu (`P9.<tier>.unverified`).

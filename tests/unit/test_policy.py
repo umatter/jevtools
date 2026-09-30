@@ -58,7 +58,7 @@ require_present = 0.80
 [probes]
 present = ["external", "critical"]
 reverse = ["critical"]
-verify = ["write", "external", "critical"]
+verify = ["read", "write", "external", "critical"]
 unique = []
 
 [widen]

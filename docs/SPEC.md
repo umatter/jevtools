@@ -426,7 +426,7 @@ P        := sanitized param path, segments joined by "."; a segment equal to a r
 | probe | `T.P` | Choice: `NOT_STATED`, `NONE_OF_THESE` only | pool empty *and* slot has a default | P(default) vs P(stated but uncovered) |
 | present | `T.P.present` | Noul | REF slots of tier external or critical | consistency check (not a factor) |
 | rev | `T.P.rev` | Choice: same options, real candidates in *reverse* canonical order | REF slots with ≥ 2 real candidates in critical tier (config `probes.reverse`) | f = min(fwd, rev); disagreement flag |
-| verify | `T.P.verify.i` | Noul (`T_VERIFY`; the candidate is the record's label and match note) | top-level identity REF slots in tiers `probes.verify` (write, external, critical): the `pools.verify_k` = 3 best-anchored records, except a key the user typed; in a follow-up round, the elected record when the first round did not verify it (§3.8.3) | gate on the elected record (not a factor) |
+| verify | `T.P.verify.i` | Noul (`T_VERIFY`; the candidate is the record's label and match note) | top-level identity REF slots in tiers `probes.verify` (all four by default): the `pools.verify_k` = 3 best-anchored records, except a key the user typed; in a follow-up round, the elected record when the first round did not verify it (§3.8.3) | gate on the elected record (not a factor) |
 | unique | `T.P.unique` | Noul (`T_UNIQUE`; `options` lists up to `pools.unique_k` = 10 options, best-anchored first) | experimental, off: top-level identity REF slots with ≥ 2 real candidates in tiers `probes.unique` | gate on the slot (not a factor) |
 | date / time | `T.P.date`, `T.P.time` | Choice each | temporal with > 24 complete readings | f_date · f_time |
 | accept | `T.P.accept.i` | Noul (content or cosmetic template) | TEXT slots: one per candidate (≤ 4 content, ≤ 3 cosmetic) | elected = argmax; f = n(elected) |
@@ -721,7 +721,7 @@ This handles the case "the argmax tool is infeasible but the runner-up is fully 
 - **diffuse**: otherwise → `escalate` if configured, else `clarify(open)`.
 
 **Look-alike check (`P9.<tier>.unverified`).** A call about to be shown (execute or confirm, not a click the user
-made) in a tier of `probes.verify` needs, for each top-level identity REF slot, a `verify` Noul on its *elected*
+made) in a tier of `probes.verify` (every tier by default; reads since the held-out bench) needs, for each top-level identity REF slot, a `verify` Noul on its *elected*
 record, unless the user typed that record's key or bound it by a click. The first round asks it for the
 `pools.verify_k` best-anchored records; when Jev elects another one, the router asks it in one same-state follow-up
 round. A verify answer below `shapes.verify_min` = 0.50 turns the call into `clarify(menu)` on that slot (reason
@@ -2594,7 +2594,7 @@ require_present = 0.80     # until E2 passes (§11.2)
 [probes]
 present = ["external", "critical"]   # REF slots
 reverse = ["critical"]               # REF slots with ≥ 2 real candidates
-verify = ["write", "external", "critical"]   # identity REF slots of a shown call (§3.8.3)
+verify = ["read", "write", "external", "critical"]   # identity REF slots of a shown call (§3.8.3)
 unique = []                                  # experimental, off: tiers that ask "does the request single out one?"
 
 [widen]

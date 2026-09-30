@@ -232,3 +232,22 @@ def test_r6_latest_invoice_tie_does_not_execute() -> None:
         R6_MEMBERS.clear()
         R6_MEMBERS.update(members)
     assert decision.outcome != "execute"
+
+
+def test_present_sets_the_not_stated_mass_when_on() -> None:
+    from jevtools.policy import Policy
+
+    catalog, rc = scenario("Email Anna Keller that the contract is signed")
+    tool = catalog["send_email"]
+    slot = tool.slot("to")
+    pool, (slot_q, present_q, *_) = resolve(tool, slot, rc)
+    answers = {slot_q.qid: choice(slot_q, {KELLER: 0.54, NOT_STATED: 0.40, NONE_OF_THESE: 0.06}),
+               present_q.qid: noul(0.94)}  # fmt: skip
+    off = decode(tool, slot, pool, answers, rc)
+    assert off.factor == pytest.approx(0.54)  # the default: the Choice as answered
+    rc.policy = Policy.from_dict({"probes": {"present_sets_not_stated": True}})
+    on = decode(tool, slot, pool, answers, rc)
+    assert on.value == "anna.keller@acme.com" and on.factor == pytest.approx(0.94 * 0.54 / 0.60, abs=1e-3)
+    assert on.sentinels[NOT_STATED] == pytest.approx(0.06) and on.sentinels[NONE_OF_THESE] == pytest.approx(0.094)
+    unsure = {**answers, present_q.qid: noul(0.2)}  # present doubts it: NOT_STATED takes 0.8 and wins
+    assert decode(tool, slot, pool, unsure, rc).value is Bottom.MISSING

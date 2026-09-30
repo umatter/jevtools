@@ -246,6 +246,24 @@ more tokens). Two problems the development bench had understated, the same in ev
 - **Read-tier look-alikes: 12 false bindings.** "What's the balance of my Savings account?" with Savings removed shows
   Travel savings, and the reverse, in every replay: `verify` covers write tiers and above only.
 
+### Held-out, round 2
+
+Live, 2026-09-30, 284 cases × 3 replays, 582 control decisions per column (A is the defaults at that time: record
+hints on, `verify` for write tiers and above):
+
+| | A | B: `verify` for reads | C: B + present sets NOT_STATED | D: C + `present` in write |
+|---|---:|---:|---:|---:|
+| Correct (pooled) | 82.6% | 82.2% | 81.3% | 80.3% |
+| Calls right | 78.9% | 78.6% | 77.1% | 77.7% |
+| Wrong executions | 11 | 11 | 11 | 19 |
+| False bindings in controls | 12 | **7** | 7 | 9 |
+| Emails to a full name | 0% | 0% | 20% | 26% |
+| Payee payments | 100% | 100% | 50% | 50% |
+| Second Jev rounds | 15 | 15 | 39 | 52 |
+| Input tokens per decision | 4,331 | 4,551 | 4,644 | 4,806 |
+
+B is the new default; C and D are not adopted (DECISIONS "present sets NOT_STATED").
+
 ### What the app bench found and fixed
 
 Each fix has a regression test (`tests/unit/test_app_domain_features.py`), and DECISIONS.md explains it.

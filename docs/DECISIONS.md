@@ -1834,3 +1834,16 @@ Extends "Documentation and final merge":
   86%, as menus); `unique` +0 overall (+6 points on several fitting records, −20 on accounts, +22% tokens). Defaults:
   `tool.record_hints = 3`, `probes.unique = []`. The spec's §13.4/§13.5 requests now carry the send_email hint (R2
   7,629 characters, R5 6,162); golden fixtures were regenerated with no outcome, rule or round change.
+
+## `verify` for reads; present sets NOT_STATED (measured, not adopted)
+
+- Held-out, live, 3 replays, 582 control decisions each (BENCH "Held-out, round 2"): `probes.verify` with `read`
+  took false bindings 12 → 7 (the Travel-savings/Savings balance look-alikes) at 82.6% → 82.2% correct (noise) and
+  +5% tokens. Default: `verify` in all four tiers. The 7 left are "my Savings account" with Savings removed →
+  *Travel savings*, which `verify` accepts: a travel savings account is a savings account.
+- `probes.present_sets_not_stated` (off): the slot Choice's NOT_STATED mass replaced by 1 − P(present), the rest
+  rescaled. Full-name emails went 0% → 20%, but correct fell 82.2% → 81.3%, payee payments 100% → 50%, and second
+  rounds 15 → 39; asking `present` in the write tier as well was worse (80.3%). Traces show why: for "Send Lisa Wong
+  a note…" the Choice gave NOT_STATED 0.55, Lisa Wong 0.24, NONE_OF_THESE 0.20; rescaled, NONE_OF_THESE still takes
+  0.43 and triggers a widen round. The per-record `verify` Nouls of the same request said 0.86 for Lisa Wong and
+  0.10–0.21 for the others: on exact names, independent per-record Nouls discriminate where the one Choice hedges.

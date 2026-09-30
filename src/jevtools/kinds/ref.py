@@ -30,7 +30,7 @@ from typing import Any
 
 from jevtools import templates
 from jevtools.ballot import BallotOption, BallotQuestion, slot_qid
-from jevtools.candidates import Bottom, Candidate, Pool, reverse_order, value_key
+from jevtools.candidates import NOT_STATED, Bottom, Candidate, Pool, reverse_order, value_key
 from jevtools.extract.base import Mention, Mentions
 from jevtools.extract.coref import coref_candidates
 from jevtools.kinds.base import (
@@ -56,7 +56,7 @@ from jevtools.kinds.widen import (
 )
 from jevtools.sources.base import SourceQuery
 from jevtools.spec.models import SlotSpec, ToolSpec
-from jevtools.wire import Answer, NoulAnswer
+from jevtools.wire import Answer, ChoiceAnswer, NoulAnswer
 
 ORDER_DEFAULTS: dict[str, tuple[str, str]] = {
     "latest": ("date", "max"),
@@ -300,8 +300,10 @@ class RefResolver(ChoiceResolver):
             return self._decode_members(tool, slot, pool, answers, rc)
         if is_bucket_stage(rc.slot_questions(tool, slot)):
             return decode_buckets(tool, slot, answers, rc, self.normalizer)
-        result = super().decode(tool, slot, pool, answers, rc)
         questions = {q.family: q for q in rc.slot_questions(tool, slot)}
+        if rc.policy.probes.present_sets_not_stated:
+            answers = self._present_sets_not_stated(questions, answers)
+        result = super().decode(tool, slot, pool, answers, rc)
         flags = list(result.flags)
         probes: dict[str, float] = {}
         rev_q = questions.get("rev")
@@ -322,6 +324,36 @@ class RefResolver(ChoiceResolver):
             ):
                 flags.append("presence_conflict")
         return result.with_(flags=tuple(dict.fromkeys(flags)), probes={**result.probes, **probes})
+
+    @staticmethod
+    def _present_sets_not_stated(
+        questions: Mapping[Any, BallotQuestion], answers: Mapping[str, Answer]
+    ) -> Mapping[str, Answer]:
+        """``probes.present_sets_not_stated``: in the slot (and ``rev``) Choice, ``NOT_STATED`` gets 1 − P(present) and
+        every other label is scaled by P(present) / (1 − P(NOT_STATED)), so ``NONE_OF_THESE`` keeps its share of the
+        stated mass. Unchanged when ``present`` was not answered or the Choice left under 5% outside ``NOT_STATED``."""
+        present_q = questions.get("present")
+        present = answers.get(present_q.qid) if present_q is not None else None
+        if not isinstance(present, NoulAnswer):
+            return answers
+        out = dict(answers)
+        for family in ("slot", "rev"):
+            question = questions.get(family)
+            answer = answers.get(question.qid) if question is not None else None
+            if not isinstance(answer, ChoiceAnswer) or NOT_STATED not in question.sentinels:  # type: ignore[union-attr]
+                continue
+            stated = 1.0 - float(answer.probabilities.get(NOT_STATED, 0.0))
+            if stated < 0.05:
+                continue
+            scale = present.noul / stated
+            probabilities = {label: (1.0 - present.noul if label == NOT_STATED else float(p) * scale)
+                             for label, p in answer.probabilities.items()}  # fmt: skip
+            probabilities.setdefault(NOT_STATED, 1.0 - present.noul)
+            top = max(probabilities, key=lambda label: probabilities[label])
+            out[question.qid] = answer.model_copy(  # type: ignore[union-attr]
+                update={"probabilities": probabilities, "choice": top, "confidence": probabilities[top]}
+            )
+        return out
 
     def _min_merge(self, fwd: SlotResult, rev: SlotResult, rc: ResolveContext) -> SlotResult:
         """``D(v) = min(D_fwd(v), D_rev(v))`` for every value; v* stays the forward argmax (§3.6 ``rev``)."""

@@ -163,7 +163,11 @@ class ProbePolicy(_Section):
 
     present: tuple[Tier, ...] = (Tier.EXTERNAL, Tier.CRITICAL)
     reverse: tuple[Tier, ...] = (Tier.CRITICAL,)
-    verify: tuple[Tier, ...] = (Tier.WRITE, Tier.EXTERNAL, Tier.CRITICAL)
+    present_sets_not_stated: bool = False
+    """Experimental: a REF slot's ``NOT_STATED`` mass is taken from its ``present`` Noul (1 − P(present)) and the
+    rest of the Choice rescaled to fill the remainder. The Choice keeps ~40% on the sentinels even for "Email Anna
+    Keller" while ``present`` says 0.94 (DECISIONS "present sets NOT_STATED")."""
+    verify: tuple[Tier, ...] = (Tier.READ, Tier.WRITE, Tier.EXTERNAL, Tier.CRITICAL)
     unique: tuple[Tier, ...] = ()
     """Experimental, off: tiers whose identity REF slots get a ``unique`` Noul (does the request single out one?)."""
 
