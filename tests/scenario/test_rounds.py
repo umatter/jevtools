@@ -15,6 +15,7 @@ from jevtools.wire import DecisionRequest
 from tests.scenario import scripts
 from tests.scenario.fixtures import scenario_context
 from tests.scenario.support import decide, qids, verified
+from tests.support import fixed_gate_policy
 
 R6_REQUEST = "Find the latest invoice from ACME and forward it to finance"
 INV_2291 = "finance/invoices/acme/2026-09-15_ACME_INV-2291.pdf"
@@ -83,7 +84,7 @@ class Searcher:
 def test_unsupported_escalates_and_the_gate_round_binds_the_proposal() -> None:
     script = {**scripts.R7, "tool": {"UNSUPPORTED": 0.9, "search_web": 0.1}, "search_web.query.accept.*": 0.2,
               "search_web.query.accept.2": 0.9}  # fmt: skip
-    router, backend, d = decide(script, scripts.R7_REQUEST, escalator=Searcher())
+    router, backend, d = decide(script, scripts.R7_REQUEST, escalator=Searcher(), policy=fixed_gate_policy())
     assert qids(backend, 1) == ["search_web.query.accept.0", "search_web.query.accept.1", "search_web.query.accept.2"]
     assert (d.outcome, d.rule) == (Outcome.EXECUTE, "P9.read.execute") and d.usage.llm_calls == 1
     assert d.call is not None and d.call.arguments == {"query": "jokes about cats"}
@@ -135,3 +136,21 @@ def test_r6_step2_forwards_without_nominating_injected_values() -> None:
     assert "ACME AG — Invoice INV-2291" in d.call.arguments["body"]  # the observation text, pasted verbatim
     assert d.confidence is not None and d.confidence.PI == pytest.approx(0.93 * 0.94 * 0.9 * 0.88, abs=0.001)
     verified(d, router, R6_REQUEST, context=ctx)
+
+
+@pytest.mark.parametrize("gate_tool", ["UNSUPPORTED", "search_web"])
+def test_the_gate_round_re_asks_the_tool_after_an_unsupported_escalation(gate_tool: str) -> None:
+    calls: list[DecisionRequest] = []
+
+    def script(request: DecisionRequest) -> Mapping[str, Any]:
+        calls.append(request)
+        first = len(calls) == 1
+        return {**scripts.R7, "tool": {"UNSUPPORTED": 0.9, "search_web": 0.1} if first else {gate_tool: 0.9},
+                "search_web.query.accept.*": 0.2, "search_web.query.accept.2": 0.9}  # fmt: skip
+
+    router, backend, d = decide(script, scripts.R7_REQUEST, escalator=Searcher())
+    assert "tool" in qids(backend, 1) and d.usage.llm_calls == 1  # the gate round asks the tool Choice again
+    if gate_tool == "search_web":
+        assert d.outcome is Outcome.EXECUTE and d.call is not None and d.call.arguments == {"query": "jokes about cats"}
+    else:  # Jev keeps "no listed action fits": the decision a router without an Escalator makes
+        assert d.outcome is Outcome.ABSTAIN and d.rule == "P2.tool.unsupported" and d.call is None

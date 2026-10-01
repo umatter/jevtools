@@ -23,3 +23,11 @@ def load_fixture(name: str) -> Any:
 
 
 __all__ = ["FIXTURES", "SCENARIO_NOW", "SCENARIO_SOURCES", "load_fixture"]
+
+
+def fixed_gate_policy() -> Any:
+    """The default policy with ``tool.regate_escalation`` off: an escalation's gate round fixes the drafted tool."""
+    from jevtools.policy import Policy
+
+    policy = Policy()
+    return policy.model_copy(update={"tool": policy.tool.model_copy(update={"regate_escalation": False})})

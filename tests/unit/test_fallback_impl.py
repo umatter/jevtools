@@ -28,6 +28,7 @@ from jevtools.policy import Outcome
 from jevtools.wire import DecisionRequest
 from tests.scenario import scripts
 from tests.scenario.fixtures import scenario_context, scenario_messages, scenario_router
+from tests.support import fixed_gate_policy
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -314,7 +315,8 @@ def test_the_escalation_gate_never_binds_generated_identity_values(proposed_to: 
     )
     transport = Recorder(completion(None, [proposal])).transport()
     escalator = OpenAICompatibleEscalator("m", api_key="sk", transport=transport)
-    router, backend = scenario_router(escalation_script, context=scenario_context(history=True), escalator=escalator)
+    router, backend = scenario_router(escalation_script, context=scenario_context(history=True), escalator=escalator,
+                                      policy=fixed_gate_policy())  # fmt: skip
     d = router.decide(scenario_messages(scripts.R2_REQUEST, history=True))
     gate = backend.requests[1]
     assert "tool" not in gate.questions and "send_email.authorized" in gate.questions  # one gate round

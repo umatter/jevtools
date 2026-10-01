@@ -93,6 +93,11 @@ class ToolPolicy(_Section):
     hints_skip_search: bool = True
     """No record hints when the request carries a search cue ("find", "is there"): the user wants to
     know which records exist, and naming the matches pushed such requests to open one (DECISIONS)."""
+    regate_escalation: bool = True
+    """After an escalation from the tool rules (unsupported, ambiguous, diffuse), the gate round re-asks the ``tool``
+    Choice and the draft stands only if Jev elects the drafted tool; otherwise the decision is the one the policy
+    makes without an Escalator. Off, the gate fixes the drafted tool (Jev decides only its arguments): live on
+    When2Call that executed drafts on 30 cases where no tool fits (DECISIONS "drafted values")."""
     record_hints: int = 3
     """Name up to this many records the request matches (best-anchored first) in the ``tool`` option of each tool that
     takes one, so the tool Choice knows a matching record exists (§3.5.4 ``T_TOOL_MATCHES``; DECISIONS "record hints");

@@ -665,31 +665,34 @@ OpenRouter) that drafts a call when a value is not on the ballot; Jev re-decides
 
 BFCL, all 3,051 cases, strict (executed calls exactly right):
 
-| Category | No drafter | Drafter |
-|---|---:|---:|
-| simple_python | 26.5% | **42.5%** |
-| multiple | 30.5% | **39.5%** |
-| live_simple | 24.0% | **41.1%** |
-| live_multiple | 25.7% | **44.4%** |
-| irrelevance | 97.1% | 95.0% |
-| live_irrelevance | 98.2% | 96.9% |
-| live_relevance | 18.8% | 31.2% |
-| Cost | $0.23 | $0.26 + $0.10 drafter (1,426 calls) |
+| Category | No drafter | Drafter, fixed gate | Drafter, re-gate (default) |
+|---|---:|---:|---:|
+| simple_python | 26.5% | 42.5% | **43.8%** |
+| multiple | 30.5% | 39.5% | **40.0%** |
+| live_simple | 24.0% | 41.1% | **40.7%** |
+| live_multiple | 25.7% | 44.4% | **44.4%** |
+| irrelevance | 97.1% | 95.0% | 95.8% |
+| live_irrelevance | 98.2% | 96.9% | 97.7% |
+| live_relevance | 18.8% | 31.2% | 25.0% (16 cases) |
+| Cost | $0.23 | $0.26 + $0.10 drafter | $0.27 + $0.10 drafter (1,443 calls) |
 
 When2Call, all 3,652 cases:
 
-| | No drafter | Drafter |
-|---|---:|---:|
-| Accuracy / macro F1 | 65.7% / 64.8% | **70.3% / 70.6%** |
-| Recall: tool call / ask / decline | 35.4% / 86.3% / 79.1% | 58.8% / 79.3% / 74.3% |
-| Tool called on cannot-answer cases | 3.9% | **7.4%** |
-| Errors (backend failures after retries) | 0 | 21 |
-| Cost | $0.28 | $0.28 + $0.21 drafter |
+| | No drafter | Drafter, fixed gate | Drafter, re-gate (default) |
+|---|---:|---:|---:|
+| Accuracy / macro F1 | 65.7% / 64.8% | 70.3% / 70.6% | **73.3% / 73.2%** |
+| Recall: tool call / ask / decline | 35.4% / 86.3% / 79.1% | 58.8% / 79.3% / 74.3% | 59.5% / 80.2% / 81.5% |
+| Tool called on cannot-answer cases | 3.9% | 7.4% | **5.3%** |
+| Errors (backend failures after retries) | 0 | 21 | 0 |
+| Cost | $0.28 | $0.28 + $0.21 drafter | $0.34 + $0.22 drafter |
 
 A first drafter run escalated `missing` too, ended text drafts in `abstain` and let unfitted values reach the ballot:
-58.1% accuracy, "ask" recall 32%, 144 errors; those three are fixed. The doubled call rate on cannot-answer cases
-remains: 46 of the 96 calls are new, 30 of them through the older escalation of unsupported, ambiguous or diffuse
-turns, whose gate round fixes the drafted tool so Jev cannot reject it. That is the next fix.
+58.1% accuracy, "ask" recall 32%, 144 errors. The second fixed those; its call rate on cannot-answer cases (7.4%)
+came mostly from the older escalation of unsupported, ambiguous or diffuse turns, whose gate round fixed the drafted
+tool. With `tool.regate_escalation` (default) that gate re-asks the tool Choice and a draft stands only if Jev elects
+its tool: 5.3%, and declines are more accurate than without a drafter. For reference, the When2Call paper reports
+61.3% accuracy for GPT-4o (judged by an LLM) and 70.0% for its best fine-tuned 8B model (log-probabilities over the
+written answers); the protocols differ.
 
 ## Reading a live run
 

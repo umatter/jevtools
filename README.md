@@ -588,8 +588,8 @@ fits and makes the call on 35% of those that want one (the rest become questions
 customer-service conversations, reduced to 994 next-call decisions, it makes 68% of the read calls exactly right and
 executes a call in 3% of the turns where the reference agent made none; write calls, whose ids come from earlier tool
 results, reach 37% (25% executed) only when the app trusts its own lookup tools. With a cheap LLM drafting values that
-no extractor finds (`Router(escalator=…)`, Jev still decides them), BFCL strict accuracy rises to 39–44% and When2Call
-accuracy to 70%, for about $0.0001 per decision more, at the price of more calls where none fits (When2Call: 7.4%
+no extractor finds (`Router(escalator=…)`, Jev still decides them), BFCL strict accuracy rises to 40–44% and When2Call
+accuracy to 73%, for about $0.0001 per decision more, at the price of a few more calls where none fits (When2Call: 5.3%
 instead of 3.9%). Details, attribution and the full tables are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends

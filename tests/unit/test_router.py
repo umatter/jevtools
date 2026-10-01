@@ -36,6 +36,7 @@ from tests.stubs import (
     scenario_context,
     scenario_resolvers,
 )
+from tests.support import fixed_gate_policy
 
 R2_REQUEST = "Email Anna that I'll be 10 minutes late"
 NO_HISTORY_SCRIPT = {**R2_SCRIPT, "send_email.to": {"Anna Keller <anna.keller@acme.com>": 0.47,
@@ -357,14 +358,14 @@ def test_escalation_gate_round(scenario_catalog: Catalog, stubs: list[Any]) -> N
         arguments={"to": "anna.keller@acme.com", "subject": "Late", "body": "I'll be 10 minutes late."},
     )
     escalator = Escalator(proposal)
-    r, backend = router(scenario_catalog, script, escalator=escalator)
+    r, backend = router(scenario_catalog, script, escalator=escalator, policy=fixed_gate_policy())
     d = r.decide(R2_MESSAGES)
     assert escalator.seen[0].outcome is Outcome.ESCALATE and escalator.seen[0].rule == "P5.tool.ambiguous"
     assert len(backend.requests) == 2 and "tool" not in backend.requests[1].questions
     assert "send_email.subject.accept.3" in backend.requests[1].questions  # the LLM's subject, as generated
     assert d.outcome is Outcome.CONFIRM and d.usage.llm_calls == 1 and d.rounds == 2
     text = Escalator("I can't do that.")
-    r2, _ = router(scenario_catalog, script, escalator=text)
+    r2, _ = router(scenario_catalog, script, escalator=text, policy=fixed_gate_policy())
     handed = r2.decide(R2_MESSAGES)
     assert handed.outcome is Outcome.ABSTAIN and handed.content == "I can't do that."
 

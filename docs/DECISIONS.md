@@ -2043,6 +2043,11 @@ Extends "Documentation and final merge":
   the value, and a draft would override it (escalating it too raised calls on "cannot answer" cases from 3.9% to 7.5%).
   A drafted value is fitted to the slot's schema (`spec.schema.fit_schema`: valid as is, or an exact numeric/boolean
   coercion of a string, else dropped); an unfitted value had made the ballot builder raise (144 errors).
+- §4.7: the gate round after an escalation from the tool rules (P2 unsupported, P5 ambiguous, P9 diffuse) fixed the
+  drafted tool, so Jev judged only its arguments and never whether the tool fits → with `tool.regate_escalation`
+  (default) it re-asks the `tool` Choice, and the draft stands only if Jev elects the drafted tool; otherwise the
+  decision is the policy's without an Escalator (`escalator=False`). Live on When2Call: calls on cannot-answer cases
+  7.4% → 5.3%, accuracy 70.3% → 73.3%. A coverage escalation keeps the fixed gate (the tool is already Jev's choice).
 - §3.4.2: `generated` joins the default allow-list of read-tier identity slots, which already admitted
   `tool_output`: a drafted value is no less trustworthy than a tool result, and a wrong read returns data, not an
   action. Identity slots of write, external and critical tools still never take a `generated` value (unless an equal

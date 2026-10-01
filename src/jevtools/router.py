@@ -820,11 +820,18 @@ class Router:
                  for name, value in proposed.arguments.items() if name in tool.slot_names
                  for slot in [tool.slot(name)]
                  for fitted in [fit_schema(value, slot.json_schema)] if fitted is not None}  # fmt: skip
-        plan = self._compile(
-            s, tool_choice={"type": "function", "function": {"name": tool.name}}, extra_candidates=extra
-        )
+        regate = not coverage and self.policy.tool.regate_escalation and s.tool_choice == "auto"
+        named = {"type": "function", "function": {"name": tool.name}}
+        plan = self._compile(s, tool_choice=s.tool_choice if regate else named, extra_candidates=extra)
         gate = yield from self._round(s, plan)
         gate, gated, gate_inp = yield from self._policy_loop(s, gate)
+        if regate and gate.failure is None and (gate_inp is None or gate_inp.chosen != tool.name):
+            # Jev did not take up the drafted tool: decide as if no Escalator were configured
+            s.notes.append(f"gate round did not elect the drafted tool {tool.name!r}: no escalation")
+            if inp is None:
+                return (yield from self._finish(s, gate, gated, gate_inp))
+            plain = evaluate(inp.model_copy(update={"escalator": False}), self.policy)
+            return (yield from self._finish(s, state, plain, inp))
         return (yield from self._finish(s, gate, gated, gate_inp))
 
     # -- resume -------------------------------------------------------------------------------------------------
