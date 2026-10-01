@@ -2056,3 +2056,12 @@ Extends "Documentation and final merge":
 - This makes jevtools a decision layer over an LLM's draft when an Escalator is configured, rather than Jev alone:
   "bind, don't write" holds for every value in an executed call (Jev elected it from a pool), but a pool can now hold
   values an LLM wrote. Without an Escalator nothing changes.
+
+
+## No shared calibrator
+
+- §11.4: a calibrator fitted on a mix of benches was meant to become the default → it does not transfer: left out of
+  the fit, each bench's calibration stays off by 0.10–0.22 (ECE), and the same C is right 95% of the time on τ² but
+  69% on BFCL (BENCH "Does one calibration fit every bench?"). C ranks well within each bench, so calibration stays
+  per app (`jevtools tune` on its own labelled decisions, e.g. accepted, edited or cancelled confirm cards), and
+  `confidence.calibrated` stays false by default.

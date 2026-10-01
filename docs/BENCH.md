@@ -694,6 +694,25 @@ its tool: 5.3%, and declines are more accurate than without a drafter. For refer
 61.3% accuracy for GPT-4o (judged by an LLM) and 70.0% for its best fine-tuned 8B model (log-probabilities over the
 written answers); the protocols differ.
 
+## Does one calibration fit every bench? (2026-10-01)
+
+Every recorded decision that proposes a call was re-decided offline (no API cost) and labelled right or wrong: the
+held-out app bench and its controls, τ² (both trust settings), BFCL and When2Call (the latter by tool name only;
+the dataset has no argument gold). Share of proposed calls that are right, read tier, by confidence C:
+
+| C | 0.6–0.7 | 0.7–0.8 | 0.8–0.9 | 0.9–0.95 | 0.95–1.0 |
+|---|---:|---:|---:|---:|---:|
+| App (held-out) | 48% | 48% | 54% | 62% | 87% |
+| τ² | 39% | 45% | 67% | 77% | 95% |
+| BFCL | 16% | 27% | 32% | 48% | 69% |
+| When2Call | 48% | 53% | 63% | 59% | 73% |
+
+C ranks decisions on every bench, but the same C means different odds on different benches. An isotonic calibration
+fitted on three benches and applied to the fourth lowers the calibration error (ECE 0.20–0.40 → 0.10–0.22) but never
+singles out calls that are 90% right on the bench it did not see (τ² writes: 47% above the fitted cut). So no shared
+calibrator ships; calibration is per app (`jevtools tune` on the app's own labelled decisions), and the default
+thresholds stay priors.
+
 ## Reading a live run
 
 Run with a key, then compare:
