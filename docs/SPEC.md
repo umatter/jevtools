@@ -2044,11 +2044,12 @@ A meta-test asserts that the union of fired rule ids equals the full rule set.
 
 ### 11.3 Threshold tuning
 
-- For each tier, choose the composition, `τ_execute` and `τ_confirm` that **maximize automation**, subject to the one-sided 95% Clopper–Pearson upper bound on the wrong-execution rate among cases with `C ≥ τ_execute` being ≤ α_tier.
+- For each tier, choose the composition, `τ_execute` and `τ_confirm` that **maximize right executions** (the highest threshold on a tie), subject to the one-sided 95% Clopper–Pearson upper bound on the wrong-execution rate among cases with `C ≥ τ_execute` being ≤ α_tier.
 - Defaults: α = 5% (read), 2% (write), 1% (external), 0.1% (critical).
 - Split conformal risk control is available as `tuning.method = "crc"`.
 - Output: a versioned `policy.toml` plus calibrators, cited by every trace.
 - Thresholds do not transfer across datasets [C: Janus]. They must be tuned on the adopter's own labelled traffic, run in `shadow` mode first. In shadow mode `Router(policy=…, shadow=True)` logs decisions and always returns `confirm`.
+- **Labels from confirm cards.** `Router(feedback=FeedbackLog(path))` appends one row per resumed confirm card: the decision's call, W/Π/L/J, tier and the user's verdict (`accepted`; `edited` or `cancelled`; an app may add `undone` for a reverted execution). Only `accepted` counts as right. `jevtools tune --feedback LOG` tunes on the oldest 80% and re-applies both the current and the tuned policy (composition, threshold, hysteresis) to the newest 20%: `ok` when the wrong-execution bound meets the budget there, `unproven` when only the observed rate does, `over` otherwise; it recommends switching only when every tier is `ok`.
 
 ### 11.4 Certification of critical auto-execution
 

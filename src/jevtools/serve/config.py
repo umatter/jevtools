@@ -43,6 +43,7 @@ model = "openai/gpt-4o-mini"
 api_key_env = "OPENROUTER_API_KEY"
 
 # [text_llm], [filler] and [escalator] take the same keys (plus `options`, e.g. temperature).
+# feedback_log = "feedback.jsonl"  # log the user's verdict on each confirm card (jevtools tune --feedback)
 ```
 
 Source specs (:mod:`jevtools.sources.specs`) are shared with evaluation context documents and `jevtools lint --sources`.
@@ -69,6 +70,7 @@ from jevtools.fallback import (
     OpenAICompatibleFiller,
     OpenAICompatibleTextLLM,
 )
+from jevtools.feedback import FeedbackLog
 from jevtools.policy import Policy
 from jevtools.sources.specs import (
     KEY_GUESSES,
@@ -172,6 +174,9 @@ class ServeConfig(_Model):
     filler: EndpointConfig | None = None
     escalator: EndpointConfig | None = None
     fallback_llm: EndpointConfig | None = None
+    feedback_log: str | None = None
+    """A JSONL :class:`~jevtools.feedback.FeedbackLog` (relative to the config file): each confirm card the proxy
+    resumes is logged with the user's verdict, for ``jevtools tune --feedback`` (§11.3)."""
     pending_ttl_s: float = 900.0
     max_routers: int = 32
     """Base routers kept per distinct set of per-request sources (least recently used dropped first)."""
@@ -254,6 +259,10 @@ class ServeConfig(_Model):
     def build_filler(self) -> OpenAICompatibleFiller | None:
         """The FILL endpoint (``None`` when not configured)."""
         return self._endpoint(self.filler, OpenAICompatibleFiller)  # type: ignore[no-any-return]
+
+    def build_feedback(self) -> FeedbackLog | None:
+        """The configured feedback log, if any."""
+        return FeedbackLog(self.resolve(self.feedback_log)) if self.feedback_log else None
 
     def build_escalator(self) -> OpenAICompatibleEscalator | None:
         """The escalation endpoint (``None`` when not configured)."""

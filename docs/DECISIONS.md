@@ -2065,3 +2065,18 @@ Extends "Documentation and final merge":
   69% on BFCL (BENCH "Does one calibration fit every bench?"). C ranks well within each bench, so calibration stays
   per app (`jevtools tune` on its own labelled decisions, e.g. accepted, edited or cancelled confirm cards), and
   `confidence.calibrated` stays false by default.
+
+## Labels from confirm cards; the tuner maximizes right executions
+
+- §11.3: the spec asked adopters to tune on labelled traffic collected in shadow mode but gave no way to collect the
+  labels → `jevtools.feedback`: a router given `feedback=` logs the user's verdict on every confirm card it resumes
+  (confirm → `accepted`, cancel → `cancelled`, any other option or an unparsed reply → `edited`), an app can log
+  `undone` itself, and `jevtools tune --feedback` tunes on the older rows and checks on the newest (verdict `ok` /
+  `unproven` / `over`). Cancelling counts as wrong: had the call run, the user would not have wanted it. Cards
+  are kept in memory per router (a resumed pending that reaches another process is not labelled); the proxy takes
+  `feedback_log`.
+- §11.3: the tuner chose the threshold that let the most decisions execute within the budget, so on cleanly
+  separated data it still lowered the threshold into decisions that were all wrong, spending the budget on known
+  errors → it maximizes right executions (`kept − errors`), the highest threshold on a tie, also when it chooses the
+  composition.
+

@@ -61,6 +61,7 @@ from jevtools.decode import (
 )
 from jevtools.errors import PendingScopeError
 from jevtools.fallback import Escalator, FillCandidate, Filler, FillRequest, ObservationPreview, ProposedCall, TextLLM
+from jevtools.feedback import FeedbackLog, label_of
 from jevtools.kinds.base import ResolveContext, get_resolver
 from jevtools.plan import (
     PoolKey,
@@ -275,6 +276,7 @@ class Router:
         calibrators: Mapping[str, IsotonicCalibrator] | None = None,
         revalidate: Revalidator | None = None,
         store_bodies: StoreBodies = "full",
+        feedback: FeedbackLog | None = None,
     ) -> None:
         self.context = context or Context()
         sources = list(self.context.sources.values())
@@ -290,8 +292,11 @@ class Router:
         self.calibrators = dict(calibrators or {})
         self.revalidate = revalidate or self.default_revalidate
         self.store_bodies = store_bodies
+        self.feedback = feedback
         self.pendings: dict[str, Pending] = {}
         self._live: dict[str, _Live] = {}
+        self._cards: dict[str, Decision] = {}
+        """Confirm cards awaiting the user's verdict, by pending id (only with ``feedback``)."""
 
     # -- identity -----------------------------------------------------------------------------------------------
 
@@ -859,6 +864,7 @@ class Router:
         ctx = base.with_messages(messages)
         if selection is None and reply is not None:
             selection = parse_short_reply(reply, handle.state.get("options", []))
+        self._log_card(handle, selection)
         loop = bool(handle.state.get("loop"))
         tool = handle.state.get("tool")
         unknown = bool(tool) and str(tool) not in self.catalog  # resumed on a router serving another tool list
@@ -1070,6 +1076,8 @@ class Router:
         )  # fmt: skip
         if pending is not None and state is not None:
             self._remember(pending, _Live(session=s, state=state, tool=td.tool.name if td else None))
+            if self.feedback is not None and result.outcome is Outcome.CONFIRM and call is not None:
+                self._cards[pending.pending_id] = decision
         return decision
 
     def _ids(self, s: _Session) -> DecisionIds:
@@ -1094,6 +1102,16 @@ class Router:
     def _forget(self, pending_id: str) -> None:
         self.pendings.pop(pending_id, None)
         self._live.pop(pending_id, None)
+        self._cards.pop(pending_id, None)
+
+    def _log_card(self, handle: Pending, selection: str | None) -> None:
+        """Log the verdict on a confirm card being resumed: its option's action (a free-text reply that is not an
+        option counts as an edit)."""
+        card = self._cards.pop(handle.pending_id, None)
+        if card is None or self.feedback is None:
+            return
+        action = handle.options.get(selection) if selection is not None else None
+        self.feedback.add(card, label_of(action.action if action is not None else None))
 
     def _confidence(self, td: ToolDecode | None, comp: Composition | None) -> Confidence | None:
         if td is None or comp is None or comp.C is None:

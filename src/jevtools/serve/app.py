@@ -148,6 +148,7 @@ class ServeState:
         self.text_llm = text_llm if text_llm is not None else config.build_text_llm()
         self.filler = filler if filler is not None else config.build_filler()
         self.escalator = escalator if escalator is not None else config.build_escalator()
+        self.feedback = config.build_feedback()
         self.fallback_transport = fallback_transport
         self.sources = config.build_sources()
         self._routers: OrderedDict[str, Router] = OrderedDict()
@@ -167,7 +168,7 @@ class ServeState:
         sources = [s for s in self.sources if s.name not in names] + added
         router = Router([], backend=self.backend, policy=self.policy, context=self.config.build_context(sources),
                         filler=self.filler, escalator=self.escalator, text_llm=self.text_llm,
-                        calibrators=self.calibrators)  # fmt: skip
+                        calibrators=self.calibrators, feedback=self.feedback)  # fmt: skip
         with self._lock:
             router = self._routers.setdefault(key, router)
             while len(self._routers) > max(1, self.config.max_routers):

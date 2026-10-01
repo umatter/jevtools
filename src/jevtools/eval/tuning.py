@@ -1,7 +1,7 @@
 """Threshold tuning, calibration and certification (spec §11.3, §11.4).
 
 For each risk tier, :func:`tune` chooses the composition (W, Π, L, J, ``MIN_L_J``), ``τ_execute`` and ``τ_confirm``
-that **maximize automation** subject to the one-sided 95% Clopper–Pearson upper bound on the wrong-execution rate
+that **maximize right executions** subject to the one-sided 95% Clopper–Pearson upper bound on the wrong-execution rate
 among the cases the policy would execute being ≤ ``α_tier`` (defaults: read 5%, write 2%, external 1%,
 critical 0.1%). ``method="crc"`` uses split conformal risk control instead. Optionally an isotonic calibrator
 (:class:`~jevtools.confidence.IsotonicCalibrator`) is fitted per tier on ``(C_prior, call correct)`` pairs.
@@ -162,6 +162,11 @@ class ThresholdChoice:
         return self.kept / self.n if self.n else 0.0
 
 
+def _right(choice: ThresholdChoice) -> int:
+    """The tuning objective: right executions."""
+    return choice.kept - choice.errors
+
+
 def _candidates(scores: Sequence[float], h: float) -> list[float]:
     """Thresholds worth testing: each distinct score minus ``h`` (rounded up), highest first."""
     taus = {_ceil4(max(0.0, s - h)) for s in scores if s >= h - _EPS}
@@ -204,7 +209,8 @@ def execute_threshold(
     method: Method = "cp",
     composition: str = "C",
 ) -> ThresholdChoice | None:
-    """The threshold letting through the most cases whose wrong-execution risk meets ``alpha``.
+    """The threshold letting through the most **right** cases whose wrong-execution risk meets ``alpha`` (the
+    highest such threshold on a tie: lowering a threshold into cases that are all wrong buys no automation).
 
     ``cp``: the one-sided Clopper–Pearson upper bound (level ``conf``) of the wrong rate among the kept cases is
     ≤ ``alpha``. ``crc``: split conformal risk control on the loss ``wrong ∧ kept``:
@@ -215,7 +221,7 @@ def execute_threshold(
     best: ThresholdChoice | None = None
     for tau in _candidates(scores, hysteresis):
         k, m = count(tau)
-        if not m or (best is not None and m <= best.kept):
+        if not m or (best is not None and m - k <= best.kept - best.errors):
             continue
         if method == "cp":
             if k / m > alpha:
@@ -430,7 +436,7 @@ def _tune_tier(
         scores = [_score(r, rule, cal) for r in items]
         choice = execute_threshold(scores, [r.wrong_if_executed for r in items], alpha, conf=conf, hysteresis=h,
                                    method=method, composition=rule)  # fmt: skip
-        if best is None or (choice is not None and (best[0] is None or choice.kept > best[0].kept)):
+        if best is None or (choice is not None and (best[0] is None or _right(choice) > _right(best[0]))):
             best = (choice, rule, cal)
     assert best is not None
     choice, rule, cal = best

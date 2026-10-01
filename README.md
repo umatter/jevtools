@@ -516,7 +516,36 @@ jevtools eval cases.jsonl --backend auto --replays 3 --out report.json   # ECE, 
 jevtools tune report.json --out tuned/ --alpha external=0.01            # writes tuned/policy.toml
 ```
 
-Thresholds do not transfer between datasets. Tune on your own traffic, and start in shadow mode.
+Thresholds do not transfer between datasets (BENCH shows the same confidence right 95% of the time on one benchmark
+and 69% on another). Tune on your own traffic, and start in shadow mode.
+
+**Labels from confirm cards.** You don't have to label traffic by hand: a confirm card labels its call when the user
+answers it (accepted = right; edited or cancelled = executing it would have been wrong). Give the router a feedback
+log, run in shadow mode so that would-be executions are shown as cards too, and tune on what accumulates:
+
+```python
+from jevtools.feedback import FeedbackLog
+
+log = FeedbackLog("feedback.jsonl")
+router = jt.Router(tools, backend=backend, policy=jt.Policy(shadow=True), feedback=log)
+# ... each router.resume(pending, selection=...) of a confirm card appends a labelled row
+log.add(decision, "undone")   # an app can also log a verdict itself, e.g. when a user reverts an executed call
+```
+
+```bash
+jevtools tune --feedback feedback.jsonl --out tuned/   # tunes on the older 80%, checks on the newest 20%
+```
+
+The command prints, per tier, what the current and the tuned policy would execute on the newest rows and how much of
+it the users rejected, then a verdict: switch (exit 0), keep the current policy because a budget is exceeded
+(exit 2), or collect more labels because too few executions prove the budget (exit 3). The proxy takes
+`feedback_log = "feedback.jsonl"` in `jevtools.toml`.
+
+How many labels it takes: a budget is shown by the bound, so with no wrong calls a tier needs about 60 executions in
+the checked rows for a 5% budget, 150 for 2% and 300 for 1% (the rule of three), which means a few thousand cards in
+all. Tried on the held-out app bench's live decisions as if they were cards (629, 98% accepted), the tuner could not
+yet prove the write and external budgets and turned their auto-execution off, and the verdict was to collect more
+labels before switching.
 
 **Traces.** Every `Decision` carries a `Trace` with the Ballot, requests, responses, bindings, factors and the rule
 that fired. `jt.verify` replays it with the model out of the loop: it rebuilds the Ballot, re-decodes the answers
@@ -541,6 +570,7 @@ open("trace.json", "wb").write(d.trace.to_json())   # then: jevtools explain tra
 | `jevtools serve --config jevtools.toml [--host H --port P]` | the OpenAI-compatible proxy (extra `serve`) |
 | `jevtools eval DATASET [--backend B] [--replays N] [--out report.json]` | run a labelled dataset and report the SPEC §11.2 metrics |
 | `jevtools tune REPORT [--out DIR] [--alpha tier=x] [--method cp\|crc] [--calibrate]` | tune thresholds, fit isotonic calibrators, certify the critical tier |
+| `jevtools tune --feedback LOG [--check 0.2] [--out DIR] [--alpha tier=x]` | tune on labelled confirm cards and check the result on the newest ones before switching |
 | `jevtools fixtures [--update] [--case NAME]` | check or regenerate the golden conformance fixtures (from a checkout) |
 | `jevtools bench app [--domains …] [--dir DIR \| --heldout] [--merged-catalog] [--backend oracle\|sim\|auto…] [--policy F] [--tags] [--replays N] [--controls] [--record DIR \| --replay DIR] [--out F]` | run the app-domain benchmark (or your own domains, or the generated held-out cases): the ceiling (oracle), or live Jev next to it; `--replays` decides each case N times, `--controls` adds the negative controls ([docs/BENCH.md](docs/BENCH.md)) |
 | `jevtools bench bfcl [--download] [--backend oracle\|sim\|auto…] [--categories …] [--limit N] [--record DIR] [--out F]` | run the BFCL benchmark: the coverage ceiling (oracle), or live Jev next to its ceiling ([docs/BENCH.md](docs/BENCH.md)) |

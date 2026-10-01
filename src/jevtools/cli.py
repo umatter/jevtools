@@ -743,9 +743,18 @@ def _alphas(pairs: Sequence[str]) -> dict[str, float]:
     return alphas
 
 
+FEEDBACK_MIN_ROWS = 200
+"""Fewer labelled rows than this to tune on: ``jevtools tune --feedback`` warns that the bounds will be wide."""
+
+
 def _cmd_tune(args: argparse.Namespace, out: TextIO) -> int:
     from jevtools.eval import EvalReport, tune
 
+    if args.feedback:
+        return _cmd_tune_feedback(args, out)
+    if not args.report:
+        print("jevtools tune: give a report JSON or --feedback LOG", file=out)
+        return 1
     report = EvalReport.load(args.report)
     base = Policy.from_toml(args.policy) if args.policy else None
     held_out: Any = EvalReport.load(args.held_out) if args.held_out else bool(args.calibrate)
@@ -758,6 +767,57 @@ def _cmd_tune(args: argparse.Namespace, out: TextIO) -> int:
           f"({cert.cases} labelled case(s); {cert.reason})".rstrip(), file=out)  # fmt: skip
     toml_path, cal_path = result.save(args.out)
     print(f"wrote {toml_path}" + (f" and {cal_path}" if cal_path else ""), file=out)
+    return 0
+
+
+def _cmd_tune_feedback(args: argparse.Namespace, out: TextIO) -> int:
+    """Tune on the older labelled confirm cards, check the current and the tuned policy on the newest ones."""
+    from jevtools.eval import tune
+    from jevtools.feedback import FeedbackLog, check_policy, split
+
+    log = FeedbackLog(args.feedback)
+    rows = log.records()
+    if len(rows) < 2:
+        print(f"jevtools tune: {args.feedback} holds {len(rows)} labelled row(s); nothing to tune", file=out)
+        return 1
+    fit, held = split(rows, args.check)
+    if len(fit) < FEEDBACK_MIN_ROWS:
+        print(f"warning: {len(fit)} row(s) to tune on (< {FEEDBACK_MIN_ROWS}); the bounds will be wide", file=out)
+    base = Policy.from_toml(args.policy) if args.policy else Policy()
+    alphas = _alphas(args.alpha or ())
+    result = tune(log.report(fit), alphas, base_policy=base, method=args.method, calibrate=False)
+    print(f"tuned on {len(fit)} row(s), checked on the newest {len(held)}:", file=out)
+    for name, tier in result.tiers.items():
+        if tier.status != "no_data":
+            print(f"  {name:<9} tuned on {tier.n} row(s): {tier.status}, execute={tier.execute} confirm={tier.confirm}",
+                  file=out)  # fmt: skip
+    print("  tier      n     current: executes  wrong  bound    tuned: executes  wrong  bound    budget  verdict",
+          file=out)  # fmt: skip
+    before, after = check_policy(held, base, alphas), check_policy(held, result.policy, alphas)
+    statuses: list[str] = []
+    for name, now in before.items():
+        new = after[name]
+        statuses.append(new.status)
+
+        def cell(c: Any) -> str:
+            bound = "–" if c.upper is None else f"{c.upper:.3f}"
+            return f"{c.executed:>5} ({c.automation:>4.0%})  {c.wrong:>5}  {bound:>5}"
+
+        print(f"  {name:<9} {now.n:<5} {cell(now)}    {cell(new)}    {new.alpha:<6}  {new.status}", file=out)
+    toml_path, _ = result.save(args.out)
+    print(f"wrote {toml_path}", file=out)
+    if "over" in statuses:
+        print("verdict: the tuned policy exceeds a budget on the newest rows; keep the current one", file=out)
+        return 2
+    if "unproven" in statuses:
+        print("verdict: within budget on the newest rows, but too few executions there to prove it; collect more "
+              "labels (or a larger --check share) before switching", file=out)  # fmt: skip
+        return 3
+    never = [name for name, tier in result.tiers.items() if tier.status == "never"]
+    note = (f" (it never auto-executes {', '.join(never)}: no threshold met the budget on the older rows)"
+            if never else "")  # fmt: skip
+    print(f"verdict: the tuned policy keeps every tier within its budget on the newest rows; switch to it{note}",
+          file=out)  # fmt: skip
     return 0
 
 
@@ -914,7 +974,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", help="write the full report (JSON)")
 
     p = sub.add_parser("tune", help="tune policy thresholds on an evaluation report (§11.3, §11.4)")
-    p.add_argument("report", help="report JSON written by `jevtools eval --out`")
+    p.add_argument("report", nargs="?", help="report JSON written by `jevtools eval --out`")
+    p.add_argument("--feedback", metavar="LOG",
+                   help="tune on the labelled confirm cards of a FeedbackLog instead (the older rows), then check the "
+                        "current and the tuned policy on the newest rows")  # fmt: skip
+    p.add_argument("--check", type=float, default=0.2, help="with --feedback: share of the newest rows kept for the "
+                                                            "check (default 0.2)")  # fmt: skip
     p.add_argument("--out", default=".", help="directory for policy.toml (and policy.calibrators.json)")
     p.add_argument("--policy", help="base policy.toml (default: Appendix B)")
     p.add_argument("--alpha", action="append", help="wrong-execution budget per tier, e.g. write=0.01 (repeatable)")
