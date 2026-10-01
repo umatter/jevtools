@@ -83,3 +83,33 @@ def test_a_write_tool_gets_looked_up_ids_only_from_trusted_tools() -> None:
     item = next(c for c in plan.pool(RETURN["function"]["name"], ("item_ids",)).candidates if c.value == "8538875209")
     assert "name: Water Bottle" in str(item.text)  # the field is described by its siblings
     assert Context(messages=messages).to_doc() == Context(messages=messages, trusted_tools=()).to_doc()  # hashes kept
+
+
+def test_name_parts_digit_strings_and_qualified_fields_reach_the_pool() -> None:
+    lookup = {"type": "function", "function": {
+        "name": "find_user_id_by_name_zip", "description": "Find a user id by name and zip code.",
+        "parameters": {"type": "object", "required": ["first_name", "last_name", "zip"], "properties": {
+            "first_name": {"type": "string"}, "last_name": {"type": "string"}, "zip": {"type": "string"}}}}}  # fmt: skip
+    by_email = {"type": "function", "function": {
+        "name": "find_user_id_by_email", "description": "Find a user id by email.",
+        "parameters": {"type": "object", "required": ["email"], "properties": {"email": {"type": "string"}}}}}  # fmt: skip
+    exchange = {"type": "function", "function": {
+        "name": "exchange_delivered_order_items", "description": "Exchange items of a delivered order.",
+        "parameters": {"type": "object", "required": ["new_item_ids"], "properties": {
+            "new_item_ids": {"type": "array", "items": {"type": "string"}}}}}}  # fmt: skip
+    catalog = Catalog.from_openai([lookup, by_email, exchange])
+    messages = [{"role": "user", "content": "I'm Yusuf Rossi, zip code 19122, email yusuf.rossi@example.com."}]
+    observation = Observation(step=1, tool="get_product_details", content={"variants": [{"item_id": "1234567890"}]})
+    ctx = Context(messages=messages, observations=[observation], trusted_tools=("get_product_details",))
+    plan = compile_round(catalog, ctx, jt.Policy(), mode="loop")
+
+    def offered(tool: str, slot: str) -> list[str]:
+        pool = plan.pool(tool, (slot,))
+        assert pool is not None
+        return [str(c.value) for c in pool.candidates]
+
+    assert "Yusuf" in offered("find_user_id_by_name_zip", "first_name")
+    assert "Rossi" in offered("find_user_id_by_name_zip", "last_name")
+    assert "19122" in offered("find_user_id_by_name_zip", "zip")
+    assert "yusuf.rossi@example.com" in offered("find_user_id_by_email", "email")
+    assert "1234567890" in offered("exchange_delivered_order_items", "new_item_ids")

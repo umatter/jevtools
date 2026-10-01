@@ -582,28 +582,48 @@ every argument, id lists as sets) and a **talk** case per assistant turn without
 executes one there). jevtools gets the tool schemas and the conversation, not the domain policy. The tool schemas
 come from a τ² install (`tau2.EXPORT_TOOLS`); τ² data is not vendored.
 
-Live, 2026-09-30, retail (106 tasks) and airline (34), 994 cases, no backend failures:
+Live, retail (106 tasks) and airline (34), 994 cases, no backend failures. The first run (2026-09-30) is before the
+coverage fixes below, the second (2026-10-01) after them:
 
-| | n | Trust `none` (default) | Trust `reads` |
-|---|---:|---:|---:|
-| Read calls exactly right | 341 | 21.7% | 22.0% |
-| Write calls exactly right (shown / executed) | 173 | 1.2% / 1.2% | 15.6% / 9.8% |
-| Right tool chosen (read / write) | | 83.9% / 90.2% | 84.2% / 93.1% |
-| Talk turns without an executed call | 480 | 97.9% | 96.9% |
-| Cost | | $1.47 | $2.38 |
+| | n | Trust `none` (default) | | Trust `reads` | |
+|---|---:|---:|---:|---:|---:|
+| | | before | after | before | after |
+| Read calls exactly right | 341 | 21.7% | **57.2%** | 22.0% | **57.8%** |
+| Write calls exactly right (shown / executed) | 173 | 1.2% / 1.2% | 2.3% / 1.7% | 15.6% / 9.8% | **17.9% / 12.1%** |
+| Right tool chosen (read / write) | | 83.9% / 90.2% | 83.9% / 91.3% | 84.2% / 93.1% | 83.9% / 91.9% |
+| Talk turns without an executed call | 480 | 97.9% | 97.7% | 96.9% | 95.4% |
+| Cost | | $1.47 | $1.64 | $2.38 | $2.45 |
 
-Coverage (compiled offline: every gold value on the ballot): reads 59%, writes 38% with trusted lookups. Missing
-most often: `first_name`/`last_name`/`zip` of `find_user_id_by_name_zip` (the user's "Mei Kovacs … 28236" offers the
-whole name and a number, not the parts and a string), `new_item_ids` (the new item's id is an `item_id` field),
-`email`, and free text or objects no extractor writes (`summary`, `reason`, flights, passengers). Among the covered
-cases 37% of reads and 42% of writes (3% without trust) come out exactly right; a next-call case often has several
-valid next calls ("I have two orders"), and jevtools asks which.
+Coverage (compiled offline: every gold value on the ballot, trusted lookups): 267 of 514 call cases before, 442
+(86%) after. The fixes, each found by reading the misses:
+- **name parts**: "I'm Mei Kovacs" offers "Mei" to a `first_name` slot and "Kovacs" to a `last_name` slot (87 misses
+  each);
+- **digit strings**: a number of three or more digits the user typed is offered as text to a string slot, so a zip
+  code is "28236", not 28236 (92);
+- **qualified field names**: `new_item_ids` takes `item_id` fields of earlier tool results (58);
+- **emails**: generic string slots took the role's default extractors and dropped the ones inferred from the name,
+  so a slot named `email` never ran the email extractor (30);
+- **allowed values in descriptions**: "should be either 'no longer needed' or 'ordered by mistake'" makes the slot
+  an enum, so the value is one the tool accepts, not the user's paraphrase (9).
 
-Executed calls in talk turns that the reference agent never made: two cancellations with the user's words as the
-reason ("I ordered it by mistake") where the tool's description asks for "ordered by mistake", two airline
-cancellations the reference agent did not make (the policy restricts cancellations; jevtools does not see it), and
-reads with a malformed id. With trusted lookups, six more were the reference agent's next call, made a turn early.
-Requests are large (median 19k input tokens, 82 questions): long conversations with 16 tools expand most of them.
+Name parts and digit strings come from the user's words only; a tool result's values come as field candidates,
+described by their sibling fields. Still missing: free text and objects no extractor writes (`summary` 16,
+`flights` 12, `passengers` 8, `payment_methods` 5), dates (15), and lists where only some ids are on the ballot
+(`item_ids` 8, `new_item_ids` 7).
+
+Read calls are now right more often than not. Write calls barely move without trust, because their ids come from
+earlier tool results, which the injection defence keeps out of write slots unless the app trusts the lookup tools.
+A next-call case often has several valid next calls ("I have two orders"), and jevtools asks which.
+
+Executed calls in talk turns that the reference agent did not make there: before the fixes, two cancellations with
+the user's words as the reason ("I ordered it by mistake"), two airline cancellations (the policy restricts
+cancellations; jevtools does not see it), and reads with a malformed id. After the fixes, with trusted lookups,
+seven more: five are the reference agent's next call made a turn early (it asks "shall I proceed?" first; τ²'s
+policy requires that, and jevtools does not see the policy), one is a read (`find_user_id_by_email`), and one
+(retail-24-6) cancels an order the reference agent never cancelled, after "I was actually thinking about canceling
+it". An app that wants explicit confirmation before a cancellation sets that tool's policy to confirm; the bench
+runs the defaults. Requests are large (median 19k input tokens, 82 questions): long conversations with 16 tools
+expand most of them.
 
 ## Reading a live run
 

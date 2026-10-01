@@ -584,7 +584,10 @@ reformatting or world knowledge that selection cannot produce. Live (all 3,051 c
 accuracy 24–31% on the categories that want a call, far below LLM tool callers that write arguments, with Jev right
 71–93% of the time where the values were on the ballot; on the irrelevance categories it executes a call in 2–3% of
 cases. On **When2Call** (3,652 cases on when to call, ask or decline) it calls a tool on 3.9% of the cases where none
-fits and makes the call on 35% of those that want one (the rest become questions). Details, attribution and the full
+fits and makes the call on 35% of those that want one (the rest become questions). On **τ²-bench**'s published
+customer-service conversations, reduced to 994 next-call decisions, it makes 57% of the read calls exactly right and
+executes a call in 2% of the turns where the reference agent made none; write calls, whose ids come from earlier tool
+results, reach 18% only when the app trusts its own lookup tools. Details, attribution and the full
 tables are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends

@@ -43,10 +43,14 @@ ROLE_DEFAULTS: dict[str, tuple[str, ...]] = {"generic": ("clause", "quote", "nou
 identifier-like tokens (``code``)."""
 
 
+_NAMED_PATTERNS = frozenset({"email", "url", "uuid"})
+
+
 def extractors_of(slot: SlotSpec) -> tuple[str, ...]:
     """The slot's extractors: declared ``x-jev.extract``, else the role default, else the inferred list."""
     if slot.xjev.extract is None and slot.role in ROLE_DEFAULTS:
-        return ROLE_DEFAULTS[slot.role]
+        named = tuple(e for e in slot.extract or () if e in _NAMED_PATTERNS)  # ``email`` from a slot named ``email``
+        return ROLE_DEFAULTS[slot.role] + tuple(e for e in named if e not in ROLE_DEFAULTS[slot.role])
     return slot.extract or ("clause", "quote", "noun_phrase")
 
 
@@ -84,6 +88,49 @@ def span_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
 
 
 _ID_SUFFIX = re.compile(r"_(?:ids?|numbers?|codes?|keys?)$")
+_QUALIFIERS = ("new_", "old_", "current_", "original_", "target_", "selected_")
+"""Prefixes a slot may add to a field's name: ``new_item_ids`` takes an ``item_id`` field."""
+_FIRST_NAME = re.compile(r"^(?:first|given|fore)_?name$")
+_LAST_NAME = re.compile(r"^(?:last|family|sur)_?name$|^surname$")
+
+
+def name_part_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
+    """For a ``first_name`` / ``last_name`` slot: the first or last word of each proper-noun run of the user's
+    words ("Yusuf Rossi" → "Yusuf" / "Rossi"); a person's full name is how people give it."""
+    name = slot.name.lower()
+    which = 0 if _FIRST_NAME.match(name) else -1 if _LAST_NAME.match(name) else None
+    if which is None:
+        return []
+    out: list[Candidate] = []
+    seen: set[str] = set()
+    for m in pool_mentions(rc, "proper_noun"):
+        if m.channel != Channel.USER:
+            continue
+        words = m.text.split()
+        if len(words) < 2:
+            continue
+        part = words[which].strip(".,;:")
+        if part and part not in seen:
+            seen.add(part)
+            where = "first" if which == 0 else "last"
+            out.append(mention_candidate(m, part, display=part, note=f'the {where} word of "{m.text}"'))
+    return out
+
+
+def digit_string_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
+    """For a string slot: every all-digit number of three or more digits the user typed, as text. A zip code, an
+    account or an order number is a string, not a quantity ("my zip code is 19122"). A tool result's numbers
+    come as field candidates, described by their siblings."""
+    if slot.json_schema.get("type") != "string":
+        return []
+    out: list[Candidate] = []
+    seen: set[str] = set()
+    for m in pool_mentions(rc, "number"):
+        text = m.text.strip()
+        if m.channel == Channel.USER and len(text) >= 3 and text.isdigit() and text not in seen:
+            seen.add(text)
+            out.append(mention_candidate(m, text, display=text))
+    return out
 
 
 def field_stem(name: str) -> str:
@@ -118,6 +165,7 @@ def field_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
     observation's: ``tool_output``, or ``registry`` for a tool in ``Context.trusted_tools``."""
     name = next((part for part in reversed(slot.path) if part != ITEM), slot.name)
     stem = field_stem(name)
+    stems = {stem} | {stem[len(q) :] for q in _QUALIFIERS if stem.startswith(q)}
     trusted = set(rc.ctx.trusted_tools)
     out: list[Candidate] = []
     seen: set[str] = set()
@@ -126,7 +174,12 @@ def field_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
             continue
         channel = Channel.REGISTRY if obs.tool in trusted else Channel.TOOL_OUTPUT
         for path, key, value, siblings in _fields(jsonable(obs.content), "$", None):
-            if key is None or field_stem(key) != stem or isinstance(value, bool) or not isinstance(value, (str, int)):
+            if (
+                key is None
+                or field_stem(key) not in stems
+                or isinstance(value, bool)
+                or not isinstance(value, (str, int))
+            ):
                 continue
             text = str(value)
             if not text or text in seen:
@@ -189,7 +242,8 @@ class SpanResolver(ChoiceResolver):
     normalizer = "span@1"
 
     def candidates(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
-        out = span_candidates(slot, rc) + field_candidates(slot, rc) + author_candidates(slot)
+        out = (span_candidates(slot, rc) + name_part_candidates(slot, rc) + digit_string_candidates(slot, rc)
+               + field_candidates(slot, rc) + author_candidates(slot))  # fmt: skip
         return path_candidates(out) if is_path_slot(slot) else out
 
     def normalizer_for(self, slot: SlotSpec) -> str:

@@ -91,6 +91,11 @@ FORMAT_EXTRACTORS = {
     "email": ("email",), "uri": ("url",), "uuid": ("uuid",), "ipv4": ("ipv4",),
     "ipv6": (f"regex:{IPV6_RE}",), "hostname": (f"regex:{HOSTNAME_RE}",),
 }  # fmt: skip
+NAME_PATTERN_EXTRACTORS: dict[str, tuple[str, ...]] = {
+    "email": ("email",), "url": ("url",), "link": ("url",), "website": ("url",), "uuid": ("uuid",), "guid": ("uuid",),
+}  # fmt: skip
+"""Pattern extractors a generic string slot gets from a word of its name, when its schema has no ``format``
+(``email``, ``customer_email``: an address the user typed)."""
 EMAIL_PACK_CUES = ("email", "mail", "message")
 EVENT_PACK_CUES = ("event", "meeting", "calendar")
 MAX_RECORD_DEPTH = 3
@@ -155,6 +160,32 @@ def ref_noun(noun: str) -> str:
         if pattern.match(noun):
             return pattern.sub(repl, noun)
     return noun
+
+
+_CLOSED_LIST = re.compile(r"\b(?:either|one of|must be|should be|allowed values?|valid values?|can only be)\b", re.I)
+_QUOTED = re.compile(r"'([^']{1,60})'|\"([^\"]{1,60})\"")
+
+
+def described_values(description: str | None) -> list[str] | None:
+    """Values a description states as the only ones allowed ("should be either 'no longer needed' or 'ordered by
+    mistake'"): the quoted values after a closed-list cue, at least two. Examples ("such as 'X'") are not."""
+    if not description:
+        return None
+    cue = _CLOSED_LIST.search(description)
+    if cue is None:
+        return None
+    rest = description[cue.end() :].split(".", 1)[0] if "such as" not in description[cue.end() :][:40] else ""
+    values = [a or b for a, b in _QUOTED.findall(rest)]
+    return list(dict.fromkeys(values)) if len(set(values)) >= 2 else None
+
+
+def with_described_values(schema: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A string schema whose description states its allowed values gets them as an ``enum`` (so the slot is a
+    closed Choice, and the value is one the tool accepts, not the user's paraphrase)."""
+    if schema.get("type") != "string" or "enum" in schema or "const" in schema:
+        return schema
+    values = described_values(schema.get("description"))
+    return {**schema, "enum": values} if values else schema
 
 
 def default_intent(name: str, description: str | None) -> str:
@@ -379,9 +410,11 @@ def infer_kind(
         return _Kind("text", "row 16: body name or maxLength > 200", role="body", extract=("clause", "quote"))
     if lname in PLACE_NAMES:
         return _Kind("span", "row 17: place name", role="place", extract=("place",))
+    named = tuple(dict.fromkeys(ext for word in lname.split("_") for ext in NAME_PATTERN_EXTRACTORS.get(word, ())))
     return _Kind(
-        "span", "row 18: generic string", role="generic", weak=True, extract=("clause", "quote", "noun_phrase")
-    )
+        "span", "row 18: generic string", role="generic", weak=True,
+        extract=("clause", "quote", "noun_phrase", *named),
+    )  # fmt: skip
 
 
 def _small_range(schema: Mapping[str, Any]) -> bool:
@@ -453,6 +486,7 @@ def infer_slot(
     xjevs = xjevs or {}
     x = xjevs.get(path_key(path), ParamXJev())
     schema, nullable = unwrap_nullable(schema)
+    schema = with_described_values(schema)
     siblings = tuple((parent or {}).get("properties", {}).keys())
     inferred = infer_kind(name, schema, siblings=siblings, sources=sources, depth=depth)
     kind, reason = inferred.kind, inferred.reason
@@ -735,6 +769,7 @@ __all__ = [
     "auto_packs",
     "default_intent",
     "default_noun",
+    "described_values",
     "ref_noun",
     "default_stakes",
     "description_phrase",

@@ -1965,4 +1965,24 @@ Extends "Documentation and final merge":
 - τ², reduced to next calls (BENCH): with trusted lookups, exactly right write calls rose from 1.2% to 15.6% (9.8%
   executed) with talk-turn safety at 96.9% (97.9%), and six of the extra talk-turn executions were the reference
   agent's next call made a turn early. It is app configuration, not a default: an app lists the tools that return its
-  own data. Coverage gaps it exposed (split names, digit strings, prefixed field names, emails) are next.
+  own data.
+
+## Span coverage for record lookups (τ²)
+
+- §4.2.6: a generic string slot with no declared extractors took the role default (`clause`, `quote`,
+  `noun_phrase`, `proper_noun`, `code`) and dropped what was inferred from its name → the role default plus the
+  pattern extractors the name implies (`email` for `email`, `url` for `url`/`link`/`website`, `uuid` for
+  `uuid`/`guid`).
+- §4.2: span pools gain two candidate sources, both from the user's words only: the first or last word of a
+  multi-word proper noun for a `first_name`/`last_name` slot, and an all-digit number of three or more digits as text
+  for a `type: string` slot (a zip code or an account number is a string, not a quantity). Numbers in tool results
+  are not copied this way; they come as field candidates, described by their siblings.
+- Field candidates match a slot name with a qualifier prefix removed (`new_`, `old_`, `current_`, `original_`,
+  `target_`, `selected_`): `new_item_ids` takes `item_id` fields.
+- §3.3.1: a string schema whose description states its only values (a closed-list cue such as "either", "one of",
+  "must be", "allowed values", then at least two quoted values) gets them as `enum`, so the slot is an enum Choice
+  and the value is one the tool accepts. Examples ("such as 'X'") stay examples.
+- τ², reduced to next calls (BENCH): offline coverage 267 → 442 of 514 call cases; live, exactly right read calls
+  21.7% → 57.2% (default trust), write calls with trusted lookups 15.6% → 17.9% (12.1% executed). Talk turns without
+  an executed call 95.4% with trusted lookups (96.9% before): the closed `reason` list makes cancellations
+  executable, and five of the seven new ones were the reference agent's next call made a turn early.

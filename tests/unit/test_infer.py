@@ -7,7 +7,15 @@ from typing import Any
 import pytest
 
 from jevtools.policy import Tier
-from jevtools.spec.infer import infer_kind, infer_slot, infer_tier, ref_noun, unwrap_nullable, with_channels
+from jevtools.spec.infer import (
+    described_values,
+    infer_kind,
+    infer_slot,
+    infer_tier,
+    ref_noun,
+    unwrap_nullable,
+    with_channels,
+)
 from jevtools.spec.models import SlotSpec
 from jevtools.spec.xjev import ParamXJev
 from tests.support import SCENARIO_SOURCES
@@ -210,3 +218,31 @@ def test_ref_noun_names_the_entity(noun: str, expected: str) -> None:
 def test_ref_noun_applies_only_to_ref_slots() -> None:
     span = infer_slot("code", {"type": "string", "description": "The file path"})
     assert span.kind != "ref" and span.noun == "the file path"
+
+
+@pytest.mark.parametrize(
+    ("description", "values"),
+    [
+        ("The reason, which should be either 'no longer needed' or 'ordered by mistake'.",
+         ["no longer needed", "ordered by mistake"]),
+        ('The cabin class, one of "basic_economy", "economy" or "business".', ["basic_economy", "economy", "business"]),
+        ("The payment method id, such as 'credit_card_0000000'.", None),  # an example, not a closed list
+        ("The id, one of 'x'.", None),  # a single value is not a list
+        ("Free text, such as 'hello' or 'thanks'.", None),
+        (None, None),
+    ],
+)  # fmt: skip
+def test_described_values(description: str | None, values: list[str] | None) -> None:
+    assert described_values(description) == values
+
+
+def test_described_values_become_an_enum() -> None:
+    schema = {"type": "string", "description": "Should be either 'no longer needed' or 'ordered by mistake'."}
+    assert infer_slot("reason", schema).kind == "enum"
+    assert infer_slot("reason", {"type": "string", "description": "The reason, such as 'late'."}).kind != "enum"
+
+
+def test_pattern_extractors_follow_the_slot_name() -> None:
+    assert "email" in infer_slot("email", {"type": "string"}).extract
+    assert "url" in infer_slot("website_link", {"type": "string"}).extract
+    assert "email" not in infer_slot("note", {"type": "string"}).extract
