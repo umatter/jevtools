@@ -113,7 +113,7 @@ def test_tune_feedback_switches_when_the_newest_rows_agree(tmp_path: Path) -> No
 
 def test_tune_feedback_keeps_the_policy_when_the_newest_rows_drift(tmp_path: Path) -> None:
     code, text = _tune(_log(tmp_path / "feedback.jsonl", 2500, drift_from=2000), tmp_path)
-    read = next(line for line in text.splitlines() if line.strip().startswith("read"))
+    read = next(line for line in text.splitlines() if line.strip().startswith("read") and "%" in line)  # the table
     assert code == 2 and read.endswith("over") and "keep the current one" in text, text
 
 
