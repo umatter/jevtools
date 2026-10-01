@@ -73,6 +73,7 @@ from jevtools.plan import (
 )
 from jevtools.policy import (
     RULE_NO_TOOL,
+    RULE_NOT_SPECULATED,
     RULE_SLOT_SHAPE,
     Action,
     Outcome,
@@ -99,7 +100,7 @@ from jevtools.prompts import (
 from jevtools.spec.catalog import Catalog, ToolLike, strip_xjev
 from jevtools.spec.constraints import ConstraintContext
 from jevtools.spec.models import SlotSpec, ToolSpec
-from jevtools.spec.schema import validate
+from jevtools.spec.schema import fit_schema, validate
 from jevtools.trace import RoundRecord, StoreBodies, Trace, build_trace, call_record
 from jevtools.validate import Limits, cached_limits
 from jevtools.wire import Answer, DecisionRequest, DecisionResponse
@@ -798,6 +799,12 @@ class Router:
         answer = yield _Escalate(_messages(s.ctx), self.catalog.to_openai(), preliminary)
         s.usage.llm_calls += 1
         proposed = ProposedCall.coerce(answer)
+        coverage = result.reason == "uncovered" or result.rule == RULE_NOT_SPECULATED
+        if coverage and (proposed is None or proposed.name != (inp.chosen if inp is not None else None)):
+            # a coverage escalation drafts the chosen tool's values; no such draft → the question it would have asked
+            s.notes.append("escalator drafted no call of the chosen tool: clarifying as before")
+            fallback = result.model_copy(update={"outcome": Outcome.CLARIFY, "ask": "open"})
+            return (yield from self._finish(s, state, fallback, inp))
         if proposed is None or proposed.name not in self.catalog:
             text = answer if isinstance(answer, str) else ""
             if state.failure is not None:  # P0: the handoff itself is the outcome
@@ -808,10 +815,11 @@ class Router:
             s.notes.append("escalator proposed a call while Jev is unavailable: not bound")
             return (yield from self._finish(s, state, result, inp, proposed=proposed))
         tool = self.catalog.get(proposed.name)
-        extra = {(tool.name, slot.path): [Candidate(value=value, text="Proposed by the escalation assistant.",
+        extra = {(tool.name, slot.path): [Candidate(value=fitted, text="Proposed by the escalation assistant.",
                                                     channel=Channel.GENERATED, prov={"source": "escalator"})]
                  for name, value in proposed.arguments.items() if name in tool.slot_names
-                 for slot in [tool.slot(name)]}  # fmt: skip
+                 for slot in [tool.slot(name)]
+                 for fitted in [fit_schema(value, slot.json_schema)] if fitted is not None}  # fmt: skip
         plan = self._compile(
             s, tool_choice={"type": "function", "function": {"name": tool.name}}, extra_candidates=extra
         )

@@ -28,7 +28,7 @@ RESERVED_WORDS: frozenset[str] = frozenset(
     {
         "authorized", "joint", "done_after",
         "present", "rev", "verify", "unique", "date", "time", "branch", "more", "group",
-        "accept", "item", "member", "bucket",
+        "accept", "item", "member", "bucket", "how_many",
     }
 )  # fmt: skip
 """Suffix words a param-path segment may not equal (they get ``_`` appended)."""

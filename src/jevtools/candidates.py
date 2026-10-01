@@ -195,6 +195,8 @@ class Candidate(BaseModel):
         """Whether this candidate is evidence-backed for viability (spec §5.1)."""
         if self.channel in EVIDENCE_CHANNELS:
             return True
+        if self.channel is Channel.GENERATED and self.prov.get("source") == "escalator":
+            return True  # the gate round's drafted value: Jev decides it, with NOT_STATED on the ballot (§4.7)
         # a registry value is evidence when anchored, sent whole, or found in text (a trusted tool's output)
         return self.channel is Channel.REGISTRY and bool(
             self.prov.get("anchor") or self.prov.get("whole") or self.prov.get("mention"))  # fmt: skip
@@ -265,10 +267,8 @@ def default_allow_list(tier: Tier | str, stakes: str, *, quantity: bool = False)
         if stakes == "identity" and quantity:
             return (Channel.USER, Channel.REGISTRY)
         return _TRUSTED
-    if stakes != "identity":
-        return _ALL
-    if tier is Tier.READ:
-        return _NO_GENERATED
+    if stakes != "identity" or tier is Tier.READ:
+        return _ALL  # a read's identity slot already admits tool output; a drafted value is no less trustworthy
     return _TRUSTED_AND_HISTORY
 
 

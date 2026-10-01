@@ -896,6 +896,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--policy", help="app: policy.toml for the run and its ceiling (default: Appendix B)")
     p.add_argument("--controls", action="store_true",
                    help="app: also run the negative controls (gold rows removed; counts false bindings)")  # fmt: skip
+    p.add_argument("--escalator", metavar="MODEL",
+                   help="bfcl, when2call, tau2: an LLM (OpenRouter model id) that drafts a call when a value is not on "
+                        "the ballot; its values are re-decided by Jev (ShapePolicy.escalate_uncovered)")  # fmt: skip
     p.add_argument("--data", default=None, help="BFCL data directory (default: <cache>/bfcl)")
     p.add_argument("--download", action="store_true", help="fetch the BFCL data files from GitHub into --data")
     p.add_argument("--ref", default="main", help="BFCL repository branch, tag or commit to download (default: main)")
@@ -924,6 +927,23 @@ def build_parser() -> argparse.ArgumentParser:
 # --------------------------------------------------------------------------------------------------------------------
 # bench (BFCL, app domains)
 # --------------------------------------------------------------------------------------------------------------------
+
+
+def _bench_escalator(args: argparse.Namespace) -> Any:
+    """The ``--escalator`` model as an :class:`~jevtools.fallback.OpenAICompatibleEscalator` (``None`` without)."""
+    if not getattr(args, "escalator", None):
+        return None
+    from jevtools.fallback import OpenAICompatibleEscalator
+
+    return OpenAICompatibleEscalator(args.escalator, extra_body={"usage": {"include": True}})
+
+
+def _escalator_line(meta: Mapping[str, Any]) -> str | None:
+    e = meta.get("escalator")
+    if not e:
+        return None
+    return (f"escalator {e['model']}: {e['calls']} call(s), {e['input_tokens']:,} prompt tokens, "
+            f"${e['cost_usd']:.4f}")  # fmt: skip
 
 
 def _bench_backend(name: str, allow_offline: bool, err: TextIO) -> Any:
@@ -1043,8 +1063,11 @@ def _cmd_bench_when2call(args: argparse.Namespace, out: TextIO, err: TextIO) -> 
     cases = when2call.load(path, per_category=args.limit)
     risk = None if args.risk == "infer" else args.risk
     report = when2call.run_when2call(cases, backend, risk=risk, retries=2 if live else 0,
+                                     escalator=_bench_escalator(args),
                                      meta={"data": str(path), "limit_per_category": args.limit})  # fmt: skip
     print(report.render(), file=out)
+    if (line := _escalator_line(report.meta)) is not None:
+        print(line, file=out)
     if not live:
         print(OFFLINE_NOTE.format(name="the simulator"), file=out)
     if args.out:
@@ -1086,9 +1109,12 @@ def _cmd_bench_tau2(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
 
         backend = Cassette(Path(args.record) / "replay_0.jsonl", mode="record", inner=backend)
     report = tau2.run_tau2(cases, tools, backend, trust=args.trust, retries=2 if live else 0,
+                           escalator=_bench_escalator(args),
                            meta={"domains": list(names), "data": str(data)})  # fmt: skip
     print(f"τ² next-call cases: {len(cases)} in {len(names)} domain(s), trust {args.trust}", file=out)
     print(report.render(), file=out)
+    if (line := _escalator_line(report.meta)) is not None:
+        print(line, file=out)
     if not live:
         print(OFFLINE_NOTE.format(name="the simulator"), file=out)
     if args.out:
@@ -1139,12 +1165,15 @@ def _cmd_bench(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
 
         backend = Cassette(Path(args.record) / "replay_0.jsonl", mode="record", inner=backend)
     report = run_bfcl(cases, backend, risk=risk, progress=progress, retries=2 if live else 0,
+                      escalator=_bench_escalator(args),
                       meta={"data": str(data), "ref": args.ref})  # fmt: skip
     failed = sum((r.error or "").startswith("BackendFailure") for r in report.records)
     if failed:
         print(f"warning: {failed} case(s) failed at the backend after retries; they count as errors", file=out)
     print(f"BFCL {len(cases)} case(s) on {report.mode} (risk {risk or 'inferred'})", file=out)
     print(report.render(), file=out)
+    if (line := _escalator_line(report.meta)) is not None:
+        print(line, file=out)
     if report.mode == "oracle":
         print("note: the oracle answers every question perfectly from the BFCL answer; its accuracy is the ceiling "
               "of what jevtools can emit (candidate coverage, decoding, policy), not a measurement of Jev",

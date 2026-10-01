@@ -271,6 +271,18 @@ class Context(BaseModel):
         return None
 
     @property
+    def replies_to_question(self) -> bool:
+        """Whether the request answers a question: the assistant's last turn before it ends with ``?`` and the user
+        spoke before that turn (so their task is stated earlier, and the request may only supply what was asked)."""
+        index = self.request_index
+        if index is None:
+            return False
+        before = [turn for turn in self.messages[:index] if turn.role in ("user", "assistant") and turn.text]
+        if not before or before[-1].role != "assistant":
+            return False
+        return before[-1].text.rstrip().rstrip("\"'”’)").endswith("?") and any(t.role == "user" for t in before)
+
+    @property
     def request(self) -> str:
         """Text of the latest user message (``""`` if there is none)."""
         index = self.request_index

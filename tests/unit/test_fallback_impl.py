@@ -334,3 +334,83 @@ def test_text_llm_writes_the_abstain_handoff() -> None:
     assert d.outcome is Outcome.ABSTAIN and d.content == "Why did the router cross the road?"
     assert d.usage.llm_calls == 1 and recorder.bodies[0]["messages"][0] == {"role": "system", "content": "Be funny."}
     assert asyncio.run(llm.acomplete([{"role": "user", "content": "x"}])) == "Why did the router cross the road?"
+
+
+WEATHER = {"type": "function", "function": {
+    "name": "get_weather", "description": "Get the current weather for a place.", "x-jev": {"risk": "read"},
+    "parameters": {"type": "object", "required": ["location"], "properties": {
+        "location": {"type": "string",
+                     "description": "The city and state, such as 'San Francisco, CA'."}}}}}  # fmt: skip
+
+
+def _drafted(request: DecisionRequest, *, stated: bool) -> dict[str, Any]:
+    """Round 1 elects the tool and finds no listed value fits; the gate round (no ``tool`` question) elects the
+    drafted value when the user stated a place, else ``NOT_STATED``."""
+    if "tool" in request.questions:
+        return {"tool": "get_weather", "get_weather.location": "NONE_OF_THESE"}
+    question = request.questions["get_weather.location"]
+    drafted = next((label for label in question.criteria if "New York" in label), None)  # type: ignore[union-attr]
+    return {"get_weather.location": drafted if stated and drafted else "NOT_STATED"}
+
+
+@pytest.mark.parametrize(("request_text", "stated"), [("What's the weather in the Big Apple?", True),
+                                                      ("What's the weather like?", False)])  # fmt: skip
+def test_an_uncovered_value_escalates_and_jev_decides_on_the_draft(request_text: str, stated: bool) -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    transport = Recorder(completion(None, [tool_call("get_weather", {"location": "New York, NY"})])).transport()
+    escalator = OpenAICompatibleEscalator("m", api_key="sk", transport=transport)
+    backend = ScriptedBackend(lambda request: _drafted(request, stated=stated))
+    d = Router([WEATHER], backend=backend, escalator=escalator).decide(request_text)
+    assert d.usage.llm_calls == 1 and len(backend.requests) == 2  # the draft, then one gate round
+    if stated:
+        assert d.outcome is Outcome.EXECUTE and d.call is not None and d.call.arguments == {"location": "New York, NY"}
+        assert d.slots["location"].channel == "generated"  # a read's identity slot admits a drafted value
+    else:
+        assert d.outcome is Outcome.CLARIFY and d.call is None or d.call.arguments == {}  # Jev: not stated
+
+
+def test_without_an_escalator_an_uncovered_value_still_clarifies() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    backend = ScriptedBackend(lambda request: _drafted(request, stated=True))
+    d = Router([WEATHER], backend=backend).decide("What's the weather in the Big Apple?")
+    assert d.outcome is Outcome.CLARIFY and d.rule.startswith(("P6", "P7")) and len(backend.requests) == 1
+
+
+def test_the_client_adds_up_prompt_tokens_and_cost() -> None:
+    from jevtools.bench.run import escalator_meta
+
+    priced = completion(None, [tool_call("get_weather", {"location": "Paris"})])
+    priced["usage"] = {"prompt_tokens": 120, "completion_tokens": 9, "cost": 0.00002}
+    transport = Recorder(priced, completion("no")).transport()
+    escalator = OpenAICompatibleEscalator("m", api_key="sk", transport=transport)
+    escalator.escalate([{"role": "user", "content": "x"}], [WEATHER], None)
+    escalator.escalate([{"role": "user", "content": "y"}], [WEATHER], None)
+    assert escalator.calls == 2 and escalator.input_tokens == 170 and escalator.cost_usd == pytest.approx(0.00002)
+    assert escalator_meta(escalator) == {"escalator": {"model": "m", "calls": 2, "input_tokens": 170,
+                                                       "cost_usd": pytest.approx(0.00002)}}  # fmt: skip
+    assert escalator_meta(None) == {}
+
+
+@pytest.mark.parametrize("draft", [completion("Which city do you mean?"),
+                                   completion(None, [tool_call("send_email", {"to": "a@b.example"})])])  # fmt: skip
+def test_a_coverage_escalation_without_a_draft_of_the_chosen_tool_still_clarifies(draft: dict[str, Any]) -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    escalator = OpenAICompatibleEscalator("m", api_key="sk", transport=Recorder(draft).transport())
+    backend = ScriptedBackend(lambda request: _drafted(request, stated=True))
+    d = Router([WEATHER], backend=backend, escalator=escalator).decide("What's the weather in the Big Apple?")
+    assert d.outcome is Outcome.CLARIFY and d.usage.llm_calls == 1 and len(backend.requests) == 1  # no gate round
+
+
+def test_fit_schema_coerces_exactly_or_drops() -> None:
+    from jevtools.spec.schema import fit_schema
+
+    assert fit_schema("2", {"type": "integer"}) == 2 and fit_schema("2.5", {"type": "number"}) == 2.5
+    assert fit_schema("true", {"type": "boolean"}) is True and fit_schema("x", {"type": "integer"}) is None
+    assert fit_schema("Any", {"type": "string", "enum": ["Drama", "Comedy"]}) is None
+    assert fit_schema("Paris", {"type": "string"}) == "Paris"

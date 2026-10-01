@@ -29,6 +29,7 @@ from jevtools.kinds.base import ResolveContext, register_resolver
 from jevtools.kinds.common import ChoiceResolver, mention_candidate, pool_mentions
 from jevtools.kinds.normalize import NormalizationError, normalize_email_value, normalize_path, normalize_span
 from jevtools.kinds.ref import is_path_slot
+from jevtools.spec.infer import QUALIFIERS
 from jevtools.spec.models import ITEM, SlotSpec, ToolSpec
 
 PATTERN_EXTRACTORS: dict[str, str] = {"email": "email", "url": "url", "uuid": "uuid", "ipv4": "ipv4", "code": "code"}
@@ -88,8 +89,6 @@ def span_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
 
 
 _ID_SUFFIX = re.compile(r"_(?:ids?|numbers?|codes?|keys?)$")
-_QUALIFIERS = ("new_", "old_", "current_", "original_", "target_", "selected_")
-"""Prefixes a slot may add to a field's name: ``new_item_ids`` takes an ``item_id`` field."""
 _FIRST_NAME = re.compile(r"^(?:first|given|fore)_?name$")
 _LAST_NAME = re.compile(r"^(?:last|family|sur)_?name$|^surname$")
 
@@ -133,6 +132,39 @@ def digit_string_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidat
     return out
 
 
+_EXAMPLE_ID = re.compile(r"""['"]([#A-Za-z]{0,3}?)(\d{4,})['"]""")
+
+
+def id_format(slot: SlotSpec) -> tuple[str, int] | None:
+    """The id format a string slot's description shows by example: ``"such as '#W0000000'"`` → ``("#W", 7)`` (a
+    prefix of up to three letters or ``#`` before a run of digits). ``None`` without exactly one such format."""
+    if slot.json_schema.get("type") != "string":
+        return None
+    found = {(m.group(1), len(m.group(2))) for m in _EXAMPLE_ID.finditer(slot.description or "")}
+    return found.pop() if len(found) == 1 and next(iter(found))[0] else None
+
+
+def id_format_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
+    """The user's ids written without the format's prefix ("W4284542", "9502127" for ``#W0000000``), put in it.
+    Only the prefix is restored; the digits are the user's, and their count must match the example's."""
+    fmt = id_format(slot)
+    if fmt is None:
+        return []
+    prefix, width = fmt
+    letters = prefix.lstrip("#")
+    loose = re.compile(rf"^#?(?:{re.escape(letters)})?(\d{{{width}}})$", re.I) if letters else None
+    out: list[Candidate] = []
+    seen: set[str] = set()
+    for m in pool_mentions(rc, "code", "number"):
+        text = m.text.strip().rstrip(".,;:")
+        match = loose.match(text) if loose is not None else re.fullmatch(rf"#?(\d{{{width}}})", text)
+        value = prefix + match.group(1) if match else None
+        if m.channel == Channel.USER and value is not None and value != text and value not in seen:
+            seen.add(value)
+            out.append(mention_candidate(m, value, display=value, note=f'"{text}" in the format {prefix}{"0" * width}'))
+    return out
+
+
 def field_stem(name: str) -> str:
     """A field or slot name without an id suffix or plural: ``item_ids``, ``item_id`` → ``item``; ``orders`` →
     ``order``; ``flight_number`` → ``flight``."""
@@ -165,7 +197,7 @@ def field_candidates(slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
     observation's: ``tool_output``, or ``registry`` for a tool in ``Context.trusted_tools``."""
     name = next((part for part in reversed(slot.path) if part != ITEM), slot.name)
     stem = field_stem(name)
-    stems = {stem} | {stem[len(q) :] for q in _QUALIFIERS if stem.startswith(q)}
+    stems = {stem} | {stem[len(q) :] for q in QUALIFIERS if stem.startswith(q)}
     trusted = set(rc.ctx.trusted_tools)
     out: list[Candidate] = []
     seen: set[str] = set()
@@ -243,7 +275,7 @@ class SpanResolver(ChoiceResolver):
 
     def candidates(self, tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> list[Candidate]:
         out = (span_candidates(slot, rc) + name_part_candidates(slot, rc) + digit_string_candidates(slot, rc)
-               + field_candidates(slot, rc) + author_candidates(slot))  # fmt: skip
+               + id_format_candidates(slot, rc) + field_candidates(slot, rc) + author_candidates(slot))  # fmt: skip
         return path_candidates(out) if is_path_slot(slot) else out
 
     def normalizer_for(self, slot: SlotSpec) -> str:

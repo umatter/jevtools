@@ -585,10 +585,12 @@ accuracy 24–31% on the categories that want a call, far below LLM tool callers
 71–93% of the time where the values were on the ballot; on the irrelevance categories it executes a call in 2–3% of
 cases. On **When2Call** (3,652 cases on when to call, ask or decline) it calls a tool on 3.9% of the cases where none
 fits and makes the call on 35% of those that want one (the rest become questions). On **τ²-bench**'s published
-customer-service conversations, reduced to 994 next-call decisions, it makes 57% of the read calls exactly right and
-executes a call in 2% of the turns where the reference agent made none; write calls, whose ids come from earlier tool
-results, reach 18% only when the app trusts its own lookup tools. Details, attribution and the full
-tables are in [docs/BENCH.md](docs/BENCH.md).
+customer-service conversations, reduced to 994 next-call decisions, it makes 68% of the read calls exactly right and
+executes a call in 3% of the turns where the reference agent made none; write calls, whose ids come from earlier tool
+results, reach 37% (25% executed) only when the app trusts its own lookup tools. With a cheap LLM drafting values that
+no extractor finds (`Router(escalator=…)`, Jev still decides them), BFCL strict accuracy rises to 39–44% and When2Call
+accuracy to 70%, for about $0.0001 per decision more, at the price of more calls where none fits (When2Call: 7.4%
+instead of 3.9%). Details, attribution and the full tables are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends
 

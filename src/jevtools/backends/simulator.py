@@ -500,6 +500,8 @@ class LexicalSimulator:
 
     def choice_scores(self, qid: str, question: ChoiceQuestion, view: RequestView) -> dict[str, float]:
         """The score of every option (real options and sentinels), in wire order."""
+        if qid.endswith(".how_many"):
+            return self._count_scores(qid, question, view)
         is_tool = _base_qid(qid) == "tool"
         real = {
             label: (self.tool_score if is_tool else self.real_score)(label, text, view)
@@ -532,6 +534,14 @@ class LexicalSimulator:
             else:  # pragma: no cover - every sentinel is listed above
                 scores[label] = 0.0
         return scores
+
+    def _count_scores(self, qid: str, question: ChoiceQuestion, view: RequestView) -> dict[str, float]:
+        """A list's ``how_many`` Choice: the number of its item Nouls this simulator answers yes (≥ 0.5)."""
+        head = qid[: -len(".how_many")] + ".item."
+        items = [q for k, q in view.request.questions.items() if k.startswith(head) and isinstance(q, NoulQuestion)]
+        n = sum(self._item(q, view) >= 0.5 for q in items)
+        return {label: (1.0 if label == str(n) else 0.0) if label != NONE_OF_THESE else (1.0 if n == 0 else 0.0)
+                for label in question.criteria}  # fmt: skip
 
     def _choice(self, qid: str, question: ChoiceQuestion, view: RequestView) -> ChoiceAnswer:
         scores = self.choice_scores(qid, question, view)

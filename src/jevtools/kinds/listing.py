@@ -19,6 +19,7 @@ The factor is ``∏ P(anchor value) · ∏ max(n, 1 − n) · (1 − n_more)``.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -26,6 +27,7 @@ from typing import Any, cast
 from jevtools import templates
 from jevtools.ballot import BallotOption, BallotQuestion, SentinelSpec, slot_qid
 from jevtools.candidates import EXCLUDE, NONE_OF_THESE, Candidate, Channel, Pool, least_trusted, value_key
+from jevtools.canonical import jsonable
 from jevtools.extract.base import Mention
 from jevtools.kinds.base import (
     Alternative,
@@ -43,8 +45,9 @@ from jevtools.kinds.base import (
 from jevtools.kinds.common import finalize_pool
 from jevtools.kinds.normalize import normalize_list
 from jevtools.sources.base import SourceQuery
+from jevtools.spec.infer import qualified_base
 from jevtools.spec.models import SlotSpec, ToolSpec
-from jevtools.wire import Answer, NoulAnswer
+from jevtools.wire import Answer, ChoiceAnswer, NoulAnswer
 
 PER_ANCHOR = 12
 PEOPLE_TAGS = frozenset({"email", "person"})
@@ -69,6 +72,90 @@ def item_band(n: float, band: tuple[float, float]) -> bool | None:
 def _noul(answers: Mapping[str, Answer], qid: str) -> float | None:
     answer = answers.get(qid)
     return answer.noul if isinstance(answer, NoulAnswer) else None
+
+
+_EXAMPLE = re.compile(r"(?:such as|e\.g\.|for example|like)\s*['\"]([^'\"]{1,40})['\"]", re.I)
+
+
+def numeric_examples(description: str | None) -> bool:
+    """Whether a description's examples ("each such as '1008292230'") all contain a digit: a list of such ids holds
+    no wordless phrase ("item ID"), so those candidates are left out of its items."""
+    examples = _EXAMPLE.findall(description or "")
+    return bool(examples) and all(re.search(r"\d", e) for e in examples)
+
+
+def _count(question: BallotQuestion, answer: Answer | None) -> tuple[int, float] | None:
+    """The ``count`` Choice's elected number and its probability; ``None`` without a real answer."""
+    if not isinstance(answer, ChoiceAnswer) or answer.choice == NONE_OF_THESE:
+        return None
+    option = next((o for o in question.options if o.label == answer.choice), None)
+    if option is None:
+        return None
+    return int(option.value), float(answer.probabilities.get(answer.choice, answer.confidence))
+
+
+def _odds(p: float) -> float:
+    q = min(max(p, 1e-4), 1 - 1e-4)
+    return q / (1 - q)
+
+
+def _taken(tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> set[str]:
+    """Values the sibling this slot refines already holds (``item_ids`` for ``new_item_ids``): one value is not both
+    the old and the new item."""
+    base = qualified_base(slot.name, [s.name for s in tool.slots])
+    sibling = rc.cache.get("slot_results", {}).get((tool.name, base)) if base is not None else None
+    if sibling is None or not isinstance(sibling.value, list):
+        return set()
+    return {value_key(v) for v in sibling.value}
+
+
+def object_candidates(item: SlotSpec, rc: ResolveContext) -> list[Candidate]:
+    """For a list of records with no user anchors: the objects of earlier tool results that carry every required
+    field of the item, cut down to the item's fields (a reservation's flight segments, a profile's saved passengers).
+    The object is copied, not composed; the channel is the observation's (``registry`` for a trusted tool)."""
+    fields = [c.name for c in item.children]
+    required = [str(r) for r in item.json_schema.get("required") or fields]
+    if not fields or not required:
+        return []
+    trusted = set(rc.ctx.trusted_tools)
+    out: list[Candidate] = []
+    seen: set[str] = set()
+    for obs in rc.ctx.all_observations():
+        if obs.status != "ok":
+            continue
+        channel = Channel.REGISTRY if obs.tool in trusted else Channel.TOOL_OUTPUT
+        for path, obj in _objects(jsonable(obs.content), "$"):
+            if not all(obj.get(k) not in (None, "") for k in required):
+                continue
+            value = {k: obj[k] for k in fields if k in obj}
+            key = value_key(value)
+            if key in seen:
+                continue
+            seen.add(key)
+            others = ", ".join(f"{k}: {v}" for k, v in obj.items() if k not in value and _scalar(v))[:160]
+            display = ", ".join(str(v) for v in value.values())
+            text = f"An entry of the {obs.tool} result (step {obs.step})" + (f": {others}." if others else ".")
+            mention = {"text": display, "ref": f"obs:{obs.step}:{path}"}
+            out.append(Candidate(value=value, display=display, channel=channel, text=text,
+                                 prov={"extractor": "object", "mention": mention, "tool": obs.tool}))  # fmt: skip
+    return out
+
+
+def _objects(value: Any, path: str) -> list[tuple[str, dict[str, Any]]]:
+    """Every JSON object inside ``value`` with its path (depth first)."""
+    out: list[tuple[str, dict[str, Any]]] = []
+    if isinstance(value, dict):
+        out.append((path, value))
+        for k, v in value.items():
+            out += _objects(v, f"{path}.{k}")
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            out += _objects(v, f"{path}[{i}]")
+    return out
+
+
+def _scalar(value: Any) -> bool:
+    return isinstance(value, (str, int, float)) and not isinstance(value, bool) and len(str(value)) <= 40
 
 
 @dataclass
@@ -111,6 +198,31 @@ class _Tally:
             start = float(span[0]) if isinstance(span, (list, tuple)) and span else math.inf
             self.included.append((start, len(self.included), candidate.value))
             self.channels.append(candidate.channel)
+
+    def ranked(self, scored: Sequence[tuple[Candidate, float | None]], count: tuple[int, float],
+               taken: set[str]) -> None:  # fmt: skip
+        """Count and rank: the ``n`` items with the highest Nouls, ``n`` from the ``count`` Choice. Items the refined
+        sibling already holds are left out first. Jev's Nouls rank well but sit low or close in absolute terms (three
+        right items at 0.33 / 0.30 / 0.27, the best wrong one at 0.13), so the factor is how cleanly each chosen item
+        outranks the best left-out one on the odds scale: ``P(n) · ∏ odds(n_i) / (odds(n_i) + odds(best left-out))``.
+        Fewer candidates than ``n`` gives ``flag_band``."""
+        n, p_n = count
+        free = [(c, 0.5 if v is None else v) for c, v in scored if value_key(c.value) not in taken]
+        order = sorted(range(len(free)), key=lambda i: (-free[i][1], i))
+        chosen, rest = order[:n], order[n:]
+        best_rest = _odds(max((free[i][1] for i in rest), default=0.0))
+        self.factors.append(p_n)
+        for i in chosen:
+            candidate, v = free[i]
+            self.factors.append(_odds(v) / (_odds(v) + best_rest))
+            mention = candidate.prov.get("mention")
+            span = mention.get("span") if isinstance(mention, Mapping) else None
+            start = float(span[0]) if isinstance(span, (list, tuple)) and span else math.inf
+            self.included.append((start, i, candidate.value))
+            self.channels.append(candidate.channel)
+        self.probes["count"] = float(n)
+        if len(chosen) < n:
+            self.shapes.append("flag_band")
 
     def more(self, n: float | None) -> None:
         """The ``more`` Noul (a missing answer fails closed): factor ``1 − n``; ``n ≥ 0.5`` asks "who else"."""
@@ -166,12 +278,19 @@ class ListResolver:
         if item.kind == "ref" and slot.anchored:
             return self._anchored_pool(tool, slot, item, rc)
         if item.kind == "record":
-            return self._records_pool(tool, slot, item, rc)
+            pool = self._records_pool(tool, slot, item, rc)
+            if pool.meta.get("records"):
+                return pool
+            objects = finalize_pool(tool, item, rc, object_candidates(item, rc), "record", validate=False)
+            return self._items_pool(tool, slot, objects, "enumerative", rc) if objects.candidates else pool
         inner = get_resolver(item.kind).pool(tool, item, rc)
         return self._items_pool(tool, slot, inner, "enumerative", rc)
 
     def _items_pool(self, tool: ToolSpec, slot: SlotSpec, inner: Pool, mode: str, rc: ResolveContext) -> Pool:
-        items = inner.candidates[: rc.policy.pools.items_max]
+        items = inner.candidates
+        if mode == "enumerative" and numeric_examples(slot.description):
+            items = [c for c in items if isinstance(c.value, dict) or re.search(r"\d", str(c.value))]
+        items = items[: rc.policy.pools.items_max]
         return inner.model_copy(
             update={"kind": self.kind, "path": slot.path, "candidates": items, "meta": {"mode": mode}}
         )
@@ -245,6 +364,8 @@ class ListResolver:
             out = self._record_questions(tool, slot, pool, rc)
         else:
             out = [self._item_question(tool, slot, c, i) for i, c in enumerate(pool.candidates)]
+            if mode == "enumerative" and len(pool.candidates) >= 2 and rc.policy.pools.count_max > 0:
+                out.append(self._count_question(tool, slot, min(len(pool.candidates), rc.policy.pools.count_max)))
         if out:
             return out
         default = resolve_default(tool, slot, rc.ctx)
@@ -262,6 +383,21 @@ class ListResolver:
             primitive="noul",
             instructions=templates.item_instructions(tool.intent, item, slot.noun),
             meta={"index": i},
+        )
+
+    def _count_question(self, tool: ToolSpec, slot: SlotSpec, k: int) -> BallotQuestion:
+        """``count`` Choice: how many items the list holds (1 … k; ``NONE_OF_THESE`` for more, or none)."""
+        return BallotQuestion(
+            qid=slot_qid(tool.id, slot.qpath, "how_many"),
+            family="count",
+            tool=tool.name,
+            path=slot.path,
+            kind=slot.kind,
+            stakes=slot.stakes,
+            primitive="choice",
+            instructions=templates.count_instructions(tool.intent, slot.noun),
+            options=[BallotOption(label=str(n), value=n) for n in range(1, k + 1)],
+            sentinels={NONE_OF_THESE: SentinelSpec(decodes_to="uncovered", text=templates.COUNT_NONE_TEXT)},
         )
 
     def _more_question(self, tool: ToolSpec, slot: SlotSpec, mentions: Sequence[str]) -> BallotQuestion:
@@ -325,10 +461,11 @@ class ListResolver:
             ).with_(normalizer=self.normalizer)
         if pool.meta.get("mode") == "records":
             return self._decode_records(tool, slot, pool, answers, rc)
-        return self._decode_parts(slot, pool, questions, answers, rc)
+        return self._decode_parts(tool, slot, pool, questions, answers, rc)
 
     def _decode_parts(
         self,
+        tool: ToolSpec,
         slot: SlotSpec,
         pool: Pool,
         questions: Sequence[BallotQuestion],
@@ -339,6 +476,14 @@ class ListResolver:
         tally = _Tally()
         items = pool.meta.get("groups") if pool.meta.get("mode") == "anchored" else pool.candidates
         attrs = {c.label: c.attrs for c in pool.candidates}
+        count = next((q for q in questions if q.family == "count"), None)
+        n = _count(count, answers.get(count.qid)) if count is not None else None
+        if n is not None:
+            nouls = [(items or [])[int(q.meta["index"])] for q in questions if q.family == "item"]
+            scored = [(c, _noul(answers, q.qid)) for c, q in zip(nouls, [q for q in questions if q.family == "item"],
+                                                                  strict=True)]  # fmt: skip
+            tally.ranked(scored, n, _taken(tool, slot, rc))
+            return tally.result(slot, tuple(q.qid for q in questions), self.normalizer)
         for q in questions:
             if q.family == "mention":
                 oop = rc.policy.shapes.out_of_pool

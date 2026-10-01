@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from jevtools.bench.bfcl import to_openai_tool
+from jevtools.bench.run import escalator_meta
 from jevtools.context import Context
 from jevtools.policy import RULE_FAIL_CLOSED
 from jevtools.router import Router
@@ -125,14 +126,14 @@ class BackendFailure(Exception):
     """A live decision failed closed at the backend (P0): an outage, not a decline."""
 
 
-def run_case(case: W2CCase, backend: Any, *, risk: str | None = "read") -> W2CRecord:
+def run_case(case: W2CCase, backend: Any, *, risk: str | None = "read", escalator: Any = None) -> W2CRecord:
     """Decide one case and map the decision to a When2Call category."""
     tools = [dict(t, function=dict(t["function"])) for t in case.tools]
     if risk is not None:
         for tool in tools:
             tool["function"]["x-jev"] = {"risk": risk}
     try:
-        router = Router(tools, backend=backend, context=Context(now=NOW, tz="UTC", locale="en"))
+        router = Router(tools, backend=backend, context=Context(now=NOW, tz="UTC", locale="en"), escalator=escalator)
         decision = router.decide(case.question)
         if decision.rule == RULE_FAIL_CLOSED:
             raise BackendFailure(decision.trace.notes[-1] if decision.trace and decision.trace.notes else "")
@@ -216,21 +217,22 @@ def run_when2call(
     retries: int = 0,
     progress: Callable[[int, W2CRecord], None] | None = None,
     meta: Mapping[str, Any] | None = None,
+    escalator: Any = None,
 ) -> W2CReport:
     """Decide every case (retrying, with backoff, a decision that failed closed at the backend)."""
     records: list[W2CRecord] = []
     for index, case in enumerate(cases):
-        record = run_case(case, backend, risk=risk)
+        record = run_case(case, backend, risk=risk, escalator=escalator)
         for attempt in range(retries):
             if not (record.error or "").startswith("BackendFailure"):
                 break
             time.sleep(5.0 * 4**attempt)
-            record = run_case(case, backend, risk=risk)
+            record = run_case(case, backend, risk=risk, escalator=escalator)
         records.append(record)
         if progress is not None:
             progress(index, record)
     mode = str(getattr(backend, "name", type(backend).__name__))
-    return W2CReport(mode=mode, records=records, meta={"risk": risk, **dict(meta or {})})
+    return W2CReport(mode=mode, records=records, meta={"risk": risk, **escalator_meta(escalator), **dict(meta or {})})
 
 
 __all__ = ["CATEGORIES", "W2CCase", "W2CRecord", "W2CReport", "category_of", "download", "load", "run_when2call"]

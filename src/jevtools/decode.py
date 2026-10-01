@@ -44,6 +44,7 @@ from jevtools.kinds.text import accept_result
 from jevtools.plan import PoolKey, sibling_source
 from jevtools.policy import PolicyInput, SlotState, Tier
 from jevtools.spec.constraints import Constraint, ConstraintContext
+from jevtools.spec.infer import qualified_base
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.spec.schema import validate
 from jevtools.wire import Answer, ChoiceAnswer, DecisionResponse, NoulAnswer, ScoreAnswer
@@ -292,6 +293,13 @@ def decode_answers(
                    observations=bool(rc.ctx.all_observations()), notes=list(notes))  # fmt: skip
 
 
+def decode_order(tool: ToolSpec) -> list[SlotSpec]:
+    """The tool's slots in decode order: a qualified slot after the sibling it refines (``new_item_ids`` after
+    ``item_ids``), so its resolver can read that sibling's result from ``rc.cache["slot_results"]``."""
+    names = [s.name for s in tool.slots]
+    return sorted(tool.slots, key=lambda s: qualified_base(s.name, names) is not None)
+
+
 def decode_tool(
     tool: ToolSpec,
     p_tool: float,
@@ -305,14 +313,18 @@ def decode_tool(
     results: dict[str, SlotResult] = {}
     flags: list[str] = []
     notes: list[str] = []
-    for slot in tool.slots:
+    decoded: dict[tuple[str, str], SlotResult] = rc.cache.setdefault("slot_results", {})
+    for slot in decode_order(tool):
         key = (tool.name, slot.path)
         if key in dropped:
             results[slot.name] = dropped_result(slot)
             notes.append(f"{slot.name}: family dropped after a 422")
             continue
         pool = pools.get(key) or Pool(tool=tool.name, path=slot.path, kind=slot.kind)
-        results[slot.name] = get_resolver(slot.kind).decode(tool, slot, pool, answers, rc)
+        results[slot.name] = decoded[(tool.name, slot.name)] = get_resolver(slot.kind).decode(
+            tool, slot, pool, answers, rc
+        )
+    results = {slot.name: results[slot.name] for slot in tool.slots}
     results, map_flags = constrained_map(tool, results, rc)
     results, late_flags = late_bind(tool, results, rc)
     flags += map_flags + late_flags + channel_violations(tool, results)

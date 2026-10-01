@@ -101,7 +101,64 @@ def test_multi_select_and_enumerative_lists() -> None:
     result = decode(tool, tool.slot("tags"), pool, answers, rc)
     assert result.value == ["bug", "urgent"] and result.factor == pytest.approx(0.95 * 0.9 * 0.85)
     pool, questions = resolve(tool, tool.slot("names"), rc)
-    assert "Apollo" in [c.value for c in pool.candidates] and all(q.family == "item" for q in questions)
+    assert "Apollo" in [c.value for c in pool.candidates]
+    assert [q.family for q in questions] == ["item"] * len(pool.candidates) + ["count"]  # enumerative: plus how many
+    how_many = questions[-1]
+    assert how_many.qid == "label_issue.names.how_many" and [o.label for o in how_many.options] == ["1", "2", "3"]
+
+
+def _names(nouls: list[float], count: dict[str, float]) -> tuple[list[str], str, float | None]:
+    props = {"names": {"type": "array", "items": {"type": "string"}}}
+    tool, rc = custom("label_issue", props, 'Label it as an urgent bug and add "Apollo"')
+    pool, questions = resolve(tool, tool.slot("names"), rc)
+    *items, how_many = questions
+    answers = {q.qid: noul(n) for q, n in zip(items, nouls, strict=True)} | {how_many.qid: choice(how_many, count)}
+    result = decode(tool, tool.slot("names"), pool, answers, rc)
+    return result.value, result.shape, result.factor
+
+
+def _odds(p: float) -> float:
+    return p / (1 - p)
+
+
+def _sep(chosen: float, rest: float) -> float:
+    return _odds(chosen) / (_odds(chosen) + _odds(rest))
+
+
+def test_enumerative_list_counts_then_ranks() -> None:
+    # labels in canonical order: "an urgent bug", "Apollo", "Label"
+    value, shape, factor = _names([0.1, 0.9, 0.3], {"1": 0.8, "2": 0.2})
+    assert value == ["Apollo"] and shape == "ok"  # 0.3 was in the old dead band; ranked against the count it is out
+    assert factor == pytest.approx(0.8 * _sep(0.9, 0.3))
+    value, shape, factor = _names([0.6, 0.9, 0.3], {"1": 0.8, "2": 0.2})
+    assert value == ["Apollo"] and shape == "ok" and factor == pytest.approx(0.8 * _sep(0.9, 0.6))  # less clean
+    value, shape, factor = _names([0.1, 0.4, 0.3], {"2": 0.8, "1": 0.2})
+    assert sorted(value) == ["Apollo", "Label"] and shape == "ok"  # low but well-separated Nouls still rank
+    assert factor == pytest.approx(0.8 * _sep(0.4, 0.1) * _sep(0.3, 0.1))
+    value, shape, _ = _names([0.1, 0.9, 0.3], {NONE_OF_THESE: 0.9, "1": 0.1})
+    assert value == ["Apollo"] and shape == "flag_band"  # no count: every item by its own Noul, as before
+
+
+def test_a_new_list_leaves_out_what_its_sibling_holds() -> None:
+    from jevtools.kinds.base import SlotResult
+
+    props = {"item_ids": {"type": "array", "items": {"type": "string"}},
+             "new_item_ids": {"type": "array", "items": {"type": "string"}}}  # fmt: skip
+    tool, rc = custom("exchange", props, 'Swap "1151293680" for "7706410293"', required=["item_ids", "new_item_ids"])
+    slot = tool.slot("new_item_ids")
+    pool, questions = resolve(tool, slot, rc)
+    *items, how_many = questions
+    values = [c.value for c in pool.candidates]
+    ids = {"1151293680", "7706410293"}  # the two ids look like items of an exchange; the spans around them do not
+    answers = {q.qid: noul(0.9 if v in ids else 0.05) for q, v in zip(items, values, strict=True)}
+    answers |= {how_many.qid: choice(how_many, {"1": 0.9})}
+    both = decode(tool, slot, pool, answers, rc)
+    assert set(values) >= ids and both.factor == pytest.approx(0.9 * 0.5)  # a coin flip between the two
+    old = SlotResult(path=("item_ids",), kind="list", stakes="identity", dist={}, values={}, shape="ok", factor=0.9,
+                     value=["1151293680"])  # fmt: skip
+    rc.cache["slot_results"] = {("exchange", "item_ids"): old}
+    result = decode(tool, slot, pool, answers, rc)
+    assert result.value == ["7706410293"] and result.factor == pytest.approx(0.9 * _sep(0.9, 0.05))
 
 
 def test_list_without_anchors_probes_its_default() -> None:

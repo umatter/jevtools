@@ -31,15 +31,15 @@ from jevtools.wire import (
 Family = Literal[
     "tool", "authorized", "slot", "probe", "present", "rev", "date", "time", "accept", "mention", "more",
     "item", "member", "branch", "joint", "done_after", "bucket", "group", "reply", "segmentation", "verify",
-    "unique",
+    "unique", "count",
 ]  # fmt: skip
 """Question families (spec §3.5.3)."""
 Primitive = Literal["choice", "noul", "score"]
 IdMode = Literal["dotted", "opaque"]
 
 FAMILY_ORDER: tuple[str, ...] = (
-    "slot", "probe", "date", "time", "accept", "mention", "more", "item", "member", "branch", "bucket", "group",
-    "present", "rev", "verify", "unique",
+    "slot", "probe", "date", "time", "accept", "mention", "more", "item", "count", "member", "branch", "bucket",
+    "group", "present", "rev", "verify", "unique",
 )  # fmt: skip
 """Order of a slot's question families within the plan (§3.5.3 table order, probes after the slot question)."""
 

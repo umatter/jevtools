@@ -31,6 +31,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from jevtools.bench.run import escalator_meta
 from jevtools.context import Context, Observation
 from jevtools.policy import RULE_FAIL_CLOSED
 from jevtools.router import Router
@@ -175,13 +176,14 @@ class Tau2Record:
     error: str | None = None
 
 
-def run_case(case: Tau2Case, tools: Sequence[dict[str, Any]], backend: Any, *, trust: str = "none") -> Tau2Record:
+def run_case(case: Tau2Case, tools: Sequence[dict[str, Any]], backend: Any, *, trust: str = "none",
+             escalator: Any = None) -> Tau2Record:  # fmt: skip
     trusted = tuple(t["function"]["name"] for t in tools if t["function"]["name"].startswith(READ_PREFIXES)) \
         if trust == "reads" else ()  # fmt: skip
     try:
         ctx = Context(messages=case.messages, now=NOW, tz="America/New_York", locale="en", trusted_tools=trusted,
                       observations=[Observation(**o) for o in case.observations])  # fmt: skip
-        router = Router([deepcopy(t) for t in tools], backend=backend, context=ctx)
+        router = Router([deepcopy(t) for t in tools], backend=backend, context=ctx, escalator=escalator)
         decision = router.decide(case.messages, mode="loop" if case.observations else "turn")
         if decision.rule == RULE_FAIL_CLOSED:
             raise BackendFailure("")
@@ -259,20 +261,21 @@ def run_tau2(
     retries: int = 0,
     progress: Callable[[int, Tau2Record], None] | None = None,
     meta: Mapping[str, Any] | None = None,
+    escalator: Any = None,
 ) -> Tau2Report:
     records: list[Tau2Record] = []
     for index, case in enumerate(cases):
-        record = run_case(case, tools[case.domain], backend, trust=trust)
+        record = run_case(case, tools[case.domain], backend, trust=trust, escalator=escalator)
         for attempt in range(retries):
             if not (record.error or "").startswith("BackendFailure"):
                 break
             time.sleep(5.0 * 4**attempt)
-            record = run_case(case, tools[case.domain], backend, trust=trust)
+            record = run_case(case, tools[case.domain], backend, trust=trust, escalator=escalator)
         records.append(record)
         if progress is not None:
             progress(index, record)
     return Tau2Report(mode=str(getattr(backend, "name", type(backend).__name__)), records=records,
-                      meta={"trust": trust, **dict(meta or {})})  # fmt: skip
+                      meta={"trust": trust, **escalator_meta(escalator), **dict(meta or {})})  # fmt: skip
 
 
 def save_cases(cases: Sequence[Tau2Case], path: str | Path) -> None:

@@ -304,7 +304,7 @@ def inject_candidates(pool: Pool, extra: Sequence[Candidate], slot: SlotSpec, la
 
 
 def tool_question(tools: Sequence[ToolSpec], *, choice: str, loop: bool, done: bool, label_max: int,
-                  hints: Mapping[str, str] | None = None) -> BallotQuestion:  # fmt: skip
+                  hints: Mapping[str, str] | None = None, reply: bool = False) -> BallotQuestion:  # fmt: skip
     """The ``tool`` Choice: tools in canonical label order, then ``NO_TOOL`` (unless ``required``),
     ``UNSUPPORTED`` and ``DONE`` (loop mode after at least one step). ``hints`` (tool name → text) are appended to
     the options' descriptions (``tool.record_hints``)."""
@@ -315,9 +315,10 @@ def tool_question(tools: Sequence[ToolSpec], *, choice: str, loop: bool, done: b
         sentinels[NO_TOOL] = SentinelSpec(decodes_to="no_tool", text=templates.TOOL_SENTINEL_TEXT[NO_TOOL])
     sentinels[UNSUPPORTED] = SentinelSpec(decodes_to="unsupported", text=templates.TOOL_SENTINEL_TEXT[UNSUPPORTED])
     if loop and done:
-        sentinels[DONE] = SentinelSpec(decodes_to="done", text=templates.TOOL_SENTINEL_TEXT[DONE])
+        text = templates.DONE_REPLY_TEXT if reply else templates.TOOL_SENTINEL_TEXT[DONE]
+        sentinels[DONE] = SentinelSpec(decodes_to="done", text=text)
     return BallotQuestion(qid=TOOL_QID, family="tool", primitive="choice", instructions=templates.tool_instructions(
-        loop=loop), options=canonical_order(options), sentinels=sentinels)  # fmt: skip
+        loop=loop, reply=reply), options=canonical_order(options), sentinels=sentinels)  # fmt: skip
 
 
 def tool_labels(tools: Sequence[ToolSpec], label_max: int = 64) -> dict[str, ToolSpec]:
@@ -475,7 +476,8 @@ class _Builder:
             done = bool(self.rc.ctx.all_observations())
             hints = self._record_hints(policy.tool.record_hints)
             questions.append(tool_question(self.considered, choice=self.choice, loop=loop, done=done,
-                                           label_max=self.rc.limits.label_max, hints=hints))  # fmt: skip
+                                           label_max=self.rc.limits.label_max, hints=hints,
+                                           reply=self.rc.ctx.replies_to_question))  # fmt: skip
         for tool in tool_labels(speculated, self.rc.limits.label_max).values():
             questions += self._tool_questions(tool)
         return questions, records

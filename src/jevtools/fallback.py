@@ -295,6 +295,10 @@ class OpenAICompatibleClient:
         """``chat/completions`` requests sent."""
         self.last_usage: dict[str, Any] | None = None
         self.last_error: str | None = None
+        self.input_tokens = 0
+        """Prompt tokens over every request (from the responses' ``usage``)."""
+        self.cost_usd = 0.0
+        """Cost over every request, where the endpoint reports it (OpenRouter's ``usage.cost``)."""
 
     @property
     def url(self) -> str:
@@ -345,6 +349,9 @@ class OpenAICompatibleClient:
             raise FallbackError(f"{self.url}: {payload['error']}", status=response.status_code)
         usage = payload.get("usage")
         self.last_usage = dict(usage) if isinstance(usage, dict) else None
+        if self.last_usage is not None:
+            self.input_tokens += int(self.last_usage.get("prompt_tokens") or 0)
+            self.cost_usd += float(self.last_usage.get("cost") or 0.0)
         return payload
 
     def _failed(self, exc: FallbackError) -> None:

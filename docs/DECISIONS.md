@@ -1986,3 +1986,68 @@ Extends "Documentation and final merge":
   21.7% → 57.2% (default trust), write calls with trusted lookups 15.6% → 17.9% (12.1% executed). Talk turns without
   an executed call 95.4% with trusted lookups (96.9% before): the closed `reason` list makes cancellations
   executable, and five of the seven new ones were the reference agent's next call made a turn early.
+
+## Lists, ids, replies and dates (τ² follow-ups)
+
+- §3.5.3, §3.7.1: an enumerative list decided item by item asked one Noul per candidate (up to 60) and clarified as
+  soon as any one fell in the dead band (0.2, 0.8); its factor multiplied over every candidate, and Nouls do not
+  compete, so a list of new item ids also took the old ones → enumerative lists with ≥ 2 candidates also ask a `count`
+  Choice (`T.P.how_many`, `T_COUNT`, options `1` … min(candidates, `pools.count_max` = 6) + `NONE_OF_THESE`). With a
+  real count n the list is the n items with the highest Nouls, and the factor is how cleanly each chosen item
+  outranks the best left-out one on the odds scale: `P(n) × ∏ odds(n_i) / (odds(n_i) + odds(r))`. A first version cut
+  at 0.5 (a chosen item below it, or a left-out one above it, gave `flag_band`); live, Jev ranked τ²'s items right but
+  scored them low or close (three right items at 0.33 / 0.30 / 0.27, the best wrong one at 0.13), and a phrase such as
+  "item ID" scored 0.71, so right calls became questions. Re-decided from the recording, the odds rule took exactly
+  right executed writes (trusted lookups) from 21 to 45 of 173 with the same one wrong execution; the four new
+  talk-turn executions were all the reference agent's next call made a turn early.
+- §4.2.9: an enumerative list whose description's examples all contain a digit ("each such as '1008292230'") leaves
+  candidates without a digit out of its items (objects excepted): an id list holds no wordless phrase.
+  `NONE_OF_THESE` falls back to the per-item rule. `count_max = 0` turns it off. `how_many` is a reserved qid word
+  (a parameter of that name gets `_` appended). Adding the policy field changes the policy hash, so every golden
+  fixture's decision, trace, call and pending ids changed; no ballot or request byte did.
+- §3.7.1: a qualified slot (`new_item_ids`, `old_…`, `current_…`, `original_…`, `target_…`, `selected_…`) whose
+  unqualified sibling is in the same tool is decoded after it (`decode.decode_order`), and its count-and-rank leaves
+  out the values the sibling holds: one value is not both the old and the new item. Decoded slots are shared through
+  `rc.cache["slot_results"]`.
+- §4.2: a string slot whose description shows exactly one id format by example ("such as '#W0000000'": a prefix of up
+  to three letters or `#`, then a run of digits) also gets the user's ids written without that prefix ("W4284542",
+  "9502127") in the format. Only the prefix is restored; the digits are the user's and their count must match.
+- §3.5.4: when `request` answers a question (the assistant's last turn before it ends with "?" and the user spoke
+  before that turn), the `tool` instructions append `T_TOOL_REPLY` and `DONE` reads "… everything the user asked for,
+  in `request` and before it". Without it, a reply such as "my name is Mei Kovacs, zip 28236" made the looked-up user
+  id look like the whole task, and `DONE` drew a third of the mass. `request` itself is unchanged (§3.5.1), and a
+  ballot without such a reply is byte-identical.
+- §3.3.1: a temporal string slot without `format` is a date (`format: date`) when its name is `date` or ends in
+  `_date` with no `time` in it, or when its description shows a date-only example (`'YYYY-MM-DD'`, `'2024-05-01'`);
+  before, it was a date-time and "today" became `2024-05-15T…`.
+- §3.3.1: `anyOf`/`oneOf` of a typed object and a free-form object (pydantic's `Model | dict`) is the typed object.
+- §4.2.10: a list of records with no user anchors takes the objects of earlier tool results that carry every
+  required field of the item (non-null), cut down to the item's fields, as enumerative items (with the count). The
+  object is copied, not composed; its channel is the observation's, so only a trusted lookup's objects reach a
+  write tool's identity slots.
+
+## Drafted values for uncovered slots (the Escalator as a proposer)
+
+- §4.7: the Escalator was reached only from diffuse, unsupported or failed decisions, so the commonest loss, a value
+  no extractor nominated, ended in a question → with an Escalator configured and `shapes.escalate_uncovered` (on by
+  default; it does nothing without an Escalator), `P7` `out_of_pool` / `missing` (after any widen round) and `P6`
+  (a required slot with no candidate) escalate. The Escalator drafts the call; its argument values join the pools as
+  `generated` candidates (`prov.source = "escalator"`), and one Jev gate round with the tool fixed re-decides every
+  slot, with `NOT_STATED` and `NONE_OF_THESE` on the ballot: a value the user never stated is still answered
+  "not stated" and still ends in a question.
+- §5.1: in that gate round a drafted value counts as evidence for viability (the tool is speculated and its slots are
+  asked as Choices). Nowhere else does a `generated` value count as evidence.
+- A coverage escalation drafts the chosen tool: a draft of another tool, a text answer or a failed call returns the
+  question the round would have asked (live on When2Call, ending these in `abstain` turned 460 "ask for information"
+  cases into declines), and only `out_of_pool` escalates from `P7`; `missing` is Jev saying the user did not state
+  the value, and a draft would override it (escalating it too raised calls on "cannot answer" cases from 3.9% to 7.5%).
+  A drafted value is fitted to the slot's schema (`spec.schema.fit_schema`: valid as is, or an exact numeric/boolean
+  coercion of a string, else dropped); an unfitted value had made the ballot builder raise (144 errors).
+- §3.4.2: `generated` joins the default allow-list of read-tier identity slots, which already admitted
+  `tool_output`: a drafted value is no less trustworthy than a tool result, and a wrong read returns data, not an
+  action. Identity slots of write, external and critical tools still never take a `generated` value (unless an equal
+  value arrived on a trusted channel), so the injection defence and every write-side guarantee are unchanged.
+  The catalog hash moved for every golden case (read slots list one more channel); no question byte changed.
+- This makes jevtools a decision layer over an LLM's draft when an Escalator is configured, rather than Jev alone:
+  "bind, don't write" holds for every value in an executed call (Jev elected it from a pool), but a pool can now hold
+  values an LLM wrote. Without an Escalator nothing changes.

@@ -496,6 +496,12 @@ def question_calibration(
                     ok = all(gold.accepts(k, option.value[k]) for k in checked)
                     out.append(QuestionRecord(**base, p=probs[top], correct=ok, label=top))
             return out
+        if q.family == "count":
+            slot = _slot(q)
+            members = _gold_list(gold, slot) if slot is not None and gold.mode(slot) != "ignore" else None
+            if members is not None:
+                out.append(QuestionRecord(**base, p=probs[top], correct=top == str(len(members)), label=top))
+            return out
         return []
     if q.primitive != "noul":
         return []

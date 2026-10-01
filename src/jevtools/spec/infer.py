@@ -91,6 +91,16 @@ FORMAT_EXTRACTORS = {
     "email": ("email",), "uri": ("url",), "uuid": ("uuid",), "ipv4": ("ipv4",),
     "ipv6": (f"regex:{IPV6_RE}",), "hostname": (f"regex:{HOSTNAME_RE}",),
 }  # fmt: skip
+QUALIFIERS = ("new_", "old_", "current_", "original_", "target_", "selected_")
+"""Prefixes a slot name may add to the name of what it holds: ``new_item_ids`` holds item ids, like ``item_ids``."""
+
+
+def qualified_base(name: str, names: Iterable[str]) -> str | None:
+    """The sibling a qualified slot name refines (``new_item_ids`` → ``item_ids`` when the tool has both)."""
+    names = set(names)
+    return next((name[len(q) :] for q in QUALIFIERS if name.startswith(q) and name[len(q) :] in names), None)
+
+
 NAME_PATTERN_EXTRACTORS: dict[str, tuple[str, ...]] = {
     "email": ("email",), "url": ("url",), "link": ("url",), "website": ("url",), "uuid": ("uuid",), "guid": ("uuid",),
 }  # fmt: skip
@@ -166,6 +176,20 @@ _CLOSED_LIST = re.compile(r"\b(?:either|one of|must be|should be|allowed values?
 _QUOTED = re.compile(r"'([^']{1,60})'|\"([^\"]{1,60})\"")
 
 
+_DATE_ONLY_EXAMPLE = re.compile(r"\bYYYY-MM-DD\b(?![T ]?\s*hh)|['\"]\d{4}-\d{2}-\d{2}['\"]", re.I)
+
+
+def date_format(name: str, description: str | None) -> str | None:
+    """``date`` for a temporal string without a ``format`` that names a day: a name ``date`` or ``*_date`` with no
+    ``time`` in it, or a description showing a date-only example (``'YYYY-MM-DD'``, ``'2024-05-01'``)."""
+    words = name.lower().split("_")
+    if "time" in words or "datetime" in words:
+        return None
+    if words[-1] == "date" or _DATE_ONLY_EXAMPLE.search(description or ""):
+        return "date"
+    return None
+
+
 def described_values(description: str | None) -> list[str] | None:
     """Values a description states as the only ones allowed ("should be either 'no longer needed' or 'ordered by
     mistake'"): the quoted values after a closed-list cue, at least two. Examples ("such as 'X'") are not."""
@@ -219,6 +243,20 @@ def unwrap_nullable(schema: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
         rest = [t for t in types if t != "null"]
         return {**schema, "type": rest[0] if len(rest) == 1 else rest}, True
     return dict(schema), False
+
+
+def typed_branch(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """``anyOf/oneOf [<object with properties>, <free-form object>]`` (a typed model or any dict, as pydantic writes
+    ``Model | dict``) → the typed object merged with outer keys: a value built from the typed branch fits both."""
+    for key in ("anyOf", "oneOf"):
+        branches = schema.get(key)
+        if not isinstance(branches, list) or len(branches) != 2 or not all(isinstance(b, Mapping) for b in branches):
+            continue
+        typed = [b for b in branches if b.get("type") == "object" and b.get("properties")]
+        free = [b for b in branches if b.get("type") == "object" and not b.get("properties")]
+        if len(typed) == 1 and len(free) == 1:
+            return {**typed[0], **{k: v for k, v in schema.items() if k != key}}
+    return dict(schema)
 
 
 def _numeric_pattern(pattern: str | None) -> bool:
@@ -486,6 +524,7 @@ def infer_slot(
     xjevs = xjevs or {}
     x = xjevs.get(path_key(path), ParamXJev())
     schema, nullable = unwrap_nullable(schema)
+    schema = typed_branch(schema)
     schema = with_described_values(schema)
     siblings = tuple((parent or {}).get("properties", {}).keys())
     inferred = infer_kind(name, schema, siblings=siblings, sources=sources, depth=depth)
@@ -521,7 +560,7 @@ def infer_slot(
         json_schema=schema,
         description=description,
         title=schema.get("title"),
-        format=schema.get("format"),
+        format=schema.get("format") or (date_format(name, description) if kind == "temporal" else None),
         kind=kind,
         kind_reason=reason,
         role=role,

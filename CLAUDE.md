@@ -8,9 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 typed questions (Choice, Noul = yes/no, Score) and never returns text. The core rule is **"bind, don't write"**:
 code builds a finite candidate pool for every argument, and Jev *elects* one candidate per slot. The rule holds
 only if no argument value can come from anywhere except a nominated candidate, so never add a code path that
-synthesizes a value. The package is v0.1.0 with protocol `jevtools/0.1`. **Nothing has been measured against live
-Jev.** Every number in the docs, fixtures and examples comes from scripted answers, the `LexicalSimulator` or the
-benchmark oracle, so never present such a number as evidence of Jev's accuracy.
+synthesizes a value. With an Escalator configured, a pool may also hold values an LLM drafted (`generated` channel);
+Jev still elects them, and write-side identity slots never take them. The package is v0.1.0 with protocol
+`jevtools/0.1`. Live Jev results (OpenRouter) are in `docs/BENCH.md`, each with its date and cost; every other number
+in the docs, fixtures and examples comes from scripted answers, the `LexicalSimulator` or the benchmark oracle, so
+never present such a number as evidence of Jev's accuracy.
 
 ## Commands
 
@@ -37,6 +39,8 @@ jevtools bench app --heldout ... --record DIR            # keep every Jev answer
 jevtools bench app --heldout --controls --replay DIR --policy F   # re-decide recorded answers offline, no API cost
 jevtools bench app --heldout --merged-catalog ...        # every case sees all 31 tools (large-catalog behaviour)
 jevtools bench bfcl [--download]                         # BFCL stress test (tests use the vendored sample in tests/bench/data)
+jevtools bench when2call|tau2 ...                        # When2Call; τ²-bench reduced to next calls (--trust none|reads)
+jevtools bench bfcl|when2call|tau2 --escalator openai/gpt-4o-mini   # an LLM drafts uncovered values; Jev decides them
 ```
 
 **Live bench practice.** Decide between variants on `--heldout` with `--controls` and 3 replays; a single domain

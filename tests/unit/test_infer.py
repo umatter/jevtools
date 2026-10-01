@@ -8,11 +8,13 @@ import pytest
 
 from jevtools.policy import Tier
 from jevtools.spec.infer import (
+    date_format,
     described_values,
     infer_kind,
     infer_slot,
     infer_tier,
     ref_noun,
+    typed_branch,
     unwrap_nullable,
     with_channels,
 )
@@ -246,3 +248,27 @@ def test_pattern_extractors_follow_the_slot_name() -> None:
     assert "email" in infer_slot("email", {"type": "string"}).extract
     assert "url" in infer_slot("website_link", {"type": "string"}).extract
     assert "email" not in infer_slot("note", {"type": "string"}).extract
+
+
+@pytest.mark.parametrize(
+    ("name", "description", "fmt"),
+    [
+        ("date", "The date of the flight.", "date"),
+        ("created_date", None, "date"),
+        ("due", "The due day, such as '2024-05-01'.", "date"),
+        ("start", "When it starts.", None),
+        ("start_time", "The date of the start.", None),
+    ],
+)
+def test_date_format(name: str, description: str | None, fmt: str | None) -> None:
+    assert date_format(name, description) == fmt
+    schema = {"type": "string", **({"description": description} if description else {})}
+    assert infer_slot(name, schema).format == fmt if infer_slot(name, schema).kind == "temporal" else True
+
+
+def test_typed_branch_of_a_model_or_any_dict() -> None:
+    model = {"type": "object", "properties": {"n": {"type": "string"}}, "required": ["n"]}
+    schema = {"anyOf": [model, {"type": "object", "additionalProperties": True}], "description": "d"}
+    assert typed_branch(schema) == {**model, "description": "d"}
+    assert typed_branch({"anyOf": [model, {"type": "string"}]}) == {"anyOf": [model, {"type": "string"}]}
+    assert infer_slot("items", {"type": "array", "items": schema}).item.kind == "record"  # type: ignore[union-attr]

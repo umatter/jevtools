@@ -291,7 +291,7 @@ class OracleBackend:
         if q.family == "joint":
             return [o.label for o in q.options if isinstance(o.value, Mapping) and self._combination_ok(o.value)]
         acceptable = self.acceptable(q.path)
-        if acceptable is None or q.family in ("date", "time"):
+        if acceptable is None or q.family in ("date", "time", "count"):
             return []
         typ = self.bfcl_type(q.path)
         mention = q.family == "mention"
@@ -318,6 +318,9 @@ class OracleBackend:
 
     def _slot_label(self, q: BallotQuestion) -> str:
         acceptable = self.acceptable(q.path)
+        if q.family == "count":  # the length of an acceptable list, when it is an option
+            sizes = {str(len(option)) for option in _elements(acceptable or [])}
+            return next((o.label for o in q.options if o.label in sizes), NONE_OF_THESE)
         if acceptable is None:
             return NONE_OF_THESE if NONE_OF_THESE in q.sentinels else _first_label(q)
         typ = self.bfcl_type(q.path)
@@ -467,7 +470,7 @@ class OracleBackend:
         statuses: list[Coverage] = []
         accepted: dict[str, list[bool]] = {}  # accept/item/member families: one yes is enough, a right no is fine
         for q in questions:
-            if q.family in ("authorized", "present", "rev", "more", "done_after", "joint"):
+            if q.family in ("authorized", "present", "rev", "more", "done_after", "joint", "count"):
                 continue
             if q.primitive == "noul":
                 answer = self._noul(q)

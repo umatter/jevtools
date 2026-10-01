@@ -109,6 +109,11 @@ class ShapePolicy(_Section):
     confirm_margin: float = 0.20
     """In the confirm band, an identity slot whose top two real values are closer than this gets a menu instead of
     a confirm card: a card must not present a coin flip between two people, accounts or records."""
+    escalate_uncovered: bool = True
+    """With an Escalator configured, a value the user stated but the pool lacks (``P7`` ``out_of_pool``, after any
+    widen round) or a required value no extractor found (``P6``) escalates instead of clarifying: the Escalator
+    drafts the chosen tool's call, its values join the pools as ``generated`` candidates, and one Jev round
+    re-decides (§4.7). ``missing`` (Jev: not stated) still clarifies; a draft of another tool, or none, too."""
     flag_band: tuple[float, float] = (0.20, 0.80)
     """Noul dead band: strictly inside it a flag or item is uncertain (``flag_band`` shape)."""
     accept_min: float = 0.50
@@ -205,6 +210,9 @@ class PoolPolicy(_Section):
     joint_max: int = 24
     verify_k: int = 3
     unique_k: int = 10
+    count_max: int = 6
+    """Options of an enumerative list's ``count`` Choice ("how many?"): 1 … min(candidates, count_max). 0 turns the
+    count off, and every item is then decided by its own Noul alone (§3.7.1)."""
     """Options listed in a ``unique`` Noul: the best-anchored first, then the rest of the pool in option order."""
     """First-round ``verify`` Nouls per identity REF slot: its best-anchored records (§3.8.3)."""
 
@@ -581,6 +589,9 @@ def _p6(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
     if not inp.chosen_is_tool or inp.speculated:
         return None
     slot = inp.viable.partition(":")[2] or None
+    if inp.escalator and policy.shapes.escalate_uncovered:
+        return PolicyResult(outcome=Outcome.ESCALATE, rule=RULE_NOT_SPECULATED, bottleneck=slot, shape="missing",
+                            reason=inp.viable)  # fmt: skip
     return PolicyResult(outcome=Outcome.CLARIFY, rule=RULE_NOT_SPECULATED, bottleneck=slot, shape="missing",
                         ask="open", reason=inp.viable)  # fmt: skip
 
@@ -596,6 +607,8 @@ def _p7(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
         return PolicyResult(outcome=Outcome.CLARIFY, action=Action.FILL, ask="open", **common)
     if slot.shape == "flag_band":
         return PolicyResult(outcome=Outcome.CLARIFY, ask="yes_no", **common)
+    if slot.shape == "out_of_pool" and inp.escalator and policy.shapes.escalate_uncovered:
+        return PolicyResult(outcome=Outcome.ESCALATE, reason="uncovered", **common)
     return PolicyResult(outcome=Outcome.CLARIFY, ask="open", **common)
 
 

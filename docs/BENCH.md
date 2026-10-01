@@ -625,6 +625,72 @@ it". An app that wants explicit confirmation before a cancellation sets that too
 runs the defaults. Requests are large (median 19k input tokens, 82 questions): long conversations with 16 tools
 expand most of them.
 
+### Lists, ids, replies and dates (2026-10-01)
+
+DECISIONS "Lists, ids, replies and dates": count and rank for enumerative lists (odds factor), a list leaving out
+what its refined sibling holds, ids typed without their schema prefix, the reply clause in the tool question,
+date-only temporal strings, typed object unions and lists of records taken whole from tool results.
+
+Oracle ceiling (every question answered right), trusted lookups: reads 94.4% → 99.4%, writes 22.0% → 75.7% (count and
+rank alone: 71.7%; before it, perfect list answers still multiplied to a "diffuse" factor in 84 write cases).
+
+Live, all 994 cases, no backend failures:
+
+| | Before | After |
+|---|---:|---:|
+| Read calls exactly right (trust `none` / `reads`) | 57.2% / 57.8% | **67.7% / 68.0%** |
+| Write calls exactly right, shown / executed (trust `reads`) | 17.9% / 12.1% | **37.0% / 25.4%** |
+| Write calls (trust `none`) | 2.3% / 1.7% | 2.3% / 1.7% |
+| Talk turns without an executed call (`none` / `reads`) | 97.7% / 95.4% | 97.1% / 94.6% |
+| Wrong write executions (trust `reads`) | 1 | 1 |
+| Cost (`none` / `reads`) | $1.64 / $2.45 | **$1.29 / $2.08** |
+
+A first version of count and rank cut at 0.5 and moved writes only from 17.9% to 18.5%: Jev ranked the items right
+but scored them low or close, and phrases such as "item ID" (scored 0.71) sat among the ids. Re-decided from that
+run's recording, the odds factor and the id-list filter gave the estimate (45 of 173 executed right) that the live
+run then confirmed (44). The four extra talk-turn executions were all the reference agent's next call, made before
+its "shall I proceed?" turn. With trust `none` the right write tool is chosen less often (91.3% → 85.5%); those
+writes cannot execute without trusted lookups either way. Held-out app bench, 3 replays with controls: 93.5% correct
+(93.2% before), 0 wrong executions, the same 7 control bindings; the odds rule re-decided from that recording changes
+nothing.
+
+Still out of reach: free text (`summary`), payment amounts (arithmetic), passengers the user types in the chat, and
+the 47 lookups of an order the user never named (the reference agent works through the user's orders one by one).
+
+## Drafted values (Escalator), live
+
+`--escalator MODEL` gives BFCL, When2Call and τ² an OpenAI-compatible Escalator (here `openai/gpt-4o-mini` on
+OpenRouter) that drafts a call when a value is not on the ballot; Jev re-decides the drafted values in one more round
+(DECISIONS "Drafted values for uncovered slots"). Cost is Jev plus the drafter.
+
+BFCL, all 3,051 cases, strict (executed calls exactly right):
+
+| Category | No drafter | Drafter |
+|---|---:|---:|
+| simple_python | 26.5% | **42.5%** |
+| multiple | 30.5% | **39.5%** |
+| live_simple | 24.0% | **41.1%** |
+| live_multiple | 25.7% | **44.4%** |
+| irrelevance | 97.1% | 95.0% |
+| live_irrelevance | 98.2% | 96.9% |
+| live_relevance | 18.8% | 31.2% |
+| Cost | $0.23 | $0.26 + $0.10 drafter (1,426 calls) |
+
+When2Call, all 3,652 cases:
+
+| | No drafter | Drafter |
+|---|---:|---:|
+| Accuracy / macro F1 | 65.7% / 64.8% | **70.3% / 70.6%** |
+| Recall: tool call / ask / decline | 35.4% / 86.3% / 79.1% | 58.8% / 79.3% / 74.3% |
+| Tool called on cannot-answer cases | 3.9% | **7.4%** |
+| Errors (backend failures after retries) | 0 | 21 |
+| Cost | $0.28 | $0.28 + $0.21 drafter |
+
+A first drafter run escalated `missing` too, ended text drafts in `abstain` and let unfitted values reach the ballot:
+58.1% accuracy, "ask" recall 32%, 144 errors; those three are fixed. The doubled call rate on cannot-answer cases
+remains: 46 of the 96 calls are new, 30 of them through the older escalation of unsupported, ambiguous or diffuse
+turns, whose gate round fixes the drafted tool so Jev cannot reject it. That is the next fix.
+
 ## Reading a live run
 
 Run with a key, then compare:

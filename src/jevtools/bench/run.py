@@ -161,6 +161,15 @@ def _summarize(records: Sequence[CaseRecord]) -> dict[str, Any]:
     }
 
 
+def escalator_meta(escalator: Any) -> dict[str, Any]:
+    """The Escalator's model, calls, prompt tokens and cost over a run (``{}`` without one)."""
+    if escalator is None:
+        return {}
+    return {"escalator": {"model": getattr(escalator, "model", None), "calls": getattr(escalator, "calls", 0),
+                          "input_tokens": getattr(escalator, "input_tokens", 0),
+                          "cost_usd": getattr(escalator, "cost_usd", 0.0)}}  # fmt: skip
+
+
 def bench_tools(case: BfclCase, *, risk: str | None = "read") -> list[dict[str, Any]]:
     """The case's functions as OpenAI tools, with ``x-jev.risk`` set to ``risk`` (``None`` keeps the inferred
     tier). BFCL functions are side-effect free test fixtures, so the bench treats them as read-tier tools by
@@ -172,8 +181,9 @@ def bench_tools(case: BfclCase, *, risk: str | None = "read") -> list[dict[str, 
     return tools
 
 
-def _router(case: BfclCase, backend: Any, risk: str | None, now: datetime) -> Router:
-    return Router(bench_tools(case, risk=risk), backend=backend, context=Context(now=now, tz="UTC", locale="en"))
+def _router(case: BfclCase, backend: Any, risk: str | None, now: datetime, escalator: Any = None) -> Router:
+    return Router(bench_tools(case, risk=risk), backend=backend, context=Context(now=now, tz="UTC", locale="en"),
+                  escalator=escalator)  # fmt: skip
 
 
 def _calls(decision: Decision) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -201,6 +211,7 @@ def run_case(
     risk: str | None = "read",
     now: datetime = BENCH_NOW,
     ceiling: bool = True,
+    escalator: Any = None,
 ) -> CaseRecord:
     """Decide one case with ``backend`` (``"oracle"`` for the oracle) and score it. With ``ceiling`` (the default),
     a non-oracle run first decides the case with the oracle to record its ceiling and coverage."""
@@ -216,7 +227,7 @@ def run_case(
             decision = oracle_decision
         else:
             started = time.perf_counter()
-            decision = _router(case, backend, risk, now).decide(case.messages)
+            decision = _router(case, backend, risk, now, escalator).decide(case.messages)
             if decision.rule == RULE_FAIL_CLOSED:  # an outage: never an abstain that passes an irrelevance case
                 raise BackendFailure(decision.trace.notes[-1] if decision.trace and decision.trace.notes else "")
     except Exception as exc:  # noqa: BLE001 - a crash is a failed case, reported with its message
@@ -264,23 +275,25 @@ def run_bfcl(
     retries: int = 0,
     progress: Callable[[int, CaseRecord], None] | None = None,
     meta: Mapping[str, Any] | None = None,
+    escalator: Any = None,
 ) -> BenchReport:
     """Run every case and return the report (``backend="oracle"`` for the ceiling alone). A decision that fails
     closed at the backend is retried up to ``retries`` times with backoff; one that still fails is an ``error``
     (``BackendFailure``), never an abstain that would pass an irrelevance case."""
     records: list[CaseRecord] = []
     for index, case in enumerate(cases):
-        record = run_case(case, backend, risk=risk, now=now, ceiling=ceiling)
+        record = run_case(case, backend, risk=risk, now=now, ceiling=ceiling, escalator=escalator)
         for attempt in range(retries):
             if not (record.error or "").startswith("BackendFailure"):
                 break
             time.sleep(5.0 * 4**attempt)
-            record = run_case(case, backend, risk=risk, now=now, ceiling=ceiling)
+            record = run_case(case, backend, risk=risk, now=now, ceiling=ceiling, escalator=escalator)
         records.append(record)
         if progress is not None:
             progress(index, record)
     mode = backend if isinstance(backend, str) else str(getattr(backend, "name", type(backend).__name__))
-    return BenchReport(mode=mode, records=records, meta={"risk": risk, "now": now.isoformat(), **dict(meta or {})})
+    return BenchReport(mode=mode, records=records, meta={"risk": risk, "now": now.isoformat(),
+                                                         **escalator_meta(escalator), **dict(meta or {})})  # fmt: skip
 
 
 __all__ = ["BENCH_NOW", "BackendFailure", "BenchReport", "CaseRecord", "bench_tools", "run_bfcl", "run_case"]

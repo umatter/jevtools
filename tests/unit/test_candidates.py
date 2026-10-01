@@ -43,7 +43,7 @@ def test_trust_order_and_least_trusted() -> None:
 @pytest.mark.parametrize(
     ("tier", "stakes", "quantity", "expected"),
     [
-        (Tier.READ, "identity", False, {U, R, A, H, T}),
+        (Tier.READ, "identity", False, {U, R, A, H, T, G}),  # a drafted value is no less trusted than tool output
         (Tier.READ, "content", False, {U, R, A, H, T, G}),
         (Tier.WRITE, "identity", False, {U, R, A, H}),
         (Tier.WRITE, "content", False, {U, R, A, H, T, G}),

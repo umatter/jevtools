@@ -355,6 +355,26 @@ def validate(
     return validator.run(value, schema, ())
 
 
+def fit_schema(value: Any, schema: Mapping[str, Any]) -> Any:
+    """``value`` if it is valid under ``schema``; else the exact coercion of a numeric or boolean string to the
+    schema's scalar type (``"2"`` → ``2``) when that is valid; else ``None`` (a drafted value the slot cannot take)."""
+    if is_valid(value, schema):
+        return value
+    kind = schema.get("type")
+    if isinstance(value, str) and kind in ("integer", "number", "boolean"):
+        text = value.strip()
+        coerced: Any = None
+        if kind == "boolean" and text.lower() in ("true", "false"):
+            coerced = text.lower() == "true"
+        elif kind == "integer" and re.fullmatch(r"[+-]?\d+", text):
+            coerced = int(text)
+        elif kind == "number" and re.fullmatch(r"[+-]?(\d+\.?\d*|\.\d+)", text):
+            coerced = float(text) if "." in text else int(text)
+        if coerced is not None and is_valid(coerced, schema):
+            return coerced
+    return None
+
+
 def is_valid(value: Any, schema: Mapping[str, Any] | bool, *, root: Mapping[str, Any] | None = None) -> bool:
     """``True`` when :func:`validate` reports no error."""
     return not validate(value, schema, root=root)
