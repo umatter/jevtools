@@ -204,11 +204,19 @@ def date_format(name: str, description: str | None) -> str | None:
     return None
 
 
+_COLON_LIST = re.compile(r":\s*((?:['\"][^'\"]{1,40}['\"](?:\s*\([^)]{0,40}\))?(?:\s*(?:,|\bor\b|\band\b))*\s*){2,})")
+
+
 def described_values(description: str | None) -> list[str] | None:
     """Values a description states as the only ones allowed ("should be either 'no longer needed' or 'ordered by
     mistake'"): the quoted values after a closed-list cue, at least two. Examples ("such as 'X'") are not."""
     if not description:
         return None
+    listed = _COLON_LIST.search(description)
+    if listed is not None:  # "Comparison operator: 'eq', 'ne', 'gt', …", "Method: 'a' or 'b'": a list after a colon
+        values = [a or b for a, b in _QUOTED.findall(listed.group(1))]
+        if len(set(values)) >= 3 or (len(set(values)) == 2 and re.search(r"\bor\b", listed.group(1))):
+            return list(dict.fromkeys(values))
     cue = _CLOSED_LIST.search(description)
     if cue is None:
         return None
@@ -548,8 +556,9 @@ def infer_slot(
         catalog = x.values
         if x.kind is None:
             kind, reason = "enum", f"x-jev.values catalog {catalog}"
-    if x.source is not None and x.kind is None and kind == "span":
-        kind, reason = "ref", "x-jev.source"
+    declared = x.source is not None and x.kind is None and schema_type(schema) == "string"
+    if declared and kind in ("span", "temporal", "text"):
+        kind, reason = "ref", "x-jev.source"  # a declared source wins over name heuristics ("time" as a column)
     if x.kind is not None:
         kind, reason = x.kind, "x-jev.kind"
     description = schema.get("description")

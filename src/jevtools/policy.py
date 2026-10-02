@@ -93,6 +93,10 @@ class ToolPolicy(_Section):
     hints_skip_search: bool = True
     """No record hints when the request carries a search cue ("find", "is there"): the user wants to
     know which records exist, and naming the matches pushed such requests to open one (DECISIONS)."""
+    shortlist: int = 40
+    """A catalog with more tools than this offers the ``tool`` Choice only the ``shortlist`` tools whose name and
+    description best match the user's words (BM25): a Choice holds at most 252 options, and a long one dilutes.
+    0 offers every tool."""
     two_stage_min: int = 40
     """A round whose ballot holds more questions than this asks the ``tool`` Choice first and then only the favoured
     tools' questions (one more same-state round): large catalogs cost less. 0 turns it off."""

@@ -2156,3 +2156,24 @@ normalization misses; the blocks had four other causes:
   agreeing and repeating it, and the guard grounding it on the user channel. Check now requires every string and id of
   a user-channel value to be said first by the user, unless a trusted tool's structured fields hold it.
 
+## A 270-tool catalog (prompt2analytics)
+
+Running jevtools over prompt2analytics' MCP tools (270 analytics tools whose arguments are a loaded dataset and its
+columns) needed six generic changes:
+
+- §3.5.3: the `tool` Choice offered every tool, and a Choice holds at most 252 options → a catalog larger than
+  `tool.shortlist` (40) offers only the 40 tools that best match the user's words (BM25 over each tool's name,
+  description and parameter descriptions, with a light suffix stem, a short stopword list and a few common phrasings:
+  "overview" → describe, "how many" → count, "keep only" → filter). On the prompt2analytics bench every right tool
+  was in the shortlist, the worst at rank 17. Catalogs of 40 tools or fewer are unchanged.
+- §4.2.4: a regular plural mention matches a term exactly, just below the identical word ("regions" → `region`,
+  "countries" → `country`); a spaced mention matches an underscored name ("months to churn" → `months_to_churn`).
+- §4.2.2: a digit run with two or more commas whose later groups are not all three digits long is a list, not
+  thousands (`ARIMA(1,1,1)` → 1, 1, 1; `1,234,567` stays one number); a number word before a hyphenated noun counts
+  ("one-period" → 1).
+- §3.3.1: a list of quoted values right after a colon is a closed list ("Comparison operator: 'eq', 'ne', 'gt', …";
+  two values when joined by "or").
+- §3.3.1: an explicit `x-jev.source` on a string parameter makes it a REF slot even when its name suggests a kind
+  (`time` as a column of a survival tool was temporal).
+- Record hints stop before a tool option exceeds `desc_max` (a tool with several record slots overflowed it).
+

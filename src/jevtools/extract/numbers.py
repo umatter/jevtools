@@ -197,6 +197,18 @@ def _hyphen_words(token: Token, locales: Sequence[Locale]) -> int | None:
     return total
 
 
+def _hyphen_compound(token: Token, locales: Sequence[Locale]) -> tuple[int, int] | None:
+    """``one-period`` → ``(1, 3)``: a number word first, then a part that is not one (``forty-five`` is handled by
+    :func:`_hyphen_words`)."""
+    if "-" not in token.text:
+        return None
+    first, rest = token.text.split("-", 1)
+    value = next((loc.number_words[fold(first)] for loc in locales if fold(first) in loc.number_words), None)
+    if value is None or not rest or any(fold(part) in loc.number_words for part in rest.split("-") for loc in locales):
+        return None
+    return value, len(first)
+
+
 def _word_numbers(tokens: Sequence[Token], locales: Sequence[Locale]) -> list[_Num]:
     out: list[_Num] = []
     i = 0
@@ -204,6 +216,12 @@ def _word_numbers(tokens: Sequence[Token], locales: Sequence[Locale]) -> list[_N
         hyphen = _hyphen_words(tokens[i], locales)
         if hyphen is not None:
             out.append(_Num(Decimal(hyphen), tokens[i].start, tokens[i].end, i + 1, True))
+            i += 1
+            continue
+        compound = _hyphen_compound(tokens[i], locales)
+        if compound is not None:  # "one-period", "two-year": the number word before a hyphenated noun
+            value, length = compound
+            out.append(_Num(Decimal(value), tokens[i].start, tokens[i].start + length, i + 1, True))
             i += 1
             continue
         found = _word_value(tokens[i], locales)
@@ -258,7 +276,7 @@ def _digit_numbers(source: SourceText, locale: Locale) -> list[_Num]:
     spans += [m.span(2) for m in _GLUED_CODE_RE.finditer(text) if m.group(1) in currencies()]
     for match in _DIGITS_RE.finditer(text):
         if not any(start < match.end() and match.start() < end for start, end in spans):
-            spans.append(match.span())
+            spans += _list_parts(match)
     out: list[_Num] = []
     for start, end in sorted(spans):
         value = parse_number(text[start:end], locale.decimal)
@@ -269,6 +287,24 @@ def _digit_numbers(source: SourceText, locale: Locale) -> list[_Num]:
             after = len(tokens)  # the hour of "1:30": no unit attaches to a digit run inside a larger token
         value, end, after = _magnitude(tokens, value, end, after)
         out.append(_Num(value, start, end, after, False))
+    return out
+
+
+_LIST_RE = re.compile(r"\d+(?:,\d+){2,}")
+
+
+def _list_parts(match: re.Match[str]) -> list[tuple[int, int]]:
+    """A digit run's spans: itself, or each part of a comma list (``ARIMA(1,1,1)``, ``2,1,0``: two or more commas,
+    not every later group three digits long, so not thousands like ``1,234,567``)."""
+    text = match.group(0)
+    groups = text.split(",")
+    if not _LIST_RE.fullmatch(text) or all(len(g) == 3 for g in groups[1:]):
+        return [match.span()]
+    out: list[tuple[int, int]] = []
+    pos = match.start()
+    for group in groups:
+        out.append((pos, pos + len(group)))
+        pos += len(group) + 1
     return out
 
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -44,6 +45,7 @@ from jevtools.kinds.base import ResolveContext, get_resolver, resolve_default
 from jevtools.policy import Policy, Tier
 from jevtools.prompts import Binding, render_call
 from jevtools.qid import TOOL_QID
+from jevtools.sources.retrieval import BM25
 from jevtools.spec.catalog import Catalog
 from jevtools.spec.constraints import ConstraintContext
 from jevtools.spec.infer import SECRET_NAMES
@@ -154,6 +156,9 @@ def compile_round(
         if reply_options is None:
             reply_options = pending.state.get("options")
     considered = [] if choice == "none" else [catalog.get(named)] if named else list(catalog)
+    if not named and pending is None and 0 < policy.tool.shortlist < len(considered):
+        considered = shortlist_tools(considered, ctx, policy.tool.shortlist)
+        notes.append(f"tool shortlist: {len(considered)} of {len(catalog)} tools")
     builder = _Builder(catalog, rc, considered, choice, speculate_only, extra_candidates or {}, forced=forced,
                        loop=loop)  # fmt: skip
     questions, tools = builder.build(policy)
@@ -189,6 +194,63 @@ def merge_ballots(base: Ballot, extra: Ballot) -> Ballot:
 # --------------------------------------------------------------------------------------------------------------------
 # tool_choice and state cuts
 # --------------------------------------------------------------------------------------------------------------------
+
+
+_STEM_SUFFIXES = ("izations", "ization", "ations", "ation", "ings", "ing", "ions", "ion", "ies", "es", "ed", "s")
+
+
+_STOP = frozenset({"a", "an", "the", "of", "on", "in", "to", "for", "and", "or", "by", "with", "is", "are", "be",
+                   "me", "my", "i", "it", "this", "that", "please", "can", "you", "give", "show", "run", "do", "does",
+                   "what"})  # fmt: skip
+
+
+def _stem(word: str) -> str:
+    """A light suffix stem: ``regression`` / ``regress`` → ``regress``, ``counts`` → ``count``, ``ies`` → ``y``."""
+    for suffix in _STEM_SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4 and not (suffix == "s" and word.endswith("ss")):
+            return word[: -len(suffix)] + ("y" if suffix == "ies" else "")
+    return word
+
+
+def _terms(text: str) -> list[str]:
+    return [_stem(w) for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _STOP]
+
+
+_QUERY_SYNONYMS: dict[str, str] = {
+    "overview": "describe summary",
+    "summar": "describe summary",
+    "how many": "count",
+    "frequenc": "count",
+    "keep only": "filter select",
+    "only the": "filter",
+    "where ": "filter",
+    "older than": "filter",
+    "greater than": "filter",
+    "less than": "filter",
+    "plot": "viz chart",
+    "chart": "viz plot",
+    "graph": "viz plot",
+}
+"""Common request phrasings and the words tool descriptions use for them (the shortlist only)."""
+
+
+def _shortlist_order(tools: Sequence[ToolSpec], ctx: Context) -> list[str]:
+    """Tool names, best match for the user's words first (BM25 over each tool's name, description and parameter
+    descriptions; catalog order on ties)."""
+    docs = [_terms(" ".join([t.name.replace("_", " ")] * 2 + [t.description or ""]
+                            + [f"{p.name.replace('_', ' ')} {p.description or ''}" for p in t.slots]))
+            for t in tools]  # fmt: skip
+    text = " ".join(turn.text for turn in ctx.user_turns if turn.text).lower()
+    query = _terms(text) + [w for phrase, extra in _QUERY_SYNONYMS.items() if phrase in text for w in _terms(extra)]
+    index = BM25(docs)
+    return [tools[i].name for i in sorted(range(len(tools)), key=lambda i: (-index.score(query, i), i))]
+
+
+def shortlist_tools(tools: Sequence[ToolSpec], ctx: Context, k: int) -> list[ToolSpec]:
+    """The ``k`` tools that best match the user's words (:func:`_shortlist_order`), in catalog order: a catalog
+    larger than ``tool.shortlist`` is not offered whole in the ``tool`` Choice."""
+    keep = set(_shortlist_order(tools, ctx)[:k])
+    return [t for t in tools if t.name in keep]
 
 
 def parse_tool_choice(tool_choice: ToolChoice | None, catalog: Catalog) -> tuple[str, str | None]:
@@ -494,6 +556,7 @@ class _Builder:
         hints: dict[str, str] = {}
         for tool in self.considered:
             text = ""
+            budget = self.rc.limits.desc_max - len(_tool_text(tool))  # the option's text must stay within desc_max
             for slot in tool.slots:
                 pool = self.pools.get((tool.name, slot.path))
                 if slot.kind != "ref" or slot.stakes != "identity" or len(slot.path) != 1 or pool is None:
@@ -502,7 +565,9 @@ class _Builder:
                 if anchored:
                     order = sorted(anchored, key=lambda t: (tuple(-x for x in anchor_rank(t[1].prov)), t[0]))
                     top = [c.label for _, c in order[:k]]
-                    text += templates.tool_matches_text(slot.noun, top)
+                    hint = templates.tool_matches_text(slot.noun, top)
+                    if len(text) + len(hint) <= budget:
+                        text += hint
             if text:
                 hints[tool.name] = text
         return hints

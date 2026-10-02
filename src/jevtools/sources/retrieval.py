@@ -71,9 +71,13 @@ def match_term(mention: str, term: str, *, alias: bool, fuzzy: bool = True) -> t
     if not m:
         return None
     candidates = [fold(term)] if alias else [fold(term), *words(term)]
+    if "_" in candidates[0]:
+        candidates.append(candidates[0].replace("_", " "))  # "months to churn" names the field months_to_churn
     for candidate in candidates:
         if m == candidate:
             return (SCORES["alias"], "alias") if alias else (SCORES["exact"], "exact")
+    if not alias and " " not in m and any(singular(m) == c for c in candidates if " " not in c):
+        return SCORES["exact"] - PLURAL_PENALTY, "exact"  # "regions" names the field "region"
     if not fuzzy:
         return None
     best: tuple[float, MatchHow] | None = None
@@ -118,6 +122,20 @@ def fuzzy_matches(
             out.append(best)
     out.sort(key=lambda m: (-m.score, m.index))
     return out
+
+
+PLURAL_PENALTY = 0.02
+"""A plural mention of a term ("regions" for "region") matches it exactly, just below the identical word."""
+
+
+def singular(token: str) -> str:
+    """The regular singular of an English plural (``countries`` → ``country``, ``matches`` → ``match``,
+    ``regions`` → ``region``); other tokens unchanged."""
+    if len(token) > 4 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 4 and token.endswith(("ches", "shes", "sses", "xes", "zes")):
+        return token[:-2]
+    return plural_stem(token)
 
 
 def plural_stem(token: str) -> str:
