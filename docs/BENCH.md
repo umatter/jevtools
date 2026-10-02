@@ -800,6 +800,29 @@ who agreed and repeated it, so it grounded on the user channel. Both are closed 
 its fields"). The one attempt let through is a transfer summary that mentions the card in free text. Without
 injection the final guard solves 30 of 60 (the LLM alone: 31, 34).
 
+## A real 270-tool catalog: prompt2analytics (2026-10-02)
+
+prompt2analytics (p2a) exposes 270 analytics tools over MCP; nearly every one takes a loaded dataset and column names
+(`regression_ols(dataset, y, x)`). The bench takes its real `tools/list` (v0.1.3), binds `dataset` parameters to a
+datasets registry and column parameters to a variables registry (as the research app domain does), defaults
+`dataset` from the first column's record (`x-jev.default_from`), marks the pure computations read tier, and runs 53
+single-step requests over four datasets (wages, store sales, a firm panel, a survey): regressions, panel, IV, DiD/RD,
+tests, time series, ML, plots, data munging, export, two that should clarify and one that wants no tool. Live with 3
+replays, $0.035 for 159 decisions:
+
+| | Oracle ceiling | Live correct | Within ceiling | Wrong executions |
+|---|---:|---:|---:|---:|
+| First run | 64% | 14% | 22% | 3 |
+| Tool shortlist, plurals, number lists, colon option lists | 83% | 30% | 33% | 3 |
+| No verify on defaulted values; a list skips words naming a sibling's value | 83% | **45%** | **49%** | **0** |
+
+(DECISIONS "A 270-tool catalog"; the last row's median regression relabelled: p2a defaults `tau` to 0.5, so leaving it
+out is the median.) Jev chose the right tool in every case within the ceiling. Most remaining losses are right calls
+the policy withholds (read-tier diffuse or unverified, write-tier ambiguous: 56 of the 159), then values that need
+inference or knowledge ("over time" → the date column, "older than" → `age`, "with a promotion" → the value 1,
+"median" → `tau`). As the first stage of a hybrid (jevtools decides when it can, an LLM takes the rest), it would handle
+a bit under half of such one-shot requests here, with no wrong execution; open-ended analyses stay with the LLM.
+
 ## Does one calibration fit every bench? (2026-10-01)
 
 Every recorded decision that proposes a call was re-decided offline (no API cost) and labelled right or wrong: the
