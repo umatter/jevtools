@@ -137,13 +137,132 @@ def agent_class() -> Any:
     return JevtoolsAgent
 
 
+BLOCKED = (
+    "Not executed: the {tool} call is not supported by the conversation ({reason}). Look the missing value up with a "
+    "tool or ask the customer, then try again."
+)
+
+
+def guard_agent_class() -> Any:
+    """The ``GuardAgent`` class: τ²'s own LLM agent plans and proposes every call; read calls pass through; each other
+    call is checked by jevtools (:meth:`jevtools.router.Router.check`) before it runs. ``execute`` runs it with
+    jevtools' bound arguments, ``confirm`` shows jevtools' card (the customer's reply resumes it), anything else
+    returns a tool error to the LLM, which re-plans (twice at most, then it must answer in text)."""
+    from tau2.agent.llm_agent import LLMAgent  # type: ignore[import-not-found]
+    from tau2.data_model.message import (
+        AssistantMessage,
+        MultiToolMessage,
+        ToolCall,
+        ToolMessage,
+        UserMessage,
+    )
+    from tau2.utils.llm_utils import generate  # type: ignore[import-not-found]
+
+    class GuardAgent(LLMAgent):  # type: ignore[misc]
+        def __init__(self, tools: Sequence[Any], domain_policy: str, *, backend: Any, llm: str,
+                     trust: str = "reads", llm_args: dict[str, Any] | None = None) -> None:  # fmt: skip
+            super().__init__(tools=list(tools), domain_policy=domain_policy, llm=llm, llm_args=llm_args or {})
+            schemas = [deepcopy(t.openai_schema) for t in tools]
+            names = [s["function"]["name"] for s in schemas]
+            self.reads = {n for n in names if n.startswith(READ_PREFIXES)}
+            self.trusted = tuple(self.reads) if trust == "reads" else ()
+            self.router = Router(schemas, backend=backend)
+            self.pending: Any = None
+            self.jev_cost = 0.0
+            self.checks: list[dict[str, Any]] = []
+
+        def _context(self, state: Any) -> Context:
+            turns: list[dict[str, str]] = []
+            obs: list[Observation] = []
+            calls: dict[str, Any] = {}
+            for m in state.messages:
+                if isinstance(m, ToolMessage):
+                    call = calls.pop(m.id, None)
+                    obs.append(Observation(step=len(obs) + 1, tool=call.name if call else "?",
+                                           arguments=dict(call.arguments) if call else {}, content=_content(m.content),
+                                           status="error" if m.error else "ok"))  # fmt: skip
+                    continue
+                for tc in getattr(m, "tool_calls", None) or []:
+                    calls[tc.id] = tc
+                if getattr(m, "role", None) in ("user", "assistant") and getattr(m, "content", None):
+                    turns.append({"role": str(m.role), "content": str(m.content)})
+            return Context(messages=turns, observations=obs, now=NOW, tz="America/New_York", locale="en",
+                           trusted_tools=self.trusted)  # fmt: skip
+
+        def _llm(self, state: Any, *, tools: bool = True) -> Any:
+            return generate(model=self.llm, tools=self.tools if tools else None,
+                            messages=state.system_messages + state.messages, call_name="agent_response",
+                            **self.llm_args)  # fmt: skip
+
+        def generate_next_message(self, message: Any, state: Any) -> tuple[Any, Any]:
+            if isinstance(message, MultiToolMessage):
+                state.messages.extend(message.tool_messages)
+            else:
+                state.messages.append(message)
+            if self.pending is not None and isinstance(message, UserMessage):
+                ctx = self._context(state)
+                decision = self.router.resume(self.pending, reply=str(message.content), context=ctx)
+                self.pending = None
+                self.jev_cost += decision.usage.cost_usd or 0.0
+                reply = self._act(decision, None, state)
+                if reply is not None:
+                    return reply, state
+            for _ in range(3):
+                proposal = self._llm(state)
+                writes = [tc for tc in proposal.tool_calls or [] if tc.name not in self.reads]
+                if not writes:
+                    state.messages.append(proposal)
+                    return proposal, state
+                tc = writes[0]
+                ctx = self._context(state)
+                decision = self.router.check(ctx.messages, {"name": tc.name, "arguments": dict(tc.arguments)},
+                                             context=ctx, mode="loop")  # fmt: skip
+                self.jev_cost += decision.usage.cost_usd or 0.0
+                self.checks.append({"tool": tc.name, "outcome": str(decision.outcome), "rule": decision.rule,
+                                    "proposed": dict(tc.arguments),
+                                    "bound": dict(decision.call.arguments) if decision.call else None})  # fmt: skip
+                reply = self._act(decision, tc, state)
+                if reply is not None:
+                    return reply, state
+                state.messages.append(AssistantMessage(role="assistant", content=None, tool_calls=[tc]))
+                slot = decision.bottleneck.slot if decision.bottleneck is not None else None
+                if decision.rule.startswith("C1") and slot:
+                    reason = f"the value for '{slot}' was neither given by the customer nor returned by a lookup tool"
+                else:
+                    reason = decision.prompt.text if decision.prompt and decision.prompt.text else decision.rule
+                state.messages.append(ToolMessage(id=tc.id, role="tool", content=BLOCKED.format(tool=tc.name,
+                                                  reason=reason), requestor="assistant", error=True))  # fmt: skip
+            final = self._llm(state, tools=False)
+            state.messages.append(final)
+            return final, state
+
+        def _act(self, decision: Any, tc: Any, state: Any) -> Any:
+            """The message for an ``execute`` (the bound call) or a ``confirm`` (the card); ``None`` to block."""
+            if decision.outcome is Outcome.EXECUTE and decision.call is not None:
+                call_id = tc.id if tc is not None else f"jev_{len(self.checks)}"
+                bound = ToolCall(id=call_id, name=decision.call.name, arguments=dict(decision.call.arguments))
+                out = AssistantMessage(role="assistant", content=None, tool_calls=[bound])
+                state.messages.append(out)
+                return out
+            if decision.outcome is Outcome.CONFIRM and decision.prompt and decision.prompt.text:
+                self.pending = decision.pending
+                out = AssistantMessage(role="assistant", content=decision.prompt.text)
+                state.messages.append(out)
+                return out
+            return None
+
+    return GuardAgent
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run τ² tasks with the jevtools agent and/or τ²'s ``llm_agent`` (same LLM, same simulated customer)."""
     parser = argparse.ArgumentParser(prog="python -m jevtools.bench.tau2_agent", description=main.__doc__)
     parser.add_argument("--domain", default="retail")
     parser.add_argument("--tasks", type=int, default=20, help="N tasks of the domain, from --start")
     parser.add_argument("--start", type=int, default=0, help="index of the first task")
-    parser.add_argument("--agent", choices=("jevtools", "llm", "both"), default="both")
+    parser.add_argument("--agent", choices=("jevtools", "llm", "guard", "both"), default="both",
+                        help="jevtools decides every call; llm: τ²'s llm_agent; guard: the LLM plans, jevtools checks "
+                             "every non-read call; both: jevtools and llm")  # fmt: skip
     parser.add_argument("--llm", default="openrouter/openai/gpt-4.1-mini", help="the agent's LLM (litellm id)")
     parser.add_argument("--user-llm", default="openrouter/openai/gpt-4.1-mini", help="the simulated customer")
     parser.add_argument("--trust", choices=("none", "reads"), default="reads")
@@ -167,7 +286,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     for task in tasks:
         for kind in agents:
             env = build_environment(args.domain)
-            if kind == "jevtools":
+            if kind == "guard":
+                agent = guard_agent_class()(env.get_tools(), env.get_policy(), backend=jev, llm=args.llm,
+                                            trust=args.trust, llm_args={"temperature": 0.0})  # fmt: skip
+            elif kind == "jevtools":
                 escalator = (OpenAICompatibleEscalator(args.escalator, extra_body={"usage": {"include": True}})
                              if args.escalator else None)  # fmt: skip
                 agent = agent_class()(env.get_tools(), env.get_policy(), backend=jev,
@@ -190,6 +312,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reward, agent_cost, user_cost, error = 0.0, None, None, f"{type(exc).__name__}: {exc}"[:300]
             row = {"task": str(task.id), "agent": kind, "reward": reward, "agent_cost": agent_cost,
                    "user_cost": user_cost, "error": error}  # fmt: skip
+            if kind == "guard":
+                row.update(jev_cost=agent.jev_cost, checks=agent.checks)
             if kind == "jevtools":
                 row.update(jev_cost=agent.jev_cost, writer_cost=agent.writer.cost_usd,
                            drafter_cost=getattr(agent.router.escalator, "cost_usd", 0.0) if agent.router.escalator

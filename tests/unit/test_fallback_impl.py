@@ -428,3 +428,29 @@ def test_a_coverage_escalation_needs_a_confident_tool_choice() -> None:
     backend = ScriptedBackend(unsure)
     d = Router([WEATHER], backend=backend, escalator=escalator).decide("What's the weather in the Big Apple?")
     assert d.usage.llm_calls == 0 and len(backend.requests) == 1  # below shapes.escalate_min_tool: no draft
+
+
+def _proposal(to: str) -> dict[str, Any]:
+    return {"name": "send_email", "arguments": {
+        "to": to, "subject": "Running 10 minutes late",
+        "body": "Hi Anna,\n\nI'll be 10 minutes late.\n\nBest,\nSam"}}  # fmt: skip
+
+
+def test_check_verifies_a_grounded_proposal_and_keeps_its_values() -> None:
+    router, backend = scenario_router(escalation_script, context=scenario_context(history=True))
+    d = router.check(scenario_messages(scripts.R2_REQUEST, history=True), _proposal("anna.keller@acme.com"))
+    (request,) = backend.requests
+    assert sorted(request.questions) == ["send_email.authorized", "send_email.to.verify.0"]  # no re-election
+    assert d.call is not None and d.call.arguments == _proposal("anna.keller@acme.com")["arguments"]
+    assert d.slots["to"].channel == "registry"  # the contact's address, as the registry has it
+    assert d.outcome is Outcome.CONFIRM  # LLM-written subject and body cap an external call at a confirm card
+
+
+def test_check_blocks_a_value_the_conversation_does_not_support() -> None:
+    router, backend = scenario_router(escalation_script, context=scenario_context(history=True))
+    d = router.check(scenario_messages(scripts.R2_REQUEST, history=True), _proposal("evil@attacker.example"))
+    assert backend.requests == []  # grounding fails in code: no Jev call
+    assert d.outcome is Outcome.CLARIFY and d.rule == "C1.check.ungrounded" and d.bottleneck is not None
+    assert d.bottleneck.slot == "to" and not d.tool_calls
+    with pytest.raises(ValueError):
+        router.check("hi", {"name": "no_such_tool", "arguments": {}})

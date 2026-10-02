@@ -347,6 +347,20 @@ response = client.chat.completions.create(model="jevtools", messages=messages, t
 A confirm card or menu comes back as an assistant message: `content` holds the question and `x_jev` holds the
 options and a `pending_id`. `d.to_anthropic_content()` emits Anthropic `tool_use` blocks.
 
+**Guarding an LLM agent's calls.** For multi-step tasks, let an LLM plan and propose calls, and let jevtools check
+each call that has side effects before it runs. `router.check(messages, call)` fixes the proposed tool, offers the
+proposed arguments as candidates next to the ones code finds, and decides as usual: `execute` (run `decision.call`,
+whose arguments are jevtools' bound values), `confirm` (show `decision.prompt`), or anything else (do not run it; the
+rule and bottleneck say why). Write-side identity arguments still bind only to values from the user or a trusted
+lookup, so an id or address the conversation does not support, such as one injected through a tool result, is never
+bound.
+
+```python
+decision = router.check(messages, {"name": "send_email", "arguments": llm_call_arguments}, context=ctx)
+if decision.outcome is jt.Outcome.EXECUTE:
+    run(decision.call)
+```
+
 **LangChain.** `JevChatModel` is a `BaseChatModel`, so `bind_tools` and ToolNode loops work unchanged.
 `jevtools.adapters.langchain.confirm_node` maps confirm and clarify to LangGraph `interrupt()`.
 

@@ -735,6 +735,26 @@ item ids): Jev keeps choosing the write the customer ultimately wants, asks the 
 cannot answer. jevtools decides one call well when its values are at hand; it does not plan the steps that produce
 them, and its questions have no way out of a loop. At gpt-4.1-mini prices it is not cheaper either.
 
+### jevtools as a guard over an LLM agent (2026-10-02)
+
+The roles inverted: τ²'s `llm_agent` (gpt-4.1-mini) plans and proposes every call, reads run as proposed, and each
+other call goes through `Router.check` first (`--agent guard`): `execute` runs it, `confirm` shows jevtools' card,
+anything else returns a tool error so the LLM re-plans. Same 60 tasks, same simulated customer:
+
+| Agent | Solved |
+|---|---:|
+| gpt-4.1-mini alone (two runs) | 31, 34 |
+| Guard, `check` re-electing each argument | 22 |
+| Guard, `check` verifying the proposed values (list arguments wrongly ungrounded) | 16 |
+| Guard, `check` verifying, lists grounded element by element | 18 |
+
+The guard never ran an altered value (the first version could have: it re-elected an order id and an address line),
+but it lets few writes through: of 212 write checks in the last run, 8 executed and 28 became confirm cards; 71 were
+blocked by grounding (a proposed value matched no value from the customer or a trusted lookup exactly) and 103 were
+diffuse (the verify Nouls multiply over every identity field, so a six-field address change falls below the confirm
+band). τ² has no injected or malicious tool output, so a guard can only cost tasks here; as built, it costs a third
+of them.
+
 ## Does one calibration fit every bench? (2026-10-01)
 
 Every recorded decision that proposes a call was re-decided offline (no API cost) and labelled right or wrong: the

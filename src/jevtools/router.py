@@ -28,9 +28,9 @@ from typing import Any
 
 from jevtools.backends.base import Backend
 from jevtools.backends.errors import BackendError, JevProtocolError, JevValidationError
-from jevtools.ballot import Ballot, BallotQuestion
+from jevtools.ballot import Ballot, BallotOption, BallotQuestion
 from jevtools.budget import TokenEstimator
-from jevtools.candidates import CANCEL, Candidate, Channel, Pool, display_value, value_key
+from jevtools.candidates import CANCEL, Candidate, Channel, Pool, display_value, least_trusted, value_key
 from jevtools.canonical import jsonable, sha256_of
 from jevtools.confidence import Composition, IsotonicCalibrator, confidence
 from jevtools.context import Context, Message, Mode, Turn
@@ -63,7 +63,8 @@ from jevtools.decode import (
 from jevtools.errors import PendingScopeError
 from jevtools.fallback import Escalator, FillCandidate, Filler, FillRequest, ObservationPreview, ProposedCall, TextLLM
 from jevtools.feedback import FeedbackLog, label_of
-from jevtools.kinds.base import ResolveContext, get_resolver
+from jevtools.kinds.base import ResolveContext, get_resolver, resolve_default
+from jevtools.kinds.ref import RefResolver
 from jevtools.plan import (
     PoolKey,
     RoundPlan,
@@ -106,7 +107,7 @@ from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.spec.schema import fit_schema, validate
 from jevtools.trace import RoundRecord, StoreBodies, Trace, build_trace, call_record
 from jevtools.validate import Limits, cached_limits
-from jevtools.wire import Answer, ChoiceAnswer, DecisionRequest, DecisionResponse
+from jevtools.wire import Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer
 
 Revalidator = Callable[[ToolDecode, Context], list[str]]
 """TOCTOU hook: problems that forbid executing a delayed call (empty list = still valid)."""
@@ -362,6 +363,85 @@ class Router:
         """Async :meth:`decide` (split calls run concurrently with ``asyncio.gather``)."""
         session = _Session(ctx=self.context_for(messages, context), mode=mode, tool_choice=tool_choice)
         return await self._adrive(self._flow(session))
+
+    def check(
+        self,
+        messages: str | Sequence[Message | Turn],
+        call: ProposedCall | Mapping[str, Any],
+        *,
+        context: Context | None = None,
+        mode: Mode = "turn",
+    ) -> Decision:
+        """Check a call another component proposed (an LLM agent's tool call), argument values unchanged.
+
+        1. Grounding (code): each proposed value must be an admitted candidate of its slot's pool. Write-side identity
+           slots admit only values from the user or a trusted source, so an id or address the conversation does not
+           support fails here (rule ``C1.check.ungrounded``, bottleneck: the argument), as does a missing required
+           argument.
+        2. Verification (Jev, one round): the tool's ``authorized`` Noul and a ``verify`` Noul per proposed identity
+           value ("is this the record the request refers to?").
+        3. The proposed values are bound with their candidates' channels (identity values at their verify
+           probability) and the policy decides: ``execute`` (run ``decision.call``: the proposed arguments),
+           ``confirm`` (show ``decision.prompt``), anything else: do not run it."""
+        proposed = ProposedCall.coerce(call)
+        if proposed is None or proposed.name not in self.catalog:
+            raise ValueError(f"not a call of a known tool: {call!r}")
+        named: ToolChoice = {"type": "function", "function": {"name": proposed.name}}
+        session = _Session(ctx=self.context_for(messages, context), mode=mode, tool_choice=named)
+        return self._drive(self._check_flow(session, proposed))
+
+    def _check_flow(self, s: _Session, proposed: ProposedCall) -> Flow:
+        tool = self.catalog.get(proposed.name)
+        plan = self._compile(s, tool_choice=s.tool_choice, extra_candidates=self._drafted(proposed))
+        state = _State(plan=plan, ballot=plan.ballot, answers={}, pools=dict(plan.pools))
+        picks: dict[str, tuple[Any, list[Candidate]]] = {}
+        ungrounded: list[str] = []
+        for slot in tool.slots:
+            if slot.name not in proposed.arguments:
+                if slot.required and resolve_default(tool, slot, s.ctx) is None:
+                    ungrounded.append(slot.name)
+                continue
+            fitted = fit_schema(proposed.arguments[slot.name], slot.json_schema)
+            pool = plan.pools.get((tool.name, slot.path))
+            admitted = {value_key(c.value): c for c in (pool.candidates if pool else [])}
+            # a list is grounded element by element (its pool holds the items); anything else as a whole
+            parts = fitted if slot.kind == "list" and isinstance(fitted, list) else [fitted]
+            matched = [admitted.get(value_key(v)) for v in parts]
+            if fitted is None or any(m is None for m in matched):
+                ungrounded.append(slot.name)
+            else:
+                picks[slot.name] = (fitted, [m for m in matched if m is not None])
+        if ungrounded:
+            s.notes.append(f"check: not supported by the conversation or a trusted source: {', '.join(ungrounded)}")
+            blocked = PolicyResult(outcome=Outcome.CLARIFY, rule=RULE_CHECK_UNGROUNDED, bottleneck=ungrounded[0],
+                                   shape="out_of_pool", ask="open", reason="ungrounded")  # fmt: skip
+            return (yield from self._finish(s, None, blocked, None, proposed=proposed))
+        verify: dict[str, list[BallotQuestion]] = {
+            name: [RefResolver.verify_question(tool, tool.slot(name), BallotOption.from_candidate(c), i)
+                   for i, c in enumerate(found)]
+            for name, (_, found) in picks.items() if tool.slot(name).stakes == "identity"}  # fmt: skip
+        questions = [q for q in plan.ballot.questions if q.tool == tool.name and q.family == "authorized"]
+        questions += [q for qs in verify.values() for q in qs]
+        if questions:
+            ballot = followup_ballot(plan.ballot, questions, mode=plan.ballot.mode, limits=self.round_limits())
+            asked = yield from self._ask(s, ballot, state, merged=False)
+            state.ballot = asked if asked is not None else ballot
+        self._decode(s, state)
+        if state.decoded is not None and state.decoded.decision is not None:
+            rc = replace(state.plan.rc, questions=state.ballot.by_qid)
+            td = state.decoded.decision
+            for name, (value, found) in picks.items():
+                p = 1.0
+                for q in verify.get(name, []):
+                    answer = state.answers.get(q.qid)
+                    p *= answer.noul if isinstance(answer, NoulAnswer) else 0.0
+                channel = least_trusted(*[c.effective_channel for c in found]) if found else Channel.USER
+                label = found[0].label if len(found) == 1 and tool.slot(name).kind != "list" else None
+                td = bind_value(td, name, value, rc, p=p, channel=channel, label=label,
+                                prov={"proposed": True, "from": [c.prov for c in found][:5]})  # fmt: skip
+            state.decoded = with_decision(state.decoded, td)
+        state, result, inp = yield from self._policy_loop(s, state)
+        return (yield from self._finish(s, state, result, inp))
 
     def resume(
         self,
@@ -853,11 +933,7 @@ class Router:
             s.notes.append("escalator proposed a call while Jev is unavailable: not bound")
             return (yield from self._finish(s, state, result, inp, proposed=proposed))
         tool = self.catalog.get(proposed.name)
-        extra = {(tool.name, slot.path): [Candidate(value=fitted, text="Proposed by the escalation assistant.",
-                                                    channel=Channel.GENERATED, prov={"source": "escalator"})]
-                 for name, value in proposed.arguments.items() if name in tool.slot_names
-                 for slot in [tool.slot(name)]
-                 for fitted in [fit_schema(value, slot.json_schema)] if fitted is not None}  # fmt: skip
+        extra = self._drafted(proposed)
         regate = not coverage and self.policy.tool.regate_escalation and s.tool_choice == "auto"
         named = {"type": "function", "function": {"name": tool.name}}
         plan = self._compile(s, tool_choice=s.tool_choice if regate else named, extra_candidates=extra)
@@ -871,6 +947,15 @@ class Router:
             plain = evaluate(inp.model_copy(update={"escalator": False}), self.policy)
             return (yield from self._finish(s, state, plain, inp))
         return (yield from self._finish(s, gate, gated, gate_inp))
+
+    def _drafted(self, proposed: ProposedCall) -> dict[PoolKey, list[Candidate]]:
+        """A proposed call's arguments as ``generated`` candidates of its tool's slots (fitted to each schema)."""
+        tool = self.catalog.get(proposed.name)
+        return {(tool.name, slot.path): [Candidate(value=fitted, text="Proposed by the assistant.",
+                                                   channel=Channel.GENERATED, prov={"source": "escalator"})]
+                for name, value in proposed.arguments.items() if name in tool.slot_names
+                for slot in [tool.slot(name)]
+                for fitted in [fit_schema(value, slot.json_schema)] if fitted is not None}  # fmt: skip
 
     # -- resume -------------------------------------------------------------------------------------------------
 
@@ -1392,6 +1477,10 @@ def _membership(pool: Pool, value: Any, label: str | None) -> Mapping[str, Any] 
             return f"label changed to {match.label!r}"
         return dict(match.attrs)
     return None
+
+
+RULE_CHECK_UNGROUNDED = "C1.check.ungrounded"
+"""``Router.check``: a proposed argument is not an admitted candidate of its slot (or a required one is missing)."""
 
 
 def _sampled(decision_id: str, share: float) -> bool:

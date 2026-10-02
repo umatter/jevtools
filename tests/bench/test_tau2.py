@@ -190,3 +190,25 @@ def test_an_id_list_with_numeric_examples_leaves_out_wordless_phrases() -> None:
     assert pool is not None
     values = [str(c.value) for c in pool.candidates]
     assert "8538875209" in values and all(any(ch.isdigit() for ch in v) for v in values)
+
+
+def test_check_grounds_a_list_argument_element_by_element() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    messages = [{"role": "user", "content": "Return the water bottle from order #W6390527, refund to paypal."}]
+    ctx = Context(messages=messages, observations=[Observation(step=1, tool="get_order_details", content=ORDER)],
+                  trusted_tools=("get_order_details",))  # fmt: skip
+
+    def check(item_ids: list[str]) -> jt.Decision:
+        backend = ScriptedBackend({"*.verify.*": 0.95, "*.authorized": 0.95})
+        call = {"name": RETURN["function"]["name"], "arguments": {
+            "order_id": "#W6390527", "item_ids": item_ids, "payment_method_id": "paypal_7644869"}}  # fmt: skip
+        return Router([RETURN], backend=backend).check(messages, call, context=ctx, mode="loop")
+
+    shown = check(["8538875209"])
+    assert shown.outcome in (jt.Outcome.CONFIRM, jt.Outcome.EXECUTE) and shown.call is not None
+    assert shown.call.arguments["item_ids"] == ["8538875209"]  # verified element by element, kept as proposed
+    invented = check(["8538875209", "1234567890"])
+    assert invented.outcome is jt.Outcome.CLARIFY and invented.rule == "C1.check.ungrounded"
+    assert invented.bottleneck is not None and invented.bottleneck.slot == "item_ids"

@@ -2099,3 +2099,12 @@ Extends "Documentation and final merge":
   write tool; the tool is not speculated (`P6`) and the decision carries no call. They could not execute before
   either; with trusted lookups the rate is 92.5%.
 
+## Checking a proposed call (`Router.check`)
+
+- §4.7: whole-task τ² showed jevtools does not plan the lookups a task needs (BENCH "Full τ² tasks"), so the
+  integration for agents inverts the roles → `Router.check(messages, call)` decides a call another component proposed:
+  the tool is fixed (no `tool` question), the proposed arguments enter the pools as `generated` candidates (fitted to
+  each schema; drafted values count as evidence, as in an escalation gate), and the policy runs unchanged. The
+  allow-lists do the grounding: a write-side identity argument that matches no user or trusted value is not offered,
+  so Jev elects what the conversation supports, or the slot is missing and the call is not executed.
+
