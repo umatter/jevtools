@@ -2102,9 +2102,12 @@ Extends "Documentation and final merge":
 ## Checking a proposed call (`Router.check`)
 
 - §4.7: whole-task τ² showed jevtools does not plan the lookups a task needs (BENCH "Full τ² tasks"), so the
-  integration for agents inverts the roles → `Router.check(messages, call)` decides a call another component proposed:
-  the tool is fixed (no `tool` question), the proposed arguments enter the pools as `generated` candidates (fitted to
-  each schema; drafted values count as evidence, as in an escalation gate), and the policy runs unchanged. The
-  allow-lists do the grounding: a write-side identity argument that matches no user or trusted value is not offered,
-  so Jev elects what the conversation supports, or the slot is missing and the call is not executed.
+  integration for agents inverts the roles → `Router.check(messages, call)` decides a call another component proposed,
+  its values unchanged: (1) grounding in code: each proposed value (each element of a list) must be an admitted
+  candidate of its slot's pool, which for write-side identity slots means a value from the user or a trusted lookup;
+  otherwise the call is blocked (`C1.check.ungrounded`, bottleneck: the argument); (2) one Jev round with the tool's
+  `authorized` Noul and a `verify` Noul per proposed identity value (per element for lists); (3) the values are bound
+  with their candidates' channels at their verify probability and the policy decides. A first version re-elected every
+  argument among the pool, which could replace a right order id or address line with another; it was dropped. Live as
+  a guard over an LLM agent on τ², both versions cost tasks (BENCH "jevtools as a guard over an LLM agent").
 

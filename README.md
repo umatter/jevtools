@@ -351,9 +351,10 @@ options and a `pending_id`. `d.to_anthropic_content()` emits Anthropic `tool_use
 each call that has side effects before it runs. `router.check(messages, call)` fixes the proposed tool, offers the
 proposed arguments as candidates next to the ones code finds, and decides as usual: `execute` (run `decision.call`,
 whose arguments are jevtools' bound values), `confirm` (show `decision.prompt`), or anything else (do not run it; the
-rule and bottleneck say why). Write-side identity arguments still bind only to values from the user or a trusted
-lookup, so an id or address the conversation does not support, such as one injected through a tool result, is never
-bound.
+rule and bottleneck say why). The proposed values are never changed: each identity argument must match a value from
+the user or a trusted lookup (else the call is blocked, naming the argument), and Jev verifies each one. On τ² this
+guard is still too strict: it blocked or re-confirmed most right writes and solved 18 of 60 tasks against 31–34 for
+the LLM alone (docs/BENCH.md).
 
 ```python
 decision = router.check(messages, {"name": "send_email", "arguments": llm_call_arguments}, context=ctx)
