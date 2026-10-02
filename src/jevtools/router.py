@@ -414,6 +414,10 @@ class Router:
             # a list is grounded element by element (its pool holds the items); anything else as a whole
             parts = fitted if slot.kind == "list" and isinstance(fitted, list) else [fitted]
             matched = [admitted.get(value_key(v)) or _composed(v, sources) for v in parts]
+            # a value the user only repeated after the assistant said it is the assistant's, not the user's
+            echoed = [m is not None and m.effective_channel is Channel.USER and _echoed(m.value, s.ctx, sources)
+                      for m in matched]  # fmt: skip
+            matched = [None if e else m for m, e in zip(matched, echoed, strict=True)]
             if fitted is None or any(m is None for m in matched):
                 ungrounded.append(slot.name)
                 offered = [display_value(c.value) for c in (pool.candidates if pool else [])][:6]
@@ -1550,6 +1554,26 @@ def _grounding_sources(ctx: Context) -> tuple[str, set[str]]:
             values |= {_norm(v) for key, v in _leaves(part) if v is not None and trusted_leaf(key, str(v))}
             values |= {_norm(k) for k in _keys(part)}
     return user, values
+
+
+def _echoed(value: Any, ctx: Context, sources: tuple[str, set[str]]) -> bool:
+    """Whether the user only repeated a value an assistant turn introduced (a planted id the agent relayed and the
+    user agreed to, or one the agent made up): some string or id of it is said first by the assistant and is not
+    among a trusted tool's structured values."""
+    _, trusted = sources
+    turns = [(t.role, f" {_norm(t.text)} ") for t in ctx.messages if t.role in ("user", "assistant") and t.text]
+    for _key, leaf in _leaves(value):
+        if leaf is None or isinstance(leaf, bool):
+            continue
+        if isinstance(leaf, (int, float)) and len(str(abs(int(leaf)))) < 4:
+            continue
+        text = _norm(leaf)
+        if not text or text in trusted:
+            continue
+        first = next((role for role, said in turns if f" {text} " in said), None)
+        if first == "assistant":
+            return True
+    return False
 
 
 def _date_forms(text: str) -> list[str]:

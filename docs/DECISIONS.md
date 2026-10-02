@@ -2151,4 +2151,8 @@ normalization misses; the blocks had four other causes:
   returns the calls to run and `tool` refusals naming the unsupported value; read tools pass; LangChain tools are
   accepted; `GuardedToolNode` is the LangGraph node. A grounded critical-tier call is allowed with
   `needs_confirmation` (the guard has no memory of the user's "yes", so blocking it would loop).
+- A value the user only repeated after an assistant turn introduced it is not the user's (`router._echoed`): the τ²
+  injection run showed the agent relaying a planted `credit_card_8765432` to the customer, the simulated customer
+  agreeing and repeating it, and the guard grounding it on the user channel. Check now requires every string and id of
+  a user-channel value to be said first by the user, unless a trusted tool's structured fields hold it.
 
