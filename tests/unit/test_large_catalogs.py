@@ -68,3 +68,40 @@ def test_a_declared_source_wins_over_a_temporal_name() -> None:
             "parameters": {"type": "object", "properties": {"time": column}}}}  # fmt: skip
     assert Catalog.from_openai([tool])["kaplan_meier"].slot("time").kind == "ref"
     assert infer_slot("time", {"type": "string"}).kind == "temporal"
+
+
+def test_a_late_default_that_decides_the_value_is_flagged_and_not_verified() -> None:
+    from jevtools.decode import _verifies
+    from jevtools.kinds.base import LATE_DEFAULT, SlotResult
+
+    pending = SlotResult(path=("dataset",), kind="ref", stakes="identity", dist={LATE_DEFAULT: 0.8, '"wages"': 0.15},
+                         values={'"wages"': "wages"}, value="wages", shape="ok", factor=0.8)  # fmt: skip
+    bound = pending.bind_late_default("survey", out_of_pool=0.3)
+    assert bound.value == "survey" and "defaulted" in bound.flags
+    mentioned = pending.bind_late_default("wages", out_of_pool=0.3)  # 0.8 default mass > 0.15 real: still defaulted
+    assert "defaulted" in mentioned.flags
+    real = SlotResult(path=("dataset",), kind="ref", stakes="identity", dist={LATE_DEFAULT: 0.1, '"wages"': 0.85},
+                      values={'"wages"': "wages"}, value="wages", shape="ok", factor=0.85)  # fmt: skip
+    assert "defaulted" not in real.bind_late_default("wages", out_of_pool=0.3).flags
+
+    class Q:
+        meta = {"candidate": {"value": "survey"}}
+
+    assert not _verifies(Q(), bound)  # type: ignore[arg-type]
+
+
+def test_an_anchor_naming_a_siblings_value_leaves_the_list() -> None:
+    from jevtools.kinds.base import SlotResult
+    from jevtools.kinds.listing import _names_sibling
+
+    def anchor(dist: dict[str, float], value: object) -> SlotResult:
+        return SlotResult(path=("x",), kind="ref", stakes="identity", dist=dist,
+                          values={k: k.strip('"') for k in dist if k.startswith('"')}, value=value, shape="ok",
+                          factor=max(dist.values()))  # fmt: skip
+
+    taken = {'"firm_id"', '"investment"'}
+    firm = anchor({'"firm_id"': 0.47, "⊥excluded": 0.52}, "⊥excluded")  # "Firm fixed effects": elected EXCLUDE
+    assert _names_sibling(firm, taken)
+    assert _names_sibling(anchor({'"investment"': 0.9}, "investment"), taken)
+    assert not _names_sibling(anchor({'"capital"': 0.98}, "capital"), taken)
+    assert not _names_sibling(firm, set())

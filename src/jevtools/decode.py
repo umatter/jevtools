@@ -295,9 +295,10 @@ def decode_answers(
 
 def decode_order(tool: ToolSpec) -> list[SlotSpec]:
     """The tool's slots in decode order: a qualified slot after the sibling it refines (``new_item_ids`` after
-    ``item_ids``), so its resolver can read that sibling's result from ``rc.cache["slot_results"]``."""
+    ``item_ids``) and lists after scalars (``x`` after ``y``), so a resolver can read its siblings' results from
+    ``rc.cache["slot_results"]``."""
     names = [s.name for s in tool.slots]
-    return sorted(tool.slots, key=lambda s: qualified_base(s.name, names) is not None)
+    return sorted(tool.slots, key=lambda s: (qualified_base(s.name, names) is not None, s.kind == "list"))
 
 
 def decode_tool(
@@ -351,7 +352,9 @@ def decode_tool(
 def _verifies(question: BallotQuestion, result: SlotResult | None) -> bool:
     """Whether a ``verify`` Noul was asked about the value the slot now elects."""
     candidate = (question.meta or {}).get("candidate") or {}
-    return result is not None and not result.is_bottom and value_key(candidate.get("value")) == value_key(result.value)
+    if result is None or result.is_bottom or "defaulted" in result.flags:
+        return False  # a value a declared default supplied is not one the request refers to
+    return value_key(candidate.get("value")) == value_key(result.value)
 
 
 def dropped_result(slot: SlotSpec) -> SlotResult:

@@ -258,15 +258,17 @@ class SlotResult:
         dist = dict(self.dist)
         mass = dist.pop(LATE_DEFAULT)
         key = value_key(value)
+        defaulted = mass > dist.get(key, 0.0)  # the default, not a mention, carries the value
         dist[key] = dist.get(key, 0.0) + mass
         values = {**self.values, key: value}
         entries = dict(self.entries)
         entries.setdefault(
             key, ValueEntry(display=display or display_value(value), channel=channel, prov={"default": True})
         )
+        flags = (*self.flags, "defaulted") if defaulted else self.flags
         return elect(
             path=self.path, kind=self.kind, stakes=self.stakes, dist=dist, values=values, entries=entries,
-            out_of_pool=out_of_pool, qids=self.qids, sentinels=self.sentinels, notes=self.notes, flags=self.flags,
+            out_of_pool=out_of_pool, qids=self.qids, sentinels=self.sentinels, notes=self.notes, flags=flags,
         )  # fmt: skip
 
     def with_(self, **changes: Any) -> SlotResult:

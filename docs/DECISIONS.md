@@ -2176,4 +2176,13 @@ columns) needed six generic changes:
 - §3.3.1: an explicit `x-jev.source` on a string parameter makes it a REF slot even when its name suggests a kind
   (`time` as a column of a survival tool was temporal).
 - Record hints stop before a tool option exceeds `desc_max` (a tool with several record slots overflowed it).
+- §3.8.3: a slot whose value a declared default supplied (`default_from`) carries the flag `defaulted` (the
+  default's mass decided it), and the `verify` gate skips it: verify asks whether a record is the one the request
+  refers to, and a dataset derived from the columns the user named is not referred to. On the prompt2analytics
+  bench such datasets were verified at 0.09–0.47 and right calls became questions. The flag appears in decision
+  documents (golden R3-TOCTOU-changed: the currency defaulted from the account).
+- §3.7.1: list slots decode after the scalar slots of the same tool, and a list leaves out an anchor that names a
+  sibling's elected value, whether it elects that value or its most probable real option is it ("Firm fixed effects
+  regression of investment on …": "Firm" is the entity variable and "investment" the dependent variable, not
+  regressors). Each such anchor's EXCLUDE probability had multiplied into the list's factor.
 

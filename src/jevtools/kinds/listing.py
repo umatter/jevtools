@@ -99,6 +99,30 @@ def _odds(p: float) -> float:
     return q / (1 - q)
 
 
+def _names_sibling(part: SlotResult, taken: set[str]) -> bool:
+    """Whether an anchor's word names a sibling's value: it elects that value, or its most probable real option is
+    one ("Firm fixed effects": the anchor "Firm" is the entity variable, not a regressor)."""
+    if not taken:
+        return False
+    if not part.is_bottom and value_key(part.value) in taken:
+        return True
+    real = [(p, key) for key, p in part.dist.items() if key in part.values]
+    return bool(real) and max(real)[1] in taken
+
+
+def _sibling_values(tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> set[str]:
+    """Values the tool's scalar REF siblings already elected (decoded first: ``decode.decode_order``)."""
+    results = rc.cache.get("slot_results", {})
+    out: set[str] = set()
+    for sibling in tool.slots:
+        if sibling.name == slot.name or sibling.kind != "ref":
+            continue
+        result = results.get((tool.name, sibling.name))
+        if result is not None and not result.is_bottom:
+            out.add(value_key(result.value))
+    return out
+
+
 def _taken(tool: ToolSpec, slot: SlotSpec, rc: ResolveContext) -> set[str]:
     """Values the sibling this slot refines already holds (``item_ids`` for ``new_item_ids``): one value is not both
     the old and the new item."""
@@ -478,15 +502,16 @@ class ListResolver:
             nouls = [(items or [])[int(q.meta["index"])] for q in questions if q.family == "item"]
             scored = [(c, _noul(answers, q.qid)) for c, q in zip(nouls, [q for q in questions if q.family == "item"],
                                                                   strict=True)]  # fmt: skip
-            tally.ranked(scored, n, _taken(tool, slot, rc))
+            tally.ranked(scored, n, _taken(tool, slot, rc) | _sibling_values(tool, slot, rc))
             return tally.result(slot, tuple(q.qid for q in questions), self.normalizer)
+        taken = _sibling_values(tool, slot, rc)
         for q in questions:
             if q.family == "mention":
                 oop = rc.policy.shapes.out_of_pool
-                tally.mention(
-                    f"m{q.meta['anchor']}",
-                    decode_choice(slot.item, q, answers.get(q.qid), out_of_pool=oop, attrs=attrs),
-                )
+                part = decode_choice(slot.item, q, answers.get(q.qid), out_of_pool=oop, attrs=attrs)
+                if _names_sibling(part, taken):
+                    continue  # the word names a sibling's value ("regress investment on …": investment is y)
+                tally.mention(f"m{q.meta['anchor']}", part)
             elif q.family == "item":
                 tally.item((items or [])[int(q.meta["index"])], _noul(answers, q.qid), rc.policy.shapes.flag_band)
             elif q.family == "more":
