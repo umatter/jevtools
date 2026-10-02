@@ -2111,3 +2111,28 @@ Extends "Documentation and final merge":
   argument among the pool, which could replace a right order id or address line with another; it was dropped. Live as
   a guard over an LLM agent on τ², both versions cost tasks (BENCH "jevtools as a guard over an LLM agent").
 
+## What the guard diagnostic changed
+
+A 20-task τ² run logging every blocked check (BENCH "jevtools as a guard over an LLM agent") found no
+normalization misses; the blocks had four other causes:
+
+- §3.2: `summary`, `description`, `note(s)`, `comment(s)` and `explanation` join the content stakes names: a
+  transfer's `summary` is free text the agent writes, but as an identity value it could take only user or trusted
+  values.
+- §3.3.2: `transfer` with a handoff object in the name (agent, human, support, operator, representative, call, chat,
+  conversation) is external, not critical: `transfer_to_human_agents` hands the conversation to a person.
+  `transfer_funds` stays critical.
+- `Router.check` grounds a value no pool holds field by field: each string, and each number of four or more digits,
+  must appear in the user's turns or among a trusted tool's results and arguments (normalized); small numbers are left
+  to the verify Noul. A booking's flight (a search result's number plus the searched date) and passengers the user
+  typed are grounded this way; an id that appears nowhere is still blocked. Once every argument is grounded, the tool
+  counts as viable and speculated (the plan's own pools may not hold such composed values).
+- §4.2: tool-result fields are described with their neighbours' nested objects flattened (`options: color blue, size
+  large`): Jev scored a product variant 0.1–0.5 when it could not see what made it the variant the user asked for.
+- `Router.check(verify=False)`: grounding only, no Jev call. A grounded call executes (`C2.check.grounded`; the
+  critical tier still only confirms), an ungrounded one is blocked. Live on τ² as a guard over gpt-4.1-mini it solved
+  29 of 60 tasks against 31 and 34 for the LLM alone, while every verifying variant solved 15–22. Field grounding
+  then learnt four things from its blocks: an arithmetic expression is grounded when its numbers are, object keys are
+  sources (payment methods keyed by id), a `YYYY-MM-DD` date matches the user's "April 12, 2001", and numbers in
+  quantity fields (`amount`, `price`, `total`, `count`…) are left to verification like small counts.
+

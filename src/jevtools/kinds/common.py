@@ -100,6 +100,24 @@ def mention_prov(m: Mention, **extra: Any) -> dict[str, Any]:
     return prov
 
 
+def _short_scalar(value: Any) -> bool:
+    return isinstance(value, (str, int, float)) and not isinstance(value, bool) and len(str(value)) <= 40
+
+
+def noted(value: Any) -> bool:
+    """Whether a tool-result field can describe its neighbours: a short scalar, or an object of short scalars (a
+    product variant's ``options``)."""
+    return _short_scalar(value) or (isinstance(value, dict) and bool(value)
+                                    and all(_short_scalar(v) for v in value.values()))  # fmt: skip
+
+
+def field_note(name: str, value: Any) -> str:
+    """``price: 235.13``, or a nested object flattened: ``options: color blue, size large``."""
+    if isinstance(value, dict):
+        return f"{name}: " + ", ".join(f"{k} {v}" for k, v in value.items())
+    return f"{name}: {value}"
+
+
 def mention_candidate(
     m: Mention, value: Any, *, display: str | None = None, note: str | None = None, **prov: Any
 ) -> Candidate:

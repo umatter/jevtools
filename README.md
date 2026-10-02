@@ -352,9 +352,10 @@ each call that has side effects before it runs. `router.check(messages, call)` f
 proposed arguments as candidates next to the ones code finds, and decides as usual: `execute` (run `decision.call`,
 whose arguments are jevtools' bound values), `confirm` (show `decision.prompt`), or anything else (do not run it; the
 rule and bottleneck say why). The proposed values are never changed: each identity argument must match a value from
-the user or a trusted lookup (else the call is blocked, naming the argument), and Jev verifies each one. On τ² this
-guard is still too strict: it blocked or re-confirmed most right writes and solved 18 of 60 tasks against 31–34 for
-the LLM alone (docs/BENCH.md).
+the user or a trusted lookup (else the call is blocked, naming the argument), and Jev verifies each one. On τ² the verification
+is too strict (it blocked or re-confirmed most right writes: 15–22 of 60 tasks against 31–34 for the LLM alone), while
+`router.check(messages, call, verify=False)`, grounding only and no model call, solved 29 of 60 and caught a payment id
+the LLM had made up (docs/BENCH.md).
 
 ```python
 decision = router.check(messages, {"name": "send_email", "arguments": llm_call_arguments}, context=ctx)

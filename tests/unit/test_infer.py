@@ -171,6 +171,8 @@ def test_channels_follow_tier_and_declarations() -> None:
     ("name", "kwargs", "tier", "reason"),
     [
         ("do_it", {"risk": "write"}, Tier.WRITE, "x-jev.risk"),
+        ("transfer_to_human_agents", {}, Tier.EXTERNAL, "verb 'transfer' + handoff object"),
+        ("transfer_funds", {}, Tier.CRITICAL, "verb 'transfer'"),
         ("send_email", {"annotations": {"readOnlyHint": True}}, Tier.READ, "annotation readOnlyHint"),
         ("get_x", {"annotations": {"destructiveHint": True}}, Tier.CRITICAL, "annotation destructiveHint"),
         ("get_x", {"annotations": {"openWorldHint": True}}, Tier.EXTERNAL, "annotation openWorldHint"),

@@ -159,9 +159,10 @@ def guard_agent_class() -> Any:
     from tau2.utils.llm_utils import generate  # type: ignore[import-not-found]
 
     class GuardAgent(LLMAgent):  # type: ignore[misc]
-        def __init__(self, tools: Sequence[Any], domain_policy: str, *, backend: Any, llm: str,
-                     trust: str = "reads", llm_args: dict[str, Any] | None = None) -> None:  # fmt: skip
+        def __init__(self, tools: Sequence[Any], domain_policy: str, *, backend: Any, llm: str, trust: str = "reads",
+                     llm_args: dict[str, Any] | None = None, verify: bool = True) -> None:  # fmt: skip
             super().__init__(tools=list(tools), domain_policy=domain_policy, llm=llm, llm_args=llm_args or {})
+            self.verify = verify
             schemas = [deepcopy(t.openai_schema) for t in tools]
             names = [s["function"]["name"] for s in schemas]
             self.reads = {n for n in names if n.startswith(READ_PREFIXES)}
@@ -216,11 +217,16 @@ def guard_agent_class() -> Any:
                 tc = writes[0]
                 ctx = self._context(state)
                 decision = self.router.check(ctx.messages, {"name": tc.name, "arguments": dict(tc.arguments)},
-                                             context=ctx, mode="loop")  # fmt: skip
+                                             context=ctx, mode="loop", verify=self.verify)  # fmt: skip
                 self.jev_cost += decision.usage.cost_usd or 0.0
                 self.checks.append({"tool": tc.name, "outcome": str(decision.outcome), "rule": decision.rule,
                                     "proposed": dict(tc.arguments),
-                                    "bound": dict(decision.call.arguments) if decision.call else None})  # fmt: skip
+                                    "bound": dict(decision.call.arguments) if decision.call else None,
+                                    "bottleneck": decision.bottleneck.slot if decision.bottleneck else None,
+                                    "slot_p": {k: v.p for k, v in decision.slots.items()},
+                                    "C": decision.confidence.call if decision.confidence else None,
+                                    "notes": [n for n in (decision.trace.notes if decision.trace else [])
+                                              if n.startswith("check:")]})  # fmt: skip
                 reply = self._act(decision, tc, state)
                 if reply is not None:
                     return reply, state
@@ -268,6 +274,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--trust", choices=("none", "reads"), default="reads")
     parser.add_argument("--escalator", default=None, help="an OpenRouter model that drafts uncovered values")
     parser.add_argument("--max-steps", type=int, default=60)
+    parser.add_argument(
+        "--guard-verify",
+        choices=("on", "off"),
+        default="on",
+        help="guard: also have Jev verify grounded values (off: grounding in code only)",
+    )
     parser.add_argument("--out", required=True, help="JSON results")
     args = parser.parse_args(argv)
 
@@ -288,7 +300,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             env = build_environment(args.domain)
             if kind == "guard":
                 agent = guard_agent_class()(env.get_tools(), env.get_policy(), backend=jev, llm=args.llm,
-                                            trust=args.trust, llm_args={"temperature": 0.0})  # fmt: skip
+                                            trust=args.trust, llm_args={"temperature": 0.0},
+                                            verify=args.guard_verify == "on")  # fmt: skip
             elif kind == "jevtools":
                 escalator = (OpenAICompatibleEscalator(args.escalator, extra_body={"usage": {"include": True}})
                              if args.escalator else None)  # fmt: skip

@@ -70,7 +70,21 @@ TITLE_NAMES = frozenset({"subject", "title", "label", "heading", "name"})
 BODY_NAMES = frozenset({"body", "message", "content", "text", "description", "note", "comment"})
 PLACE_NAMES = frozenset({"city", "place", "location", "country", "address", "destination"})
 COSMETIC_STAKES_NAMES = frozenset({"subject", "title", "query", "label"})
-CONTENT_STAKES_NAMES = frozenset({"body", "message", "content", "text"})
+CONTENT_STAKES_NAMES = frozenset(
+    {
+        "body",
+        "message",
+        "content",
+        "text",
+        "summary",
+        "description",
+        "note",
+        "notes",
+        "comment",
+        "comments",
+        "explanation",
+    }
+)
 UNIT_SUFFIXES = {
     "_minutes": "minute", "_mins": "minute", "_hours": "hour", "_seconds": "second", "_secs": "second",
     "_days": "day", "_ms": "millisecond", "_pct": "percent", "_percent": "percent", "_bytes": "byte",
@@ -775,6 +789,25 @@ def _over_people(slot: SlotSpec, sources: Sequence[Any]) -> bool:
     return False
 
 
+HANDOFF_OBJECTS = frozenset(
+    {
+        "agent",
+        "agents",
+        "human",
+        "humans",
+        "support",
+        "operator",
+        "operators",
+        "representative",
+        "representatives",
+        "call",
+        "chat",
+        "conversation",
+    }
+)
+"""A ``transfer`` of one of these hands the conversation to a person (external), not money (critical)."""
+
+
 def infer_tier(
     name: str,
     *,
@@ -795,6 +828,8 @@ def infer_tier(
         return Tier.EXTERNAL, "annotation openWorldHint"
     verb = tool_verb(name)
     tier = VERB_TIERS.get(verb)
+    if verb == "transfer" and HANDOFF_OBJECTS & set(name_tokens(name)):
+        return Tier.EXTERNAL, "verb 'transfer' + handoff object"
     if tier is Tier.WRITE and any(_over_people(slot, sources) for slot in slots):
         return Tier.EXTERNAL, f"verb '{verb}' + invitee rule"
     if tier is not None:

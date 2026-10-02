@@ -26,7 +26,7 @@ from jevtools.canonical import jsonable
 from jevtools.extract.base import Mention
 from jevtools.extract.catalogs import Place
 from jevtools.kinds.base import ResolveContext, register_resolver
-from jevtools.kinds.common import ChoiceResolver, mention_candidate, pool_mentions
+from jevtools.kinds.common import ChoiceResolver, field_note, mention_candidate, noted, pool_mentions
 from jevtools.kinds.normalize import NormalizationError, normalize_email_value, normalize_path, normalize_span
 from jevtools.kinds.ref import is_path_slot
 from jevtools.spec.infer import QUALIFIERS
@@ -178,8 +178,8 @@ def _fields(value: Any, path: str, key: str | None, siblings: str = "") -> Itera
     the value belongs to."""
     if isinstance(value, dict):
         for k, item in value.items():
-            others = ", ".join(f"{name}: {v}" for name, v in value.items() if name != k and _short(v))
-            yield from _fields(item, f"{path}.{k}", str(k), others[:160])
+            others = ", ".join(field_note(name, v) for name, v in value.items() if name != k and noted(v))
+            yield from _fields(item, f"{path}.{k}", str(k), others[:240])
     elif isinstance(value, list):
         for i, item in enumerate(value):
             yield from _fields(item, f"{path}[{i}]", key, siblings)

@@ -42,7 +42,7 @@ from jevtools.kinds.base import (
     resolve_default,
     unasked_result,
 )
-from jevtools.kinds.common import finalize_pool
+from jevtools.kinds.common import field_note, finalize_pool, noted
 from jevtools.kinds.normalize import normalize_list
 from jevtools.sources.base import SourceQuery
 from jevtools.spec.infer import qualified_base
@@ -132,7 +132,7 @@ def object_candidates(item: SlotSpec, rc: ResolveContext) -> list[Candidate]:
             if key in seen:
                 continue
             seen.add(key)
-            others = ", ".join(f"{k}: {v}" for k, v in obj.items() if k not in value and _scalar(v))[:160]
+            others = ", ".join(field_note(k, v) for k, v in obj.items() if k not in value and noted(v))[:240]
             display = ", ".join(str(v) for v in value.values())
             text = f"An entry of the {obs.tool} result (step {obs.step})" + (f": {others}." if others else ".")
             mention = {"text": display, "ref": f"obs:{obs.step}:{path}"}
@@ -152,10 +152,6 @@ def _objects(value: Any, path: str) -> list[tuple[str, dict[str, Any]]]:
         for i, v in enumerate(value):
             out += _objects(v, f"{path}[{i}]")
     return out
-
-
-def _scalar(value: Any) -> bool:
-    return isinstance(value, (str, int, float)) and not isinstance(value, bool) and len(str(value)) <= 40
 
 
 @dataclass

@@ -306,6 +306,7 @@ Here `from_account` and `to_account` resolve to the `accounts` registry by tag m
    | get, read, list, search, find, fetch, lookup, query, describe, show | read |
    | send, email, post, publish, share, forward, invite, notify, reply, message | external |
    | transfer, pay, wire, refund, purchase, buy, delete, remove, drop, destroy, revoke | critical |
+   | transfer + agent, human, support, operator, representative, call, chat or conversation in the name (a handoff) | external |
    | create, add, update, set, book, schedule, save, write, rename, move | write |
 
 4. **Invitee rule.** A `write`-tier tool that has a `ref` or `list[ref]` slot over people (a source that provides `email` or `person`, or `format: email`) is raised to `external`, because it notifies them. Example: `create_event` with attendees.

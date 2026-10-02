@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import time
 import warnings
-from collections.abc import Callable, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -371,6 +372,7 @@ class Router:
         *,
         context: Context | None = None,
         mode: Mode = "turn",
+        verify: bool = True,
     ) -> Decision:
         """Check a call another component proposed (an LLM agent's tool call), argument values unchanged.
 
@@ -382,20 +384,24 @@ class Router:
            value ("is this the record the request refers to?").
         3. The proposed values are bound with their candidates' channels (identity values at their verify
            probability) and the policy decides: ``execute`` (run ``decision.call``: the proposed arguments),
-           ``confirm`` (show ``decision.prompt``), anything else: do not run it."""
+           ``confirm`` (show ``decision.prompt``), anything else: do not run it.
+
+        With ``verify=False`` only step 1 runs (no Jev call): a grounded call executes (rule ``C2.check.grounded``;
+        the critical tier still only confirms), an ungrounded one is blocked."""
         proposed = ProposedCall.coerce(call)
         if proposed is None or proposed.name not in self.catalog:
             raise ValueError(f"not a call of a known tool: {call!r}")
         named: ToolChoice = {"type": "function", "function": {"name": proposed.name}}
         session = _Session(ctx=self.context_for(messages, context), mode=mode, tool_choice=named)
-        return self._drive(self._check_flow(session, proposed))
+        return self._drive(self._check_flow(session, proposed, verify=verify))
 
-    def _check_flow(self, s: _Session, proposed: ProposedCall) -> Flow:
+    def _check_flow(self, s: _Session, proposed: ProposedCall, *, verify: bool = True) -> Flow:
         tool = self.catalog.get(proposed.name)
         plan = self._compile(s, tool_choice=s.tool_choice, extra_candidates=self._drafted(proposed))
         state = _State(plan=plan, ballot=plan.ballot, answers={}, pools=dict(plan.pools))
         picks: dict[str, tuple[Any, list[Candidate]]] = {}
         ungrounded: list[str] = []
+        sources = _grounding_sources(s.ctx)
         for slot in tool.slots:
             if slot.name not in proposed.arguments:
                 if slot.required and resolve_default(tool, slot, s.ctx) is None:
@@ -406,9 +412,12 @@ class Router:
             admitted = {value_key(c.value): c for c in (pool.candidates if pool else [])}
             # a list is grounded element by element (its pool holds the items); anything else as a whole
             parts = fitted if slot.kind == "list" and isinstance(fitted, list) else [fitted]
-            matched = [admitted.get(value_key(v)) for v in parts]
+            matched = [admitted.get(value_key(v)) or _composed(v, sources) for v in parts]
             if fitted is None or any(m is None for m in matched):
                 ungrounded.append(slot.name)
+                offered = [display_value(c.value) for c in (pool.candidates if pool else [])][:6]
+                s.notes.append(f"check: {slot.name} proposed {display_value(proposed.arguments[slot.name])!r}; "
+                               f"offered {offered}")  # fmt: skip
             else:
                 picks[slot.name] = (fitted, [m for m in matched if m is not None])
         if ungrounded:
@@ -416,14 +425,19 @@ class Router:
             blocked = PolicyResult(outcome=Outcome.CLARIFY, rule=RULE_CHECK_UNGROUNDED, bottleneck=ungrounded[0],
                                    shape="out_of_pool", ask="open", reason="ungrounded")  # fmt: skip
             return (yield from self._finish(s, None, blocked, None, proposed=proposed))
-        verify: dict[str, list[BallotQuestion]] = {
+        # every argument is grounded, so the tool can be filled whatever the plan's own pools found
+        tools = [t.model_copy(update={"viable": "ok", "speculated": True}) if t.name == tool.name else t
+                 for t in plan.ballot.tools]  # fmt: skip
+        state.ballot = plan.ballot.model_copy(update={"tools": tools})
+        verifying: dict[str, list[BallotQuestion]] = {
             name: [RefResolver.verify_question(tool, tool.slot(name), BallotOption.from_candidate(c), i)
                    for i, c in enumerate(found)]
-            for name, (_, found) in picks.items() if tool.slot(name).stakes == "identity"}  # fmt: skip
-        questions = [q for q in plan.ballot.questions if q.tool == tool.name and q.family == "authorized"]
-        questions += [q for qs in verify.values() for q in qs]
+            for name, (_, found) in picks.items() if verify and tool.slot(name).stakes == "identity"}  # fmt: skip
+        questions = [q for q in plan.ballot.questions if q.tool == tool.name and q.family == "authorized"] \
+            if verify else []  # fmt: skip
+        questions += [q for qs in verifying.values() for q in qs]
         if questions:
-            ballot = followup_ballot(plan.ballot, questions, mode=plan.ballot.mode, limits=self.round_limits())
+            ballot = followup_ballot(state.ballot, questions, mode=plan.ballot.mode, limits=self.round_limits())
             asked = yield from self._ask(s, ballot, state, merged=False)
             state.ballot = asked if asked is not None else ballot
         self._decode(s, state)
@@ -432,7 +446,7 @@ class Router:
             td = state.decoded.decision
             for name, (value, found) in picks.items():
                 p = 1.0
-                for q in verify.get(name, []):
+                for q in verifying.get(name, []):
                     answer = state.answers.get(q.qid)
                     p *= answer.noul if isinstance(answer, NoulAnswer) else 0.0
                 channel = least_trusted(*[c.effective_channel for c in found]) if found else Channel.USER
@@ -440,6 +454,11 @@ class Router:
                 td = bind_value(td, name, value, rc, p=p, channel=channel, label=label,
                                 prov={"proposed": True, "from": [c.prov for c in found][:5]})  # fmt: skip
             state.decoded = with_decision(state.decoded, td)
+        if not verify:
+            critical = tool.tier >= Tier.CRITICAL
+            grounded = PolicyResult(outcome=Outcome.CONFIRM if critical else Outcome.EXECUTE, rule=RULE_CHECK_GROUNDED,
+                                    ask="confirm" if critical else None, reason="grounded")  # fmt: skip
+            return (yield from self._finish(s, state, grounded, None))
         state, result, inp = yield from self._policy_loop(s, state)
         return (yield from self._finish(s, state, result, inp))
 
@@ -1479,7 +1498,107 @@ def _membership(pool: Pool, value: Any, label: str | None) -> Mapping[str, Any] 
     return None
 
 
+_NORM = re.compile(r"[^a-z0-9@]+")
+
+
+def _norm(value: Any) -> str:
+    return _NORM.sub(" ", str(value).lower()).strip()
+
+
+def _leaves(value: Any, key: str = "") -> Iterator[tuple[str, Any]]:
+    """``(field name, scalar)`` of every leaf (a list item keeps its list's field name)."""
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            yield from _leaves(v, str(k))
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _leaves(v, key)
+    else:
+        yield key, value
+
+
+def _keys(value: Any) -> Iterator[str]:
+    """Every object key (a profile's payment methods are keyed by their ids)."""
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            yield str(k)
+            yield from _keys(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _keys(v)
+
+
+_QUANTITY_WORDS = frozenset({"amount", "price", "cost", "total", "fee", "balance", "count", "quantity", "number"})
+_EXPRESSION = re.compile(r"[\d\s.+\-*/()%]+")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+           "november", "december")  # fmt: skip
+
+
+def _grounding_sources(ctx: Context) -> tuple[str, set[str]]:
+    """What a composed value's fields may come from: the user's turns (as normalized text) and every scalar and key
+    of a trusted tool's results and arguments (normalized)."""
+    user = " " + " ".join(_norm(t.text) for t in ctx.user_turns if t.text) + " "
+    trusted = set(ctx.trusted_tools)
+    values: set[str] = set()
+    for o in ctx.all_observations():
+        if o.tool not in trusted or o.status != "ok":
+            continue
+        for part in (jsonable(o.content), jsonable(o.arguments)):
+            values |= {_norm(v) for _, v in _leaves(part) if v is not None}
+            values |= {_norm(k) for k in _keys(part)}
+    return user, values
+
+
+def _date_forms(text: str) -> list[str]:
+    """``2001-04-12`` as people write it: ``april 12 2001``, ``12 april 2001``, ``4 12 2001``."""
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", text)
+    if m is None:
+        return []
+    year, month, day = m.group(1), int(m.group(2)), int(m.group(3))
+    if not 1 <= month <= 12:
+        return []
+    name = _MONTHS[month - 1]
+    return [f"{name} {day} {year}", f"{day} {name} {year}", f"{month} {day} {year}", f"{name} {day}"]
+
+
+def _grounded_leaf(key: str, leaf: Any, user: str, trusted: set[str]) -> tuple[bool, bool]:
+    """``(grounded, from the user)`` for one scalar of a proposed value."""
+    if leaf is None or isinstance(leaf, bool):
+        return True, True
+    if isinstance(leaf, (int, float)):
+        if set(key.lower().split("_")) & _QUANTITY_WORDS or len(str(abs(int(leaf)))) < 4:
+            return True, True  # a quantity or a small count: left to the verify Noul
+    raw = str(leaf)
+    operator = any(op in raw for op in ("+", "*", "/", "(", " - "))  # not a date's or an id's hyphen
+    if isinstance(leaf, str) and operator and _EXPRESSION.fullmatch(raw) and _NUMBER.search(raw):
+        results = [_grounded_leaf("", float(n) if "." in n else int(n), user, trusted) for n in _NUMBER.findall(raw)]
+        return all(g for g, _ in results), all(u for _, u in results)  # arithmetic over grounded numbers
+    text = _norm(leaf)
+    if not text:
+        return True, True
+    in_user = f" {text} " in user or any(f" {form} " in user for form in _date_forms(raw))
+    return in_user or text in trusted, in_user
+
+
+def _composed(value: Any, sources: tuple[str, set[str]]) -> Candidate | None:
+    """A proposed value built from several sources (a flight number from a search result plus the date the user asked
+    for): a candidate when each of its strings and ids comes from the user's turns or a trusted tool (dates in the
+    user's words count, arithmetic counts when its numbers do; quantities and small counts are left to the verify
+    Noul). ``None`` otherwise."""
+    user, trusted = sources
+    checks = [_grounded_leaf(key, leaf, user, trusted) for key, leaf in _leaves(value)]
+    if not all(g for g, _ in checks):
+        return None
+    from_user = all(u for _, u in checks)
+    return Candidate(value=value, display=display_value(value), channel=Channel.USER if from_user else Channel.REGISTRY,
+                     text="Proposed; each of its values appears in the conversation or a trusted lookup.",
+                     prov={"source": "check", "grounded": "fields"})  # fmt: skip
+
+
 RULE_CHECK_UNGROUNDED = "C1.check.ungrounded"
+RULE_CHECK_GROUNDED = "C2.check.grounded"
+"""``Router.check(verify=False)``: every proposed value is grounded; no Jev call."""
 """``Router.check``: a proposed argument is not an admitted candidate of its slot (or a required one is missing)."""
 
 

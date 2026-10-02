@@ -454,3 +454,36 @@ def test_check_blocks_a_value_the_conversation_does_not_support() -> None:
     assert d.bottleneck.slot == "to" and not d.tool_calls
     with pytest.raises(ValueError):
         router.check("hi", {"name": "no_such_tool", "arguments": {}})
+
+
+@pytest.mark.parametrize(("to", "outcome"), [("anna.keller@acme.com", Outcome.EXECUTE),
+                                             ("evil@attacker.example", Outcome.CLARIFY)])  # fmt: skip
+def test_check_without_verification_grounds_only(to: str, outcome: Outcome) -> None:
+    router, backend = scenario_router(escalation_script, context=scenario_context(history=True))
+    d = router.check(scenario_messages(scripts.R2_REQUEST, history=True), _proposal(to), verify=False)
+    assert backend.requests == [] and d.outcome is outcome  # no Jev call either way
+    if outcome is Outcome.EXECUTE:
+        assert d.rule == "C2.check.grounded" and d.tool_calls
+        assert d.tool_calls[0].arguments == _proposal(to)["arguments"]
+    else:
+        assert d.rule == "C1.check.ungrounded" and not d.tool_calls
+
+
+@pytest.mark.parametrize(("value", "grounded"), [
+    ("(499 - 127) * 2", True),                      # arithmetic over looked-up prices
+    ("(499 - 9999) * 2", False),                    # a number that appears nowhere
+    ("credit_card_4643416", True),                  # a key of the profile's payment methods
+    ("credit_card_2135", False),                    # made up from the card's last four digits
+    ({"first_name": "Kevin", "last_name": "Smith", "dob": "2001-04-12"}, True),  # a date the user wrote in words
+    ({"payment_id": "credit_card_4643416", "amount": 2033}, True),               # an amount is a quantity, not an id
+])  # fmt: skip
+def test_composed_values_are_grounded_field_by_field(value: Any, grounded: bool) -> None:
+    from jevtools.context import Context, Observation
+    from jevtools.router import _composed, _grounding_sources
+
+    profile = {"payment_methods": {"credit_card_4643416": {"brand": "visa", "last_four": "2135"}}, "price": 499}
+    ctx = Context(messages=[{"role": "user", "content": "Add Kevin Smith, born April 12, 2001. My card ends in 2135."}],
+                  observations=[Observation(step=1, tool="get_user_details", content=profile),
+                                Observation(step=2, tool="get_flight", content={"price": 127})],
+                  trusted_tools=("get_user_details", "get_flight"))  # fmt: skip
+    assert (_composed(value, _grounding_sources(ctx)) is not None) is grounded

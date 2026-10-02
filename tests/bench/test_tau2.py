@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import jevtools as jt
 from jevtools.bench import tau2
@@ -212,3 +213,36 @@ def test_check_grounds_a_list_argument_element_by_element() -> None:
     invented = check(["8538875209", "1234567890"])
     assert invented.outcome is jt.Outcome.CLARIFY and invented.rule == "C1.check.ungrounded"
     assert invented.bottleneck is not None and invented.bottleneck.slot == "item_ids"
+
+
+BOOK = {"type": "function", "function": {"name": "book_reservation", "description": "Book a reservation.",
+        "parameters": {"type": "object", "required": ["flights"], "properties": {"flights": {"type": "array",
+            "items": {"type": "object", "required": ["flight_number", "date"], "properties": {
+                "flight_number": {"type": "string"}, "date": {"type": "string"}}}}}}}}  # fmt: skip
+TRANSFER = {"type": "function", "function": {"name": "transfer_to_human_agents",
+            "description": "Transfer the user to a human agent, with a summary of the issue.",
+            "parameters": {"type": "object", "required": ["summary"], "properties": {
+                "summary": {"type": "string", "description": "A summary of the user's issue."}}}}}  # fmt: skip
+
+
+def test_check_grounds_composed_values_field_by_field() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    search = Observation(step=1, tool="search_direct_flight", arguments={"origin": "SFO", "date": "2024-05-26"},
+                         content=[{"flight_number": "HAT271", "origin": "SFO", "price": 348}])  # fmt: skip
+    messages = [{"role": "user", "content": "Book me the direct flight from SFO on May 26."}]
+    ctx = Context(messages=messages, observations=[search], trusted_tools=("search_direct_flight",))
+
+    def check(tool: dict[str, Any], arguments: dict[str, Any]) -> jt.Decision:
+        backend = ScriptedBackend({"*.verify.*": 0.95, "*.authorized": 0.95})
+        call = {"name": tool["function"]["name"], "arguments": arguments}
+        return Router([tool], backend=backend).check(messages, call, context=ctx, mode="loop")
+
+    composed = check(BOOK, {"flights": [{"flight_number": "HAT271", "date": "2024-05-26"}]})
+    assert composed.rule != "C1.check.ungrounded" and composed.call is not None
+    assert composed.call.arguments == {"flights": [{"flight_number": "HAT271", "date": "2024-05-26"}]}
+    invented = check(BOOK, {"flights": [{"flight_number": "HAT999", "date": "2024-05-26"}]})
+    assert invented.rule == "C1.check.ungrounded"  # HAT999 is in neither the conversation nor a trusted result
+    summary = check(TRANSFER, {"summary": "The user wants a refund for a delayed flight."})
+    assert summary.rule != "C1.check.ungrounded"  # free text is content, not an identity value

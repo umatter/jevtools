@@ -747,13 +747,29 @@ anything else returns a tool error so the LLM re-plans. Same 60 tasks, same simu
 | Guard, `check` re-electing each argument | 22 |
 | Guard, `check` verifying the proposed values (list arguments wrongly ungrounded) | 16 |
 | Guard, `check` verifying, lists grounded element by element | 18 |
+| Guard, `check` verifying, after the diagnostic fixes (content summaries, field-level grounding, handoff tier, nested descriptions) | 15 |
+| **Guard, grounding only** (`check(verify=False)`: code grounding, no Jev call) | **29** |
 
 The guard never ran an altered value (the first version could have: it re-elected an order id and an address line),
 but it lets few writes through: of 212 write checks in the last run, 8 executed and 28 became confirm cards; 71 were
 blocked by grounding (a proposed value matched no value from the customer or a trusted lookup exactly) and 103 were
 diffuse (the verify Nouls multiply over every identity field, so a six-field address change falls below the confirm
-band). τ² has no injected or malicious tool output, so a guard can only cost tasks here; as built, it costs a third
-of them.
+band). τ² has no injected or malicious tool output, so a guard can only cost tasks here.
+
+A 20-task diagnostic run logged every block: no normalization misses, but free-text summaries treated as identity
+values, objects composed from several sources (a search result's flight number plus the searched date), a handoff
+inferred as a money transfer, and product variants Jev could not verify because their options were not described
+(DECISIONS "What the guard diagnostic changed"). After those fixes grounding blocked 15 calls instead of 71, but Jev's
+verification still stopped most of the rest: 105 diffuse and 34 refused, 6 of 189 executed.
+
+Grounding alone keeps nearly all of the LLM's success: 29 of 60, within the two plain runs' spread (31, 34), with 96 of
+117 write checks executed unchanged and no model call for the guard. Of its 21 blocks, one caught a real fabrication
+(`credit_card_2135`, made up from the card's last four digits); the others were arithmetic in `calculate` (15), an id
+that appears as a profile key, a birth date the user wrote in words, and computed payment amounts, all handled since
+(field grounding checks an expression's numbers, object keys, dates in words, and leaves quantities to verification).
+
+The next-call bench after these changes (trust `none` / `reads`, two stages): reads 68.0% / 67.4%, writes shown /
+executed with trusted lookups 36.4% / 26.0% (was 35.3% / 25.4%), talk turns 97.3% / 94.8%: no regression.
 
 ## Does one calibration fit every bench? (2026-10-01)
 
