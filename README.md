@@ -361,8 +361,9 @@ allowed, refusals = guard.screen(messages, assistant_message.tool_calls)
 
 In LangGraph, `jevtools.adapters.langchain.GuardedToolNode(tools)` replaces `ToolNode`. A grounded call of a
 critical-tier tool (a refund, a payment) is allowed with `verdict.needs_confirmation` set: run it after the user
-confirmed. On τ² (docs/BENCH.md) the guard kept gpt-4.1-mini's task success (31 of 60 against 31 and 34 alone) and
-stopped three payment ids the model had made up. `router.check(messages, call)` is the underlying call; with Jev
+confirmed. On τ² (docs/BENCH.md) the guard kept gpt-4.1-mini's task success (30–31 of 60 against 31 and 34 alone), stopped
+payment ids the model had made up, and with an instruction planted in every lookup result it let no attacker value
+into an executed write, where the plain model acted on it in 9 of 40 tasks. `router.check(messages, call)` is the underlying call; with Jev
 verifying each value as well (`verify=True`) it was too strict on τ² (15–22 of 60).
 
 **LangChain.** `JevChatModel` is a `BaseChatModel`, so `bind_tools` and ToolNode loops work unchanged.
