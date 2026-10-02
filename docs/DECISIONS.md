@@ -2134,5 +2134,6 @@ normalization misses; the blocks had four other causes:
   29 of 60 tasks against 31 and 34 for the LLM alone, while every verifying variant solved 15–22. Field grounding
   then learnt four things from its blocks: an arithmetic expression is grounded when its numbers are, object keys are
   sources (payment methods keyed by id), a `YYYY-MM-DD` date matches the user's "April 12, 2001", and numbers in
-  quantity fields (`amount`, `price`, `total`, `count`…) are left to verification like small counts.
+  quantity fields (`amount`, `price`, `total`, `count`…) are left to verification like small counts. With those, the
+  grounding-only guard solved 31 of 60 (the LLM's level) and blocked 6 writes, three of them made-up payment ids.
 

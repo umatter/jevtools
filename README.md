@@ -354,8 +354,9 @@ whose arguments are jevtools' bound values), `confirm` (show `decision.prompt`),
 rule and bottleneck say why). The proposed values are never changed: each identity argument must match a value from
 the user or a trusted lookup (else the call is blocked, naming the argument), and Jev verifies each one. On τ² the verification
 is too strict (it blocked or re-confirmed most right writes: 15–22 of 60 tasks against 31–34 for the LLM alone), while
-`router.check(messages, call, verify=False)`, grounding only and no model call, solved 29 of 60 and caught a payment id
-the LLM had made up (docs/BENCH.md).
+`router.check(messages, call, verify=False)`, grounding only and no model call, solved 31 of 60, the LLM's own level,
+and stopped three payment ids the LLM had made up (docs/BENCH.md). For agents, that is the recommended use: let the
+LLM plan, and ground every write before it runs.
 
 ```python
 decision = router.check(messages, {"name": "send_email", "arguments": llm_call_arguments}, context=ctx)

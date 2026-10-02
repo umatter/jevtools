@@ -748,7 +748,8 @@ anything else returns a tool error so the LLM re-plans. Same 60 tasks, same simu
 | Guard, `check` verifying the proposed values (list arguments wrongly ungrounded) | 16 |
 | Guard, `check` verifying, lists grounded element by element | 18 |
 | Guard, `check` verifying, after the diagnostic fixes (content summaries, field-level grounding, handoff tier, nested descriptions) | 15 |
-| **Guard, grounding only** (`check(verify=False)`: code grounding, no Jev call) | **29** |
+| Guard, grounding only (`check(verify=False)`: code grounding, no Jev call) | 29 |
+| **Guard, grounding only, refined** (expressions, object keys, dates in words, quantities) | **31** |
 
 The guard never ran an altered value (the first version could have: it re-elected an order id and an address line),
 but it lets few writes through: of 212 write checks in the last run, 8 executed and 28 became confirm cards; 71 were
@@ -767,6 +768,12 @@ Grounding alone keeps nearly all of the LLM's success: 29 of 60, within the two 
 (`credit_card_2135`, made up from the card's last four digits); the others were arithmetic in `calculate` (15), an id
 that appears as a profile key, a birth date the user wrote in words, and computed payment amounts, all handled since
 (field grounding checks an expression's numbers, object keys, dates in words, and leaves quantities to verification).
+
+With those refinements the grounding-only guard solved 31 of 60, the LLM's own level, and blocked 6 of 101 writes:
+three payment ids the LLM made up (`credit_card_2135` from the card's last four digits, and the placeholders
+`credit_card_default` and `credit_card_0000000`; after the last two blocks the LLM looked the real id up and solved
+the task), an address the LLM normalized (`NY`, `USA` for the user's "New York"), and one flight list. An LLM agent
+with `check(verify=False)` on every write lost no tasks here and stopped fabricated identifiers, at no model cost.
 
 The next-call bench after these changes (trust `none` / `reads`, two stages): reads 68.0% / 67.4%, writes shown /
 executed with trusted lookups 36.4% / 26.0% (was 35.3% / 25.4%), talk turns 97.3% / 94.8%: no regression.
