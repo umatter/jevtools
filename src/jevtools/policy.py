@@ -93,6 +93,13 @@ class ToolPolicy(_Section):
     hints_skip_search: bool = True
     """No record hints when the request carries a search cue ("find", "is there"): the user wants to
     know which records exist, and naming the matches pushed such requests to open one (DECISIONS)."""
+    two_stage_min: int = 40
+    """A round whose ballot holds more questions than this asks the ``tool`` Choice first and then only the favoured
+    tools' questions (one more same-state round): large catalogs cost less. 0 turns it off."""
+    stage2_min: float = 0.15
+    """Tools the ``tool`` answer gives at least this much are asked about in the second stage."""
+    stage2_max: int = 2
+    """At most this many tools (most likely first) in the second stage."""
     regate_escalation: bool = True
     """After an escalation from the tool rules (unsupported, ambiguous, diffuse), the gate round re-asks the ``tool``
     Choice and the draft stands only if Jev elects the drafted tool; otherwise the decision is the one the policy
@@ -119,6 +126,10 @@ class ShapePolicy(_Section):
     widen round) or a required value no extractor found (``P6``) escalates instead of clarifying: the Escalator
     drafts the chosen tool's call, its values join the pools as ``generated`` candidates, and one Jev round
     re-decides (§4.7). ``missing`` (Jev: not stated) still clarifies; a draft of another tool, or none, too."""
+    escalate_min_tool: float = 0.70
+    """A coverage escalation needs Jev's probability for the chosen tool at least this high: below it the missing
+    value may be a sign of the wrong tool, and a draft would only fill it in (live on When2Call: 4 of 16 calls on
+    cannot-answer cases removed, 1 of 281 gained calls lost)."""
     flag_band: tuple[float, float] = (0.20, 0.80)
     """Noul dead band: strictly inside it a flag or item is uncertain (``flag_band`` shape)."""
     accept_min: float = 0.50
@@ -260,6 +271,9 @@ class Policy(BaseModel):
     version: str = "jevtools-default-0.1"
     hysteresis: float = 0.03
     shadow: bool = False
+    shadow_share: float = 0.0
+    """Share of would-be executions shown as confirm cards anyway (cap ``shadow``), sampled by decision id: after an
+    app leaves full shadow mode, its feedback log keeps receiving labels on executed calls (§11.3)."""
     tool: ToolPolicy = ToolPolicy()
     shapes: ShapePolicy = ShapePolicy()
     tiers: TiersPolicy = TiersPolicy()
@@ -594,11 +608,17 @@ def _p6(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
     if not inp.chosen_is_tool or inp.speculated:
         return None
     slot = inp.viable.partition(":")[2] or None
-    if inp.escalator and policy.shapes.escalate_uncovered:
+    if _coverage_escalation(inp, policy):
         return PolicyResult(outcome=Outcome.ESCALATE, rule=RULE_NOT_SPECULATED, bottleneck=slot, shape="missing",
                             reason=inp.viable)  # fmt: skip
     return PolicyResult(outcome=Outcome.CLARIFY, rule=RULE_NOT_SPECULATED, bottleneck=slot, shape="missing",
                         ask="open", reason=inp.viable)  # fmt: skip
+
+
+def _coverage_escalation(inp: PolicyInput, policy: Policy) -> bool:
+    """An Escalator may draft a missing value: configured, enabled, and Jev sure enough of the chosen tool."""
+    p_tool = inp.tools.get(inp.chosen, 0.0) if inp.chosen is not None else 0.0
+    return inp.escalator and policy.shapes.escalate_uncovered and p_tool >= policy.shapes.escalate_min_tool
 
 
 def _p7(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
@@ -612,7 +632,7 @@ def _p7(inp: PolicyInput, policy: Policy) -> PolicyResult | None:
         return PolicyResult(outcome=Outcome.CLARIFY, action=Action.FILL, ask="open", **common)
     if slot.shape == "flag_band":
         return PolicyResult(outcome=Outcome.CLARIFY, ask="yes_no", **common)
-    if slot.shape == "out_of_pool" and inp.escalator and policy.shapes.escalate_uncovered:
+    if slot.shape == "out_of_pool" and _coverage_escalation(inp, policy):
         return PolicyResult(outcome=Outcome.ESCALATE, reason="uncovered", **common)
     return PolicyResult(outcome=Outcome.CLARIFY, ask="open", **common)
 

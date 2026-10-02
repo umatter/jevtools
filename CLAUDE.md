@@ -41,6 +41,8 @@ jevtools bench app --heldout --merged-catalog ...        # every case sees all 3
 jevtools bench bfcl [--download]                         # BFCL stress test (tests use the vendored sample in tests/bench/data)
 jevtools bench when2call|tau2 ...                        # When2Call; τ²-bench reduced to next calls (--trust none|reads)
 jevtools bench bfcl|when2call|tau2 --escalator openai/gpt-4o-mini   # an LLM drafts uncovered values; Jev decides them
+python -m jevtools.bench.tau2_agent --domain retail --tasks 20 --out r.json   # full τ² tasks (needs a τ²-bench env)
+jevtools tune --feedback feedback.jsonl --out tuned/     # tune on labelled confirm cards, check on the newest (docs/PILOT.md)
 ```
 
 **Live bench practice.** Decide between variants on `--heldout` with `--controls` and 3 replays; a single domain

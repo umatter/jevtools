@@ -539,7 +539,8 @@ jevtools tune --feedback feedback.jsonl --out tuned/   # tunes on the older 80%,
 The command prints, per tier, what the current and the tuned policy would execute on the newest rows and how much of
 it the users rejected, then a verdict: switch (exit 0), keep the current policy because a budget is exceeded
 (exit 2), or collect more labels because too few executions prove the budget (exit 3). The proxy takes
-`feedback_log = "feedback.jsonl"` in `jevtools.toml`.
+`feedback_log = "feedback.jsonl"` in `jevtools.toml`. [docs/PILOT.md](docs/PILOT.md) walks through a pilot: wiring,
+what is logged, how many labels, and `shadow_share` to keep labels coming after the switch.
 
 How many labels it takes: a budget is shown by the bound, so with no wrong calls a tier needs about 60 executions in
 the checked rows for a 5% budget, 150 for 2% and 300 for 1% (the rule of three), which means a few thousand cards in
@@ -620,7 +621,9 @@ executes a call in 3% of the turns where the reference agent made none; write ca
 results, reach 37% (25% executed) only when the app trusts its own lookup tools. With a cheap LLM drafting values that
 no extractor finds (`Router(escalator=…)`, Jev still decides them), BFCL strict accuracy rises to 40–44% and When2Call
 accuracy to 73%, for about $0.0001 per decision more, at the price of a few more calls where none fits (When2Call: 5.3%
-instead of 3.9%). Details, attribution and the full tables are in [docs/BENCH.md](docs/BENCH.md).
+instead of 3.9%). Run as a whole τ² agent (jevtools deciding every call, an LLM writing only text) it completes 8%
+of 60 tasks against 57% for gpt-4.1-mini on its own: it decides single calls but does not plan the lookups a task
+needs, and its questions loop. Details, attribution and the full tables are in [docs/BENCH.md](docs/BENCH.md).
 
 ## Backends
 
@@ -642,10 +645,13 @@ leads to execute. For cassettes, give the `Context` a fixed `now`, because the s
 
 These are condensed from SPEC §14.
 
-- **One live benchmark.** The app-domain benchmark has been run live with replays and negative controls (see
-  [Benchmarks](#benchmarks)), on synthetic apps. Every other probability, token count and cost in the docs, examples
-  and fixtures is illustrative. The live experiments E1–E10 (SPEC §11.2) are defined and runnable but have not been
-  run.
+- **Benchmarks, not production.** The app-domain bench (with replays and negative controls), BFCL, When2Call and
+  τ²-bench have been run live (see [Benchmarks](#benchmarks)); no real app's traffic has. Probabilities, token counts
+  and costs elsewhere in the docs, examples and fixtures are illustrative. The live experiments E1–E10 (SPEC §11.2)
+  are defined and runnable but have not been run.
+- **A decision layer, not a planner.** jevtools decides the next call when its values are at hand. It does not plan
+  the lookups a multi-step task needs, so as a whole agent it completes few τ² tasks (8% against 57% for gpt-4.1-mini):
+  it asks the user for values a lookup would find, and repeats the question.
 - **Thresholds are priors.** They mean something only after `jevtools eval` + `tune` on your own labelled traffic,
   and they do not transfer across datasets.
 - **Coverage is the ceiling.** Jev cannot elect a value that code did not nominate. Over an app's own data the

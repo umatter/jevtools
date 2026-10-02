@@ -416,3 +416,15 @@ def test_fit_schema_coerces_exactly_or_drops() -> None:
     assert fit_schema("true", {"type": "boolean"}) is True and fit_schema("x", {"type": "integer"}) is None
     assert fit_schema("Any", {"type": "string", "enum": ["Drama", "Comedy"]}) is None
     assert fit_schema("Paris", {"type": "string"}) == "Paris"
+
+
+def test_a_coverage_escalation_needs_a_confident_tool_choice() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    escalator = OpenAICompatibleEscalator("m", api_key="sk", transport=Recorder(
+        completion(None, [tool_call("get_weather", {"location": "New York, NY"})])).transport())  # fmt: skip
+    unsure = {"tool": {"get_weather": 0.65, "NO_TOOL": 0.35}, "get_weather.location": "NONE_OF_THESE"}
+    backend = ScriptedBackend(unsure)
+    d = Router([WEATHER], backend=backend, escalator=escalator).decide("What's the weather in the Big Apple?")
+    assert d.usage.llm_calls == 0 and len(backend.requests) == 1  # below shapes.escalate_min_tool: no draft

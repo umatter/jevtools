@@ -113,8 +113,10 @@ def label_of(action: str | None) -> Label:
 class FeedbackLog:
     """An append-only JSONL file of :class:`FeedbackRecord` rows (thread-safe within a process)."""
 
-    def __init__(self, path: str | os.PathLike[str]) -> None:
+    def __init__(self, path: str | os.PathLike[str], *, keep_arguments: bool = False) -> None:
         self.path = Path(path)
+        self.keep_arguments = keep_arguments
+        """Store each call's arguments (personal data in most apps; tuning does not need them)."""
         self._lock = threading.Lock()
 
     def add(self, decision: Decision, label: Label, *, at: datetime | None = None) -> FeedbackRecord | None:
@@ -122,6 +124,8 @@ class FeedbackLog:
         record = FeedbackRecord.of(decision, label, at=at)
         if record is None:
             return None
+        if not self.keep_arguments:
+            record = record.model_copy(update={"arguments": {}})
         line = record.model_dump_json() + "\n"
         with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)

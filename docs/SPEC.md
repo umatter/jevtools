@@ -535,6 +535,11 @@ Questions appear in this order:
    4. `done_after`.
 3. `reply`, in a resume round.
 
+**Two stages.** A ballot with more than `tool.two_stage_min` (40) questions is sent in two same-state rounds: first
+the questions no tool owns (1 and 3), then the questions of the tools the `tool` answer gives at least
+`tool.stage2_min` (0.15), at most `tool.stage2_max` (2), most likely first; the other tools count as not speculated.
+Both rounds decode together.
+
 #### 3.5.6 Pre-send validator (strict; always on)
 
 A Ballot is rejected *before* sending if any of these fail. The error is `BallotError(qid, rule)`, which is a code bug, never a model issue.
@@ -2049,6 +2054,7 @@ A meta-test asserts that the union of fired rule ids equals the full rule set.
 - Split conformal risk control is available as `tuning.method = "crc"`.
 - Output: a versioned `policy.toml` plus calibrators, cited by every trace.
 - Thresholds do not transfer across datasets [C: Janus]. They must be tuned on the adopter's own labelled traffic, run in `shadow` mode first. In shadow mode `Router(policy=…, shadow=True)` logs decisions and always returns `confirm`.
+- `shadow_share` (0 by default) shows that share of would-be executions as confirm cards (cap `shadow`, sampled by decision id), so labels keep arriving after an adopter leaves full shadow mode. docs/PILOT.md is the adopter's guide.
 - **Labels from confirm cards.** `Router(feedback=FeedbackLog(path))` appends one row per resumed confirm card: the decision's call, W/Π/L/J, tier and the user's verdict (`accepted`; `edited` or `cancelled`; an app may add `undone` for a reverted execution). Only `accepted` counts as right. `jevtools tune --feedback LOG` tunes on the oldest 80% and re-applies both the current and the tuned policy (composition, threshold, hysteresis) to the newest 20%: `ok` when the wrong-execution bound meets the budget there, `unproven` when only the observed rate does, `over` otherwise; it recommends switching only when every tier is `ok`.
 
 ### 11.4 Certification of critical auto-execution

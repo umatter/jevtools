@@ -131,3 +131,28 @@ def test_the_proxy_config_builds_a_feedback_log(tmp_path: Path) -> None:
     log = config.build_feedback()
     assert log is not None and log.path == tmp_path / "labels" / "feedback.jsonl"
     assert ServeConfig().build_feedback() is None
+
+
+def test_a_shadow_share_keeps_labels_coming_after_the_switch(tmp_path: Path) -> None:
+    log = FeedbackLog(tmp_path / "feedback.jsonl")
+    shown = executed = 0
+    for i in range(40):
+        router, _ = scenario_router(scripts.R1, feedback=log, policy=Policy(shadow_share=0.25))
+        d = router.decide(f"{scripts.R1_REQUEST} ({i})")
+        if d.outcome is Outcome.CONFIRM:
+            shown += 1
+            assert d.pending is not None and d.trace is not None and "shadow" in d.trace.outcome.get("caps", [])
+            done = router.resume(d.pending, selection="ok")
+            assert done.outcome is Outcome.EXECUTE  # the confirmed call runs: no second sample, no loop
+        else:
+            executed += d.outcome is Outcome.EXECUTE
+    assert 3 <= shown <= 18 and shown + executed == 40  # about a quarter, deterministic per decision id
+    assert len(log.records()) == shown and all(r.shadow and r.label == "accepted" for r in log.records())
+
+
+def test_arguments_are_kept_only_on_request(tmp_path: Path) -> None:
+    router, d = _card(FeedbackLog(tmp_path / "a.jsonl"))
+    assert d.call is not None and d.call.arguments
+    plain, kept = FeedbackLog(tmp_path / "plain.jsonl"), FeedbackLog(tmp_path / "kept.jsonl", keep_arguments=True)
+    assert plain.add(d, "accepted").arguments == {}  # type: ignore[union-attr]
+    assert kept.add(d, "accepted").arguments == dict(d.call.arguments)  # type: ignore[union-attr]

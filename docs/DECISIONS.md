@@ -2080,3 +2080,22 @@ Extends "Documentation and final merge":
   errors → it maximizes right executions (`kept − errors`), the highest threshold on a tie, also when it chooses the
   composition.
 
+## Two-stage rounds, a confident tool for drafts, shadow sampling
+
+- §3.5.5, §5: a round sends every speculated tool's questions at once, so a 16-tool τ² decision asked 82 questions
+  (19k input tokens) → a ballot over `tool.two_stage_min` (40) questions first asks only the questions no tool owns
+  (the `tool` Choice), then, in a same-state follow-up round, the questions of the tools the answer gives at least
+  `tool.stage2_min` (0.15; at most `tool.stage2_max` = 2). Other tools count as not speculated; both rounds decode
+  together, so P(tool) still enters C. One more round trip; no held-out app ballot and no golden case is that large.
+- §4.7: a coverage escalation (`P7` out of pool, `P6`) now needs P(chosen tool) ≥ `shapes.escalate_min_tool` (0.70):
+  the remaining calls on When2Call's cannot-answer cases were mostly a confidently chosen near-miss tool whose
+  missing value had hidden the mistake. Estimated on the recorded run: 16 → 12 such calls, 1 of 281 gained calls lost.
+- §11.3: `Policy.shadow_share` shows a sampled share of would-be executions (by decision id) as confirm cards with
+  cap `shadow`, so a feedback log keeps receiving labels after an app leaves full shadow mode; a confirmed card is
+  never sampled again. `FeedbackLog` drops call arguments unless `keep_arguments=True` (personal data; tuning does
+  not use them). Pilot guide: docs/PILOT.md.
+- τ² (BENCH): with default trust the right write tool is chosen less often (91.3% → 85.5%): 11 airline writes whose
+  record lists (flights, passengers) now take only objects from tool results, which an untrusted lookup cannot give a
+  write tool; the tool is not speculated (`P6`) and the decision carries no call. They could not execute before
+  either; with trusted lookups the rate is 92.5%.
+

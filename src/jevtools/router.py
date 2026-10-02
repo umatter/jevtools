@@ -17,6 +17,7 @@ The Router holds no kind-specific logic: everything about values goes through re
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 import warnings
 from collections.abc import Callable, Generator, Mapping, Sequence
@@ -98,13 +99,14 @@ from jevtools.prompts import (
     tool_menu,
     yes_no_menu,
 )
+from jevtools.qid import TOOL_QID
 from jevtools.spec.catalog import Catalog, ToolLike, strip_xjev
 from jevtools.spec.constraints import ConstraintContext
 from jevtools.spec.models import SlotSpec, ToolSpec
 from jevtools.spec.schema import fit_schema, validate
 from jevtools.trace import RoundRecord, StoreBodies, Trace, build_trace, call_record
 from jevtools.validate import Limits, cached_limits
-from jevtools.wire import Answer, DecisionRequest, DecisionResponse
+from jevtools.wire import Answer, ChoiceAnswer, DecisionRequest, DecisionResponse
 
 Revalidator = Callable[[ToolDecode, Context], list[str]]
 """TOCTOU hook: problems that forbid executing a delayed call (empty list = still valid)."""
@@ -489,10 +491,41 @@ class Router:
         if not plan.ballot.questions:  # nothing to ask (no tools): decodes to "no tool"
             self._decode(s, state)
             return state
+        if self._staged(plan.ballot):
+            return (yield from self._staged_round(s, plan, state))
         answered = yield from self._ask(s, plan.ballot, state, merged=False)
         if answered is not None:
             state.ballot = answered
             self._decode(s, state)
+        return state
+
+    def _staged(self, ballot: Ballot) -> bool:
+        """Whether a round asks the tool first (``tool.two_stage_min``): a large ballot with a ``tool`` question."""
+        limit = self.policy.tool.two_stage_min
+        return bool(limit) and len(ballot.questions) > limit and any(q.qid == TOOL_QID for q in ballot.questions)
+
+    def _staged_round(self, s: _Session, plan: RoundPlan, state: _State) -> Generator[Effect, Any, _State]:
+        """Ask the questions no tool owns (the ``tool`` Choice) first, then, in a same-state round, only the
+        questions of the tools Jev favoured (``tool.stage2_min``, at most ``tool.stage2_max``); other tools count as
+        not speculated. Both rounds decode together (I4: same state)."""
+        limits = self.round_limits()
+        first = followup_ballot(plan.ballot, [q for q in plan.ballot.questions if q.tool is None],
+                                mode=plan.ballot.mode, limits=limits)  # fmt: skip
+        asked = yield from self._ask(s, first, state, merged=False)
+        if asked is None:
+            return state
+        favoured = _favoured_tools(plan.ballot, state.answers.get(TOOL_QID), self.policy)
+        tools = [t.model_copy(update={"speculated": t.speculated and t.name in favoured}) for t in plan.ballot.tools]
+        narrowed = asked.model_copy(update={"tools": tools})
+        rest = [q for q in plan.ballot.questions if q.tool is not None and q.tool in favoured]
+        if rest:
+            second = followup_ballot(narrowed, rest, mode=plan.ballot.mode, limits=limits)
+            answered = yield from self._ask(s, second, state, merged=True)
+            if answered is None:
+                return state
+            narrowed = merge_ballots(narrowed, answered)
+        state.ballot = narrowed
+        self._decode(s, state)
         return state
 
     def _ask(
@@ -1062,6 +1095,10 @@ class Router:
             call = ToolCall.build(proposed.name, jsonable(proposed.arguments), trace_id=ids.trace_id)
         if result.outcome is Outcome.EXECUTE and (td is None or not td.complete):
             result = result.model_copy(update={"outcome": Outcome.CLARIFY, "ask": "open"})  # defensive: never guess
+        confirmed = s.confirmed_call is not None or (inp is not None and inp.confirmed)
+        if result.outcome is Outcome.EXECUTE and not confirmed and _sampled(ids.decision_id, self.policy.shadow_share):
+            result = result.model_copy(update={"outcome": Outcome.CONFIRM, "caps": [*result.caps, "shadow"],
+                                               "ask": "confirm"})  # as policy shadow mode does it  # fmt: skip
         comp = self._composition(td)
         prompt, actions = self._prompt(s, state, result, td, inp)
         pending = self._pending_handle(s, state, ids, result, call, prompt, actions, td)
@@ -1355,6 +1392,24 @@ def _membership(pool: Pool, value: Any, label: str | None) -> Mapping[str, Any] 
             return f"label changed to {match.label!r}"
         return dict(match.attrs)
     return None
+
+
+def _sampled(decision_id: str, share: float) -> bool:
+    """Whether a decision falls in a ``share`` sample (deterministic: the decision id's hash)."""
+    if share <= 0:
+        return False
+    return int(hashlib.sha256(decision_id.encode()).hexdigest()[:8], 16) / 0x1_0000_0000 < share
+
+
+def _favoured_tools(ballot: Ballot, answer: Any, policy: Policy) -> list[str]:
+    """The tools a ``tool`` answer gives at least ``tool.stage2_min`` (most likely first, at most
+    ``tool.stage2_max``); sentinels are never tools."""
+    question = next((q for q in ballot.questions if q.qid == TOOL_QID), None)
+    if question is None or not isinstance(answer, ChoiceAnswer):
+        return []
+    names = {o.label: str(o.value) for o in question.options}
+    ranked = sorted(((p, names[label]) for label, p in answer.probabilities.items() if label in names), reverse=True)
+    return [name for p, name in ranked if p >= policy.tool.stage2_min][: policy.tool.stage2_max]
 
 
 def _call_key(call: ToolCall) -> tuple[str, str]:

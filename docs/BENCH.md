@@ -694,6 +694,47 @@ its tool: 5.3%, and declines are more accurate than without a drafter. For refer
 61.3% accuracy for GPT-4o (judged by an LLM) and 70.0% for its best fine-tuned 8B model (log-probabilities over the
 written answers); the protocols differ.
 
+### Two-stage rounds (2026-10-02)
+
+`tool.two_stage_min` (DECISIONS "Two-stage rounds"): τ² ballots ask the tool first, then only the favoured tools'
+questions. Live, all 994 next-call cases, no backend failures:
+
+| | One stage | Two stages |
+|---|---:|---:|
+| Cost, trust `none` / `reads` | $1.29 / $2.08 | **$0.38 / $0.37** |
+| Median input tokens per decision, `none` / `reads` | 23,073 / 39,679 | **6,650 / 6,474** |
+| Read calls exactly right, `none` / `reads` | 67.7% / 68.0% | 67.2% / 67.7% |
+| Write calls, shown / executed (trust `reads`) | 37.0% / 25.4% | 35.3% / 25.4% |
+| Talk turns without an executed call, `none` / `reads` | 97.1% / 94.6% | 97.3% / 94.4% |
+| Wrong write executions (trust `reads`) | 1 | 1 |
+
+No held-out app ballot exceeds 40 questions, so the app benches do not change. With the gpt-4o-mini drafter on top
+(trust `reads`) τ² does not move (reads 67.2%, writes 35.8% / 25.4%; drafter $0.07): its remaining gaps are write
+identity slots, which drafted values cannot bind.
+
+### Full τ² tasks (2026-10-02)
+
+`python -m jevtools.bench.tau2_agent` (in a τ²-bench environment) runs whole simulated conversations, scored by τ²'s
+own reward (pass^1, one trial). The jevtools agent lets jevtools decide every call (an execute is the call; a confirm
+card or a question is jevtools' own prompt, resumed by the customer's reply) and an LLM write only the text replies
+jevtools has none for. The baseline is τ²'s `llm_agent` on the same LLM (gpt-4.1-mini, temperature 0), against the
+same simulated customer (gpt-4.1-mini), trusted lookups:
+
+| Tasks | jevtools agent | gpt-4.1-mini agent |
+|---|---:|---:|
+| Retail 0–19 | 3 / 20 | 10 / 20 |
+| Retail 20–39 | 0 / 20 | 12 / 20 |
+| Airline 0–19 | 2 / 20 | 12 / 20 |
+| **All** | **5 / 60 (8%)** | **34 / 60 (57%)** |
+| Agent cost | $0.44 Jev + $0.08 writer | $0.61 |
+
+jevtools does not complete τ² tasks. It gets stuck: 48 of the 60 conversations repeat the same question three or more
+times in a row, and the median one runs into the 30-turn limit. 1,148 of its 1,458 decisions were questions, mostly a
+missing value (`P7`, 478) or a choice between tools (`P5`, 371). The typical case needs a lookup first (the order's
+item ids): Jev keeps choosing the write the customer ultimately wants, asks the customer for the ids, and the customer
+cannot answer. jevtools decides one call well when its values are at hand; it does not plan the steps that produce
+them, and its questions have no way out of a loop. At gpt-4.1-mini prices it is not cheaper either.
+
 ## Does one calibration fit every bench? (2026-10-01)
 
 Every recorded decision that proposes a call was re-decided offline (no API cost) and labelled right or wrong: the

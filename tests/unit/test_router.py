@@ -539,3 +539,30 @@ def test_loop_mode_reports_done_after(scenario_catalog: Catalog, stubs: list[Any
     d = r.decide(R2_MESSAGES, mode="loop")
     assert "send_email.done_after" in backend.requests[0].questions
     assert d.gates["done_after"] == pytest.approx(0.95)
+
+
+def test_a_large_ballot_asks_the_tool_first_then_only_the_favoured_tool() -> None:
+    from jevtools.backends.scripted import ScriptedBackend
+    from jevtools.router import Router
+
+    def weather(i: int) -> dict[str, Any]:
+        return {"type": "function", "function": {
+            "name": f"get_weather_{i}", "description": f"Get the weather from provider {i}.", "x-jev": {"risk": "read"},
+            "parameters": {"type": "object", "required": ["city", "unit"], "properties": {
+                "city": {"type": "string"}, "unit": {"type": "string", "enum": ["c", "f"]}}}}}  # fmt: skip
+
+    script = {"tool": {"get_weather_3": 0.9, "get_weather_4": 0.06, "NO_TOOL": 0.04},
+              "get_weather_3.city": "Paris", "get_weather_3.unit": "c"}  # fmt: skip
+    backend = ScriptedBackend(script)
+    r = Router([weather(i) for i in range(20)], backend=backend)
+    d = r.decide("What's the weather in Paris in Celsius?")
+    first, second = backend.requests
+    assert list(first.questions) == ["tool"]  # stage 1: the tool question alone
+    assert {qid.split(".")[0] for qid in second.questions} == {"get_weather_3"}  # 0.06 < stage2_min
+    assert d.outcome is Outcome.EXECUTE and d.call is not None
+    assert d.call.name == "get_weather_3" and d.call.arguments == {"city": "Paris", "unit": "c"}
+    assert d.confidence is not None and d.confidence.call <= 0.9  # the tool's probability still counts
+    unstaged = ScriptedBackend(script)
+    off = Policy().model_copy(update={"tool": Policy().tool.model_copy(update={"two_stage_min": 0})})
+    Router([weather(i) for i in range(20)], backend=unstaged, policy=off).decide("What's the weather in Paris?")
+    assert len(unstaged.requests) == 1 and len(unstaged.requests[0].questions) > 40
