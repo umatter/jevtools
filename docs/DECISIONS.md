@@ -2137,3 +2137,18 @@ normalization misses; the blocks had four other causes:
   quantity fields (`amount`, `price`, `total`, `count`…) are left to verification like small counts. With those, the
   grounding-only guard solved 31 of 60 (the LLM's level) and blocked 6 writes, three of them made-up payment ids.
 
+## A trusted tool vouches for its fields, not its prose; `Guard`
+
+- §3.4.2: `Context.trusted_tools` gave every leaf of a trusted tool's result the `registry` channel, so an id written
+  inside a free-text field (an order note, a review, an address line a user typed) became trusted and could ground a
+  write: the first τ² injection run let a planted `gift_card_8765432` through the guard as often as the plain LLM
+  acted on it → a trusted tool vouches only for structured leaves (`extract.base.trusted_leaf`): a field not named like
+  free text (`note`, `description`, `review`, `comment`, `message`, `instructions`, …) with at most 8 words. Other
+  leaves keep `tool_output`, which write-side identity slots refuse, and the guard's field grounding uses the same
+  rule. A tool result arriving as JSON text in a `tool` message is parsed into its fields, so each is judged alone
+  (it was one long leaf, trusted or not as a whole).
+- `jevtools.Guard(tools)` packages `Router.check(verify=False)` for agent loops: `screen(messages, tool_calls)`
+  returns the calls to run and `tool` refusals naming the unsupported value; read tools pass; LangChain tools are
+  accepted; `GuardedToolNode` is the LangGraph node. A grounded critical-tier call is allowed with
+  `needs_confirmation` (the guard has no memory of the user's "yes", so blocking it would loop).
+

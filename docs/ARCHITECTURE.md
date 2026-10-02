@@ -83,6 +83,7 @@ src/jevtools/
   loop.py                Agent, LoopBudget, LoopResult, EntityStore, ingest_observation (§6)
   fallback.py            Filler, Escalator, TextLLM protocols + OpenAI-compatible reference implementations (§4.7)
   feedback.py            FeedbackLog: users' verdicts on confirm cards as labelled rows; check_policy (§11.3)
+  guard.py               Guard: ground an LLM agent's proposed calls (Router.check, no model call); screen()
   compat.py              cookbook_policy, from_jev_fn: migration from existing Jev usage (§7.4)
   probe.py               conformance probe: measure undocumented wire limits (§8.7, E1)
   cli.py                 `jevtools lint | explain | verify | probe | serve | eval | tune | fixtures`

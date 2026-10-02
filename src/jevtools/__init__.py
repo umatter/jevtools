@@ -52,6 +52,7 @@ from jevtools.fallback import (
     ProposedCall,
     TextLLM,
 )
+from jevtools.guard import Guard, Verdict
 from jevtools.kinds import ResolveContext, Resolver, SlotResult, register_resolver
 from jevtools.loop import (
     Agent,
@@ -167,6 +168,8 @@ __all__ = [
     "ResolveContext",
     "Resolver",
     "Router",
+    "Guard",
+    "Verdict",
     "SentinelSpec",
     "SlotReport",
     "SlotResult",

@@ -16,6 +16,7 @@ before a mention mark it ``negated``; the mention stays in pools with a note (Je
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, overload
@@ -214,11 +215,27 @@ def source_texts(ctx: Context) -> list[SourceText]:
         texts.append(SourceText(ref, turn.text, channel, tuple(tokenize(turn.text))))
     trusted = set(getattr(ctx, "trusted_tools", ()))
     for observation in ctx.all_observations():
-        channel = Channel.REGISTRY if observation.tool in trusted else Channel.TOOL_OUTPUT
         for path, text in _leaves(jsonable(observation.content), "$"):
             ref = f"obs:{observation.step}" + ("" if path == "$" else f":{path}")
+            vouched = observation.tool in trusted and trusted_leaf(path, text)
+            channel = Channel.REGISTRY if vouched else Channel.TOOL_OUTPUT
             texts.append(SourceText(ref, text, channel, tuple(tokenize(text))))
     return texts
+
+
+FREE_TEXT_FIELDS = frozenset({"note", "notes", "comment", "comments", "description", "review", "reviews", "message",
+                              "messages", "text", "body", "content", "summary", "instructions", "remark", "remarks",
+                              "memo", "details", "explanation", "reason", "feedback"})  # fmt: skip
+"""Fields whose text people or third parties write, even in an app's own records."""
+TRUSTED_LEAF_WORDS = 8
+
+
+def trusted_leaf(path: str, text: str) -> bool:
+    """Whether a trusted tool vouches for this leaf of its result: a structured field value (an id, a name, an amount,
+    an address line), not free text, where an instruction planted by a user or a third party can sit. A leaf is
+    vouched for when its field is not a free-text field and it has at most :data:`TRUSTED_LEAF_WORDS` words."""
+    key = re.sub(r"\[\d+\]$", "", path).rsplit(".", 1)[-1].lower()
+    return key not in FREE_TEXT_FIELDS and len(text.split()) <= TRUSTED_LEAF_WORDS
 
 
 def _leaves(value: Any, path: str) -> Iterator[tuple[str, str]]:

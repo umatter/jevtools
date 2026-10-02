@@ -347,22 +347,23 @@ response = client.chat.completions.create(model="jevtools", messages=messages, t
 A confirm card or menu comes back as an assistant message: `content` holds the question and `x_jev` holds the
 options and a `pending_id`. `d.to_anthropic_content()` emits Anthropic `tool_use` blocks.
 
-**Guarding an LLM agent's calls.** For multi-step tasks, let an LLM plan and propose calls, and let jevtools check
-each call that has side effects before it runs. `router.check(messages, call)` fixes the proposed tool, offers the
-proposed arguments as candidates next to the ones code finds, and decides as usual: `execute` (run `decision.call`,
-whose arguments are jevtools' bound values), `confirm` (show `decision.prompt`), or anything else (do not run it; the
-rule and bottleneck say why). The proposed values are never changed: each identity argument must match a value from
-the user or a trusted lookup (else the call is blocked, naming the argument), and Jev verifies each one. On τ² the verification
-is too strict (it blocked or re-confirmed most right writes: 15–22 of 60 tasks against 31–34 for the LLM alone), while
-`router.check(messages, call, verify=False)`, grounding only and no model call, solved 31 of 60, the LLM's own level,
-and stopped three payment ids the LLM had made up (docs/BENCH.md). For agents, that is the recommended use: let the
-LLM plan, and ground every write before it runs.
+**Guarding an LLM agent's calls.** For multi-step tasks, let an LLM plan and propose calls, and let jevtools ground
+each write before it runs: every id, address, account or other identity value (each field of an object, each number
+in a calculation) must come from the user's turns or a trusted tool's structured results. A value that appears nowhere,
+such as one an instruction planted in a tool result asks for or one the LLM made up, blocks the call with a tool
+error naming it, so the model can look it up or ask. Read tools pass unchecked; no model is called.
 
 ```python
-decision = router.check(messages, {"name": "send_email", "arguments": llm_call_arguments}, context=ctx)
-if decision.outcome is jt.Outcome.EXECUTE:
-    run(decision.call)
+guard = jt.Guard(tools)                       # trusts the read tools' structured results; trusted_tools=… to choose
+allowed, refusals = guard.screen(messages, assistant_message.tool_calls)
+# run `allowed`; append `refusals` (role "tool" messages answering the blocked calls) after the assistant message
 ```
+
+In LangGraph, `jevtools.adapters.langchain.GuardedToolNode(tools)` replaces `ToolNode`. A grounded call of a
+critical-tier tool (a refund, a payment) is allowed with `verdict.needs_confirmation` set: run it after the user
+confirmed. On τ² (docs/BENCH.md) the guard kept gpt-4.1-mini's task success (31 of 60 against 31 and 34 alone) and
+stopped three payment ids the model had made up. `router.check(messages, call)` is the underlying call; with Jev
+verifying each value as well (`verify=True`) it was too strict on τ² (15–22 of 60).
 
 **LangChain.** `JevChatModel` is a `BaseChatModel`, so `bind_tools` and ToolNode loops work unchanged.
 `jevtools.adapters.langchain.confirm_node` maps confirm and clarify to LangGraph `interrupt()`.

@@ -343,7 +343,48 @@ def _langgraph_interrupt() -> Callable[[Any], Any]:
     return interrupt  # type: ignore[no-any-return, unused-ignore]
 
 
+class GuardedToolNode:
+    """A LangGraph node in place of ``ToolNode``: runs the last AI message's tool calls that the
+    :class:`~jevtools.guard.Guard` grounds, and answers each other one with an error ``ToolMessage`` naming the value
+    the conversation does not support, so the model can look it up or ask. Read tools pass unchecked. No model call.
+
+    ``GuardedToolNode(tools)`` trusts the read tools' results; pass ``guard=Guard(tools, trusted_tools=...)`` to
+    choose. It returns ``{"messages": [ToolMessage, ...]}``, one per tool call, as ``ToolNode`` does."""
+
+    def __init__(self, tools: Sequence[BaseTool], *, guard: Any = None) -> None:
+        from jevtools.guard import Guard
+
+        self.tools = {t.name: t for t in tools}
+        self.guard = guard if guard is not None else Guard(list(tools))
+
+    def __call__(self, state: Any, config: RunnableConfig | None = None) -> dict[str, list[ToolMessage]]:
+        messages = _messages(state)
+        last = messages[-1] if messages else None
+        calls = list(getattr(last, "tool_calls", None) or [])
+        if not calls:
+            return {"messages": []}
+        screened = self.guard.screen(to_openai_messages(messages[:-1]), calls)
+        out: list[ToolMessage] = []
+        for call in screened.allowed:
+            tool = self.tools.get(call["name"])
+            try:
+                if tool is None:
+                    raise KeyError(f"no tool named {call['name']!r}")
+                result = tool.invoke(call.get("args") or {}, config=config)
+                content = result if isinstance(result, str) else json.dumps(result, default=str)
+                out.append(ToolMessage(content=content, tool_call_id=call["id"], name=call["name"]))
+            except Exception as exc:  # noqa: BLE001 - a failing tool answers its call, as ToolNode does
+                out.append(ToolMessage(content=f"Error: {exc}", tool_call_id=call["id"], name=call["name"],
+                                       status="error"))  # fmt: skip
+        for refusal, verdict in zip(screened.refusals, [v for v in screened.verdicts if not v.allowed], strict=True):
+            out.append(ToolMessage(content=refusal["content"], tool_call_id=refusal["tool_call_id"],
+                                   name=verdict.name, status="error"))  # fmt: skip
+        order = {call["id"]: i for i, call in enumerate(calls)}
+        return {"messages": sorted(out, key=lambda m: order.get(m.tool_call_id, len(order)))}
+
+
 __all__ = [
+    "GuardedToolNode",
     "CONFIG_KEY",
     "JevChatModel",
     "PendingStore",

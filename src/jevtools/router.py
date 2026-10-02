@@ -62,6 +62,7 @@ from jevtools.decode import (
     with_tool,
 )
 from jevtools.errors import PendingScopeError
+from jevtools.extract.base import trusted_leaf
 from jevtools.fallback import Escalator, FillCandidate, Filler, FillRequest, ObservationPreview, ProposedCall, TextLLM
 from jevtools.feedback import FeedbackLog, label_of
 from jevtools.kinds.base import ResolveContext, get_resolver, resolve_default
@@ -1536,8 +1537,9 @@ _MONTHS = ("january", "february", "march", "april", "may", "june", "july", "augu
 
 
 def _grounding_sources(ctx: Context) -> tuple[str, set[str]]:
-    """What a composed value's fields may come from: the user's turns (as normalized text) and every scalar and key
-    of a trusted tool's results and arguments (normalized)."""
+    """What a composed value's fields may come from: the user's turns (as normalized text) and every scalar a trusted
+    tool vouches for in its results and arguments (structured fields, not free text: ``trusted_leaf``), and their
+    object keys (normalized)."""
     user = " " + " ".join(_norm(t.text) for t in ctx.user_turns if t.text) + " "
     trusted = set(ctx.trusted_tools)
     values: set[str] = set()
@@ -1545,7 +1547,7 @@ def _grounding_sources(ctx: Context) -> tuple[str, set[str]]:
         if o.tool not in trusted or o.status != "ok":
             continue
         for part in (jsonable(o.content), jsonable(o.arguments)):
-            values |= {_norm(v) for _, v in _leaves(part) if v is not None}
+            values |= {_norm(v) for key, v in _leaves(part) if v is not None and trusted_leaf(key, str(v))}
             values |= {_norm(k) for k in _keys(part)}
     return user, values
 

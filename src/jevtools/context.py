@@ -323,6 +323,7 @@ class Context(BaseModel):
             name, arguments = calls.get(turn.tool_call_id or "", (turn.name or "tool", {}))
             content = turn.content if turn.content is not None else turn.text
             text = content if isinstance(content, str) else canonical_str(jsonable(content))
+            content = _structured(content)  # a JSON result keeps its fields: trust is judged per field (trusted_leaf)
             observations.append(
                 Observation(
                     step=step,
@@ -421,6 +422,16 @@ def _tool_calls_by_id(turns: Sequence[Turn]) -> dict[str, tuple[str, dict[str, A
                 arguments = {}
             calls[str(call.get("id", ""))] = (str(function.get("name", "tool")), arguments)
     return calls
+
+
+def _structured(content: Any) -> Any:
+    """A tool result sent as JSON text, parsed into its object or array (other content unchanged)."""
+    if isinstance(content, str) and content.lstrip()[:1] in ("{", "["):
+        try:
+            return json.loads(content)
+        except ValueError:
+            return content
+    return content
 
 
 def is_loop(ctx: Context, mode: str = "turn") -> bool:
