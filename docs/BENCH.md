@@ -823,6 +823,17 @@ inference or knowledge ("over time" → the date column, "older than" → `age`,
 "median" → `tau`). As the first stage of a hybrid (jevtools decides when it can, an LLM takes the rest), it would handle
 a bit under half of such one-shot requests here, with no wrong execution; open-ended analyses stay with the LLM.
 
+The bench ships under `src/jevtools/bench/app/external/p2a/`: the raw `tools/list` export, the cases and data, and a
+`catalog.json` that `python -m jevtools.bench.app._p2a [--check]` rebuilds from the export by fixed rules (a test
+checks it). One rule binds a `value` parameter whose description mentions a column, which also catches
+`munge_filter`'s filter value ("parsed based on column type"); the numbers above were measured with that binding, so
+it is kept, and the two filter cases are among the ceiling misses.
+
+```bash
+jevtools bench app --p2a                                        # oracle ceiling (83%)
+jevtools bench app --p2a --backend auto --replays 3 --tags       # live
+```
+
 ## Does one calibration fit every bench? (2026-10-01)
 
 Every recorded decision that proposes a call was re-decided offline (no API cost) and labelled right or wrong: the

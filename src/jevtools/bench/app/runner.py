@@ -50,6 +50,11 @@ def heldout_dir() -> Path:
     return Path(str(resources.files("jevtools.bench.app") / "heldout"))
 
 
+def external_dir() -> Path:
+    """Benches built from real apps' tool lists (``external/``; ``p2a``: prompt2analytics, 270 tools, ``_p2a.py``)."""
+    return Path(str(resources.files("jevtools.bench.app") / "external"))
+
+
 def merged_catalog() -> list[dict[str, Any]]:
     """The tools of every bundled domain in one catalog (31 tools, names distinct): a large catalog for the tool
     question, used with each case's own context (``with_catalog``)."""
@@ -376,6 +381,6 @@ def run_domains(
 
 
 __all__ = [
-    "DOMAINS", "AppRecord", "AppReport", "control_cases", "domains_dir", "heldout_dir", "load_domain", "merged_catalog",
-    "run_app", "run_domains", "with_catalog",
+    "DOMAINS", "AppRecord", "AppReport", "control_cases", "domains_dir", "external_dir", "heldout_dir", "load_domain",
+    "merged_catalog", "run_app", "run_domains", "with_catalog",
 ]  # fmt: skip

@@ -1,0 +1,48 @@
+{
+ "now": "2026-10-02T10:00:00+02:00",
+ "tz": "Europe/Zurich",
+ "locale": "en",
+ "sources": [
+  {
+   "name": "datasets",
+   "type": "registry",
+   "path": "data/datasets.json",
+   "key": "name",
+   "label": "{name} ({rows} rows)",
+   "describe": "{description}",
+   "match": [
+    "name",
+    "description"
+   ],
+   "provides": [
+    "dataset"
+   ],
+   "attrs": [
+    "name",
+    "rows"
+   ],
+   "item": "dataset"
+  },
+  {
+   "name": "variables",
+   "type": "registry",
+   "path": "data/variables.json",
+   "key": "name",
+   "label": "{name}: {label}",
+   "describe": "In {dataset}",
+   "match": [
+    "name",
+    "label"
+   ],
+   "provides": [
+    "variable",
+    "column"
+   ],
+   "attrs": [
+    "dataset",
+    "label"
+   ],
+   "item": "variable"
+  }
+ ]
+}

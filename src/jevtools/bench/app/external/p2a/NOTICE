@@ -1,0 +1,3 @@
+tools_list.json is the MCP tools/list output of prompt2analytics v0.1.3, a statistics server licensed MIT OR
+Apache-2.0. catalog.json is generated from it by jevtools.bench.app._p2a. The cases, datasets and
+variables are written for this bench and are not part of prompt2analytics.

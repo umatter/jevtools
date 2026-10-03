@@ -1,0 +1,207 @@
+[
+ {
+  "name": "wage",
+  "label": "Hourly wage (USD)",
+  "dataset": "wages"
+ },
+ {
+  "name": "log_wage",
+  "label": "Log hourly wage",
+  "dataset": "wages"
+ },
+ {
+  "name": "education",
+  "label": "Years of schooling",
+  "dataset": "wages"
+ },
+ {
+  "name": "experience",
+  "label": "Years of work experience",
+  "dataset": "wages"
+ },
+ {
+  "name": "tenure",
+  "label": "Years with current employer",
+  "dataset": "wages"
+ },
+ {
+  "name": "female",
+  "label": "1 if female",
+  "dataset": "wages"
+ },
+ {
+  "name": "married",
+  "label": "1 if married",
+  "dataset": "wages"
+ },
+ {
+  "name": "region",
+  "label": "Region of residence",
+  "dataset": "wages"
+ },
+ {
+  "name": "union_member",
+  "label": "1 if union member",
+  "dataset": "wages"
+ },
+ {
+  "name": "age",
+  "label": "Age in years",
+  "dataset": "wages"
+ },
+ {
+  "name": "distance_to_college",
+  "label": "Distance to the nearest college (miles)",
+  "dataset": "wages"
+ },
+ {
+  "name": "date",
+  "label": "Calendar date",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "store_id",
+  "label": "Store identifier",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "sales",
+  "label": "Daily sales (USD)",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "price",
+  "label": "Average price",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "promotion",
+  "label": "1 if a promotion ran",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "holiday",
+  "label": "1 on public holidays",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "temperature",
+  "label": "Daily mean temperature",
+  "dataset": "store_sales"
+ },
+ {
+  "name": "firm_id",
+  "label": "Firm identifier",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "year",
+  "label": "Year",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "investment",
+  "label": "Gross investment",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "market_value",
+  "label": "Market value of the firm",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "capital",
+  "label": "Capital stock",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "industry",
+  "label": "Industry code",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "employees",
+  "label": "Number of employees",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "policy",
+  "label": "1 if the firm is covered by the reform",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "after_reform",
+  "label": "1 in years after the reform",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "r_and_d",
+  "label": "R&D spending",
+  "dataset": "firm_panel"
+ },
+ {
+  "name": "respondent_id",
+  "label": "Respondent identifier",
+  "dataset": "survey"
+ },
+ {
+  "name": "respondent_age",
+  "label": "Respondent's age",
+  "dataset": "survey"
+ },
+ {
+  "name": "income",
+  "label": "Annual income",
+  "dataset": "survey"
+ },
+ {
+  "name": "satisfaction",
+  "label": "Satisfaction score 1-10",
+  "dataset": "survey"
+ },
+ {
+  "name": "treatment_group",
+  "label": "1 if in the treatment group",
+  "dataset": "survey"
+ },
+ {
+  "name": "gender",
+  "label": "Gender",
+  "dataset": "survey"
+ },
+ {
+  "name": "country",
+  "label": "Country",
+  "dataset": "survey"
+ },
+ {
+  "name": "score_pre",
+  "label": "Test score before the program",
+  "dataset": "survey"
+ },
+ {
+  "name": "score_post",
+  "label": "Test score after the program",
+  "dataset": "survey"
+ },
+ {
+  "name": "months_to_churn",
+  "label": "Months until churn or censoring",
+  "dataset": "survey"
+ },
+ {
+  "name": "churned",
+  "label": "1 if the customer churned",
+  "dataset": "survey"
+ },
+ {
+  "name": "distance_to_cutoff",
+  "label": "Eligibility score minus the cutoff",
+  "dataset": "survey"
+ },
+ {
+  "name": "program_enrolled",
+  "label": "1 if enrolled in the program",
+  "dataset": "survey"
+ }
+]

@@ -1,0 +1,22 @@
+[
+ {
+  "name": "wages",
+  "rows": 3010,
+  "description": "Individual wages: earnings, schooling, experience and demographics"
+ },
+ {
+  "name": "store_sales",
+  "rows": 730,
+  "description": "Daily sales of a retail store with prices and promotions"
+ },
+ {
+  "name": "firm_panel",
+  "rows": 2200,
+  "description": "Panel of firms by year: investment, market value, capital, a policy reform"
+ },
+ {
+  "name": "survey",
+  "rows": 1500,
+  "description": "Customer survey: income, satisfaction, a program and churn"
+ }
+]

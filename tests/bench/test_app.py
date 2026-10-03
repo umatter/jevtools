@@ -208,6 +208,36 @@ def test_cli_bench_app_heldout() -> None:
     assert "| banking | 31 | 100% |" in out.getvalue()
 
 
+def test_p2a_catalog_matches_its_builder_and_the_oracle_solves_a_sample() -> None:
+    from jevtools.bench.app._p2a import main as build_p2a
+    from jevtools.bench.app.runner import external_dir
+
+    assert build_p2a(["--check"]) == 0
+    cases = load_domain("p2a", external_dir())
+    assert len(cases) == 53
+    picked = {"p2a-03", "p2a-17", "p2a-30", "p2a-53"}  # OLS lists, a paired flag, a defaulted dataset, no tool
+    report = run_app([("p2a", c) for c in cases if c.id in picked], "oracle")
+    assert [r.record.correct for r in report.records] == [True] * 4
+
+
+def test_cli_bench_app_p2a_runs_the_external_bench(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from jevtools.bench.app import runner
+
+    src, dst = runner.external_dir() / "p2a", tmp_path / "p2a"
+    dst.mkdir()
+    for name in ("catalog.json", "context.json"):
+        (dst / name).write_text((src / name).read_text(encoding="utf-8"), encoding="utf-8")
+    (dst / "data").mkdir()
+    for f in (src / "data").iterdir():
+        (dst / "data" / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    lines = (src / "cases.jsonl").read_text(encoding="utf-8").splitlines()
+    (dst / "cases.jsonl").write_text("\n".join(lines[:2]) + "\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "external_dir", lambda: tmp_path)
+    out = io.StringIO()
+    assert main(["bench", "app", "--p2a"], out=out, err=io.StringIO()) == 0
+    assert "| p2a | 2 | 100% |" in out.getvalue()
+
+
 def test_cli_bench_app_records_and_replays_cassettes(tmp_path: Path) -> None:
     rec, first, again = tmp_path / "rec", tmp_path / "first.json", tmp_path / "again.json"
     args = ["bench", "app", "--domains", "helpdesk", "--backend", "sim", "--replays", "2", "--controls"]

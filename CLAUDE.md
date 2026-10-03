@@ -38,6 +38,8 @@ jevtools bench app --heldout --backend auto --replays 3 --controls --policy F   
 jevtools bench app --heldout ... --record DIR            # keep every Jev answer (one cassette per replay)
 jevtools bench app --heldout --controls --replay DIR --policy F   # re-decide recorded answers offline, no API cost
 jevtools bench app --heldout --merged-catalog ...        # every case sees all 31 tools (large-catalog behaviour)
+jevtools bench app --p2a                                 # prompt2analytics: a real 270-tool catalog, 53 cases
+python -m jevtools.bench.app._p2a [--check]              # rebuild external/p2a/catalog.json from its tools/list export
 jevtools bench bfcl [--download]                         # BFCL stress test (tests use the vendored sample in tests/bench/data)
 jevtools bench when2call|tau2 ...                        # When2Call; τ²-bench reduced to next calls (--trust none|reads)
 jevtools bench bfcl|when2call|tau2 --escalator openai/gpt-4o-mini   # an LLM drafts uncovered values; Jev decides them
