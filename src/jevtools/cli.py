@@ -952,6 +952,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="tau2: which tools' results are first-party data (Context.trusted_tools)")  # fmt: skip
     p.add_argument("--heldout", action="store_true",
                    help="app: the generated held-out cases (same apps; for deciding between variants)")  # fmt: skip
+    p.add_argument("--p2a", action="store_true",
+                   help="app: the prompt2analytics bench (a real 270-tool statistics server; 53 cases)")  # fmt: skip
     p.add_argument("--replays", type=int, default=1, help="app: decide every case N times (live Jev varies)")
     p.add_argument("--policy", help="app: policy.toml for the run and its ceiling (default: Appendix B)")
     p.add_argument("--controls", action="store_true",
@@ -1035,6 +1037,10 @@ def _cmd_bench_app(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
         from jevtools.bench.app.runner import heldout_dir
 
         args.dir = str(heldout_dir())
+    elif args.p2a:
+        from jevtools.bench.app.runner import external_dir
+
+        args.dir, args.domains = str(external_dir()), args.domains or "p2a"
     names = tuple(d.strip() for d in args.domains.split(",") if d.strip()) if args.domains else None
     if names is None:
         names = DOMAINS if args.dir is None else tuple(sorted(p.name for p in Path(args.dir).iterdir()
