@@ -82,9 +82,31 @@ def make_lookup(results: Mapping[str, SlotResult], ctx: Context) -> Lookup:
             raise KeyError(path)
         if not attr:
             return result.value
-        return derived_attr({**result.attrs, "value": result.value}, attr)
+        try:
+            return derived_attr({**result.attrs, "value": result.value}, attr)
+        except KeyError:
+            if not result.parts:
+                raise
+        return shared_attr(result, attr, path)
 
     return lookup
+
+
+def shared_attr(result: SlotResult, attr: str, path: str) -> Any:
+    """The attribute every elected element of a list result shares (``columns.dataset``: the dataset all the named
+    columns belong to); ``KeyError`` when the elements disagree or none has it."""
+    seen: dict[str, Any] = {}
+    for part in result.parts.values():
+        if part.is_bottom:
+            continue
+        try:
+            value = derived_attr({**part.attrs, "value": part.value}, attr)
+        except KeyError:
+            continue
+        seen[canonical_str(jsonable(value))] = value
+    if len(seen) != 1:
+        raise KeyError(path)
+    return next(iter(seen.values()))
 
 
 def late_bind(
@@ -133,4 +155,5 @@ __all__ = [
     "late_dependencies",
     "make_lookup",
     "observation_text",
+    "shared_attr",
 ]

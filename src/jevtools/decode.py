@@ -352,8 +352,8 @@ def decode_tool(
 def _verifies(question: BallotQuestion, result: SlotResult | None) -> bool:
     """Whether a ``verify`` Noul was asked about the value the slot now elects."""
     candidate = (question.meta or {}).get("candidate") or {}
-    if result is None or result.is_bottom or "defaulted" in result.flags:
-        return False  # a value a declared default supplied is not one the request refers to
+    if result is None or result.is_bottom or "defaulted" in result.flags or "implied" in result.flags:
+        return False  # a value a declared default supplies, or one another slot's row implies, needs no mention
     return value_key(candidate.get("value")) == value_key(result.value)
 
 
@@ -494,7 +494,14 @@ def _late_value(results: Mapping[str, SlotResult], source: tuple[str, str], key:
     if attr in attrs:
         return attrs[attr]
     value = sibling.values[key]
-    return value.get(attr) if isinstance(value, Mapping) else None
+    if isinstance(value, Mapping):
+        return value.get(attr)
+    if sibling.parts and key == elected_key(sibling):  # a list: the attribute its elements share
+        try:
+            return late_recipes.shared_attr(sibling, attr, f"{name}.{attr}")
+        except KeyError:
+            return None
+    return None
 
 
 def _pick(result: SlotResult, option: str, late_value: Any) -> _Pick | None:

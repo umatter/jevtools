@@ -258,18 +258,22 @@ class SlotResult:
         dist = dict(self.dist)
         mass = dist.pop(LATE_DEFAULT)
         key = value_key(value)
-        defaulted = mass > dist.get(key, 0.0)  # the default, not a mention, carries the value
-        dist[key] = dist.get(key, 0.0) + mass
+        mentioned = dist.get(key, 0.0)
+        dist[key] = mentioned + mass
         values = {**self.values, key: value}
         entries = dict(self.entries)
         entries.setdefault(
             key, ValueEntry(display=display or display_value(value), channel=channel, prov={"default": True})
         )
-        flags = (*self.flags, "defaulted") if defaulted else self.flags
-        return elect(
+        result = elect(
             path=self.path, kind=self.kind, stakes=self.stakes, dist=dist, values=values, entries=entries,
-            out_of_pool=out_of_pool, qids=self.qids, sentinels=self.sentinels, notes=self.notes, flags=flags,
+            out_of_pool=out_of_pool, qids=self.qids, sentinels=self.sentinels, notes=self.notes, flags=self.flags,
         )  # fmt: skip
+        if result.is_bottom or value_key(result.value) != key:
+            return result  # a mention of another value won: it is verified like any mention
+        # the default carries the elected value ("defaulted"), or a mention elected the value the default derives
+        # from another slot's row ("implied"): either way the request need not name it
+        return result.with_(flags=(*result.flags, "defaulted" if mass > mentioned else "implied"))
 
     def with_(self, **changes: Any) -> SlotResult:
         """A copy with fields replaced."""

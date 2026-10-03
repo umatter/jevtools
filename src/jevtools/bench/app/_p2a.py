@@ -7,11 +7,11 @@ are reproducible and checked by a test:
 
 - ``dataset``, ``left`` and ``right`` (strings) bind to the ``datasets`` registry;
 - a string or string-list parameter whose description mentions a column or variable binds to ``variables``
-  (except free-text parameters such as ``path`` or ``query``). ``value`` binds too when its description says so: it
-  names a column in ``hypothesis_oneway``, but ``munge_filter``'s "value to compare against (... column type)" also
-  matches, so that tool's filter value is a variable slot (kept as benched; see docs/BENCH.md);
-- ``dataset`` defaults to the dataset of the tool's first column parameter (``default_from``), so "a histogram of
-  wages" needs no dataset named;
+  (except free-text parameters such as ``path`` or ``query``, and a mention of a column's *type*: ``munge_filter``'s
+  "value to compare against (... parsed based on column type)" is a value, not a column);
+- ``dataset`` defaults to the dataset of the tool's first column parameter, or of a column list when there is no
+  single column (``default_from``; the dataset the listed columns share), so "a histogram of wages" needs no dataset
+  named;
 - data-changing tools (``munge_*``, imports, exports, sessions, queries) are ``write`` risk, the rest ``read``.
 
     python -m jevtools.bench.app._p2a           # (re)write catalog.json
@@ -40,6 +40,11 @@ WRITES = frozenset({
 DATASET_PARAMS = ("dataset", "left", "right")
 FREE_TEXT = frozenset({"result_name", "path", "title", "pattern", "query"})
 _COLUMN = re.compile(r"\bcolumns?\b|\bvariables?\b")
+_COLUMN_TYPE = re.compile(r"\b(?:columns?|variables?)'?s? d?types?\b")
+
+
+def _names_columns(description: str | None) -> bool:
+    return bool(_COLUMN.search(_COLUMN_TYPE.sub("", (description or "").lower())))
 
 
 def _strip(schema: Any) -> Any:
@@ -55,18 +60,20 @@ def _bind(params: dict[str, Any]) -> None:
         flat = p.get("type") == "string" or (p.get("type") == "array" and items.get("type") == "string")
         if name in DATASET_PARAMS and p.get("type") == "string":
             p["x-jev"] = {"source": "datasets"}
-        elif flat and name not in FREE_TEXT and _COLUMN.search((p.get("description") or "").lower()):
+        elif flat and name not in FREE_TEXT and _names_columns(p.get("description")):
             p["x-jev"] = {"source": "variables"}
     dataset = props.get("dataset", {})
     if dataset.get("x-jev", {}).get("source") != "datasets":
         return
 
-    def column(k: str) -> bool:
+    def column(k: str, kind: str = "string") -> bool:
         p = props.get(k, {})
-        return bool(p.get("x-jev", {}).get("source") == "variables" and p.get("type") == "string")
+        return bool(p.get("x-jev", {}).get("source") == "variables" and p.get("type") == kind)
 
-    columns = [k for k in params.get("required") or [] if column(k)]
-    columns += [k for k in props if k not in columns and column(k)]
+    columns = []
+    for kind in ("string", "array"):  # a scalar column first; else a column list (the dataset its columns share)
+        columns += [k for k in params.get("required") or [] if k not in columns and column(k, kind)]
+        columns += [k for k in props if k not in columns and column(k, kind)]
     if columns:
         dataset["x-jev"]["default_from"] = f"{columns[0]}.dataset"
 

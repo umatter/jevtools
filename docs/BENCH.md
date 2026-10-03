@@ -814,24 +814,37 @@ replays, $0.035 for 159 decisions:
 |---|---:|---:|---:|---:|
 | First run | 64% | 14% | 22% | 3 |
 | Tool shortlist, plurals, number lists, colon option lists | 83% | 30% | 33% | 3 |
-| No verify on defaulted values; a list skips words naming a sibling's value | 83% | **45%** | **49%** | **0** |
+| No verify on defaulted values; a list skips words naming a sibling's value | 83% | 45% | 49% | 0 |
+| Ref nouns without "name of"; no verify on implied values (2026-10-03) | 83% | 55% | 61% | 0 |
+| Dataset defaults from a column list; no follow-up verify of a defaulted value (2026-10-03) | 83% | **60%** | **64%** | **0** |
 
-(DECISIONS "A 270-tool catalog"; the last row's median regression relabelled: p2a defaults `tau` to 0.5, so leaving it
-out is the median.) Jev chose the right tool in every case within the ceiling. Most remaining losses are right calls
-the policy withholds (read-tier diffuse or unverified, write-tier ambiguous: 56 of the 159), then values that need
-inference or knowledge ("over time" → the date column, "older than" → `age`, "with a promotion" → the value 1,
-"median" → `tau`). As the first stage of a hybrid (jevtools decides when it can, an LLM takes the rest), it would handle
-a bit under half of such one-shot requests here, with no wrong execution; open-ended analyses stay with the LLM.
+(DECISIONS "A 270-tool catalog"; from the third row on, the median regression is relabelled: p2a defaults `tau` to
+0.5, so leaving it out is the median.) The last row came from reading the 60 right calls the policy had withheld
+(replayed from the recording): asked for "the name of the column", Jev answered `NOT_STATED` for columns the user
+named, and datasets implied by the named columns failed `verify` (row 4: withheld right calls 60 → 49, unverified
+ones 13 → 2). Row 5 makes the dataset default work for tools that take a column list (PCA, box plots: row 4's run
+showed it had not fired) and drops a follow-up `verify` round whose answer decode ignored. Withheld right calls: 41
+of 159. Replays of the last row: 60% / 58% / 62%; $0.034 for 159 decisions (row 4: $0.036).
+
+Jev chose the right tool in every case within the ceiling but two, in every run: a forecast went to `ts_arima_fit`
+instead of `ts_arima_forecast`, and "how many respondents per country" to `munge_group_by` instead of
+`munge_value_counts` (an earlier version of this section said every tool was right; it was not). Most remaining
+losses are right calls the policy withholds (41 of the 159: read-tier diffuse, mostly a column or list Jev splits
+between the named value and `NOT_STATED` or a near namesake such as `age`/`respondent_age`; write-tier ambiguous),
+then values that need inference or knowledge ("over time" → the date column, "older than" → `age`, "with a
+promotion" → the value 1). As the first stage of a hybrid (jevtools decides when it can, an LLM takes the rest), it
+would handle about 60% of such one-shot requests here, with no wrong execution; open-ended analyses stay with
+the LLM.
 
 The bench ships under `src/jevtools/bench/app/external/p2a/`: the raw `tools/list` export, the cases and data, and a
 `catalog.json` that `python -m jevtools.bench.app._p2a [--check]` rebuilds from the export by fixed rules (a test
-checks it). One rule binds a `value` parameter whose description mentions a column, which also catches
-`munge_filter`'s filter value ("parsed based on column type"); the numbers above were measured with that binding, so
-it is kept, and the two filter cases are among the ceiling misses.
+checks it). The rows before 2026-10-03 also bound `munge_filter`'s filter value to the variables ("parsed based on
+column type" mentions a column); the builder now skips a mention of a column's type. The ceiling did not move: the two
+filter cases still need inference ("older than" → `age`, "with a promotion" → 1).
 
 ```bash
 jevtools bench app --p2a                                        # oracle ceiling (83%)
-jevtools bench app --p2a --backend auto --replays 3 --tags       # live
+jevtools bench app --p2a --backend auto --replays 3 --tags       # live (~$0.04)
 ```
 
 ## Does one calibration fit every bench? (2026-10-01)

@@ -163,7 +163,8 @@ def default_noun(name: str, description: str | None) -> str:
     return "the " + phrase
 
 
-_KEY_WORDS = r"(?:e-?mail(?: address)?|id|identifier|key|path)"
+_KEY_WORD = r"(?:e-?mail(?: address)?|id|identifier|key|path|name)"
+_KEY_WORDS = rf"{_KEY_WORD}(?: or {_KEY_WORD})?"
 _ARTICLE = r"(?:the|your|a|an|this)"
 _REF_NOUN_RULES = (
     # the recipient's email address → the recipient
@@ -179,7 +180,9 @@ _REF_NOUN_RULES = (
 def ref_noun(noun: str) -> str:
     """A ref slot's noun names the entity, not the key's format: ``the recipient's email address`` → ``the
     recipient``. A ref's options are rows labelled by the entity, and "which option is the recipient's email
-    address?" reads to Jev as "did the user type an address?", so "Email Tom" drew NOT_STATED (DECISIONS)."""
+    address?" reads to Jev as "did the user type an address?", so "Email Tom" drew NOT_STATED (DECISIONS). Likewise
+    ``the name of the column containing the values`` → ``the column containing the values``: "Fit an ARIMA to sales"
+    drew NOT_STATED for "the name of the column"."""
     for pattern, repl in _REF_NOUN_RULES:
         if pattern.match(noun):
             return pattern.sub(repl, noun)

@@ -220,6 +220,26 @@ def test_p2a_catalog_matches_its_builder_and_the_oracle_solves_a_sample() -> Non
     assert [r.record.correct for r in report.records] == [True] * 4
 
 
+@pytest.mark.parametrize(("case_id", "dataset"), [("p2a-28", "firm_panel"), ("p2a-31", "survey")])
+def test_p2a_dataset_defaults_from_the_named_columns(
+    case_id: str, dataset: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jev leaves the dataset NOT_STATED: a column list (PCA) or a single column (histogram) supplies it, unverified."""
+    from jevtools.bench.app import runner
+    from jevtools.candidates import NOT_STATED
+    from jevtools.eval.harness import evaluate_case
+
+    class Unstated(runner.OracleBackend):
+        def _slot_label(self, q: Any) -> str:
+            return NOT_STATED if q.path == ("dataset",) and q.family == "slot" else super()._slot_label(q)
+
+    case = next(c for c in load_domain("p2a", runner.external_dir()) if c.id == case_id)
+    monkeypatch.setattr(runner, "OracleBackend", Unstated)
+    record = evaluate_case(case, runner._oracle_router(case, removed=False), keep_traces=False)
+    assert record.outcome == "execute" and record.arguments["dataset"] == dataset
+    assert record.correct and {"defaulted", "implied"} & set(record.flags)
+
+
 def test_cli_bench_app_p2a_runs_the_external_bench(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from jevtools.bench.app import runner
 

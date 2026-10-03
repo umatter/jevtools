@@ -797,8 +797,9 @@ class Router:
 
     def _verify_questions(self, s: _Session, state: _State) -> list[BallotQuestion]:
         """Follow-up ``verify`` Nouls for a call about to be shown (§3.8.3): one per identity REF slot whose elected
-        record was not typed by its key, bound by the user, or verified already (the first round verifies the
-        best-anchored record, so this round runs only when Jev elected another one); tiers ``policy.probes.verify``."""
+        record was not typed by its key, bound by the user, verified already (the first round verifies the
+        best-anchored record, so this round runs only when Jev elected another one) or supplied or implied by a
+        sibling's row (``defaulted``/``implied``: decode ignores their verify); tiers ``policy.probes.verify``."""
         td = state.decoded.decision if state.decoded is not None else None
         if td is None or td.tool.tier not in self.policy.probes.verify:
             return []
@@ -807,7 +808,7 @@ class Router:
             result = td.slots.get(slot.name)
             hook = getattr(get_resolver(slot.kind), "verify", None)
             if not callable(hook) or slot.stakes != "identity" or len(slot.path) != 1 or result is None \
-                    or result.is_bottom \
+                    or result.is_bottom or "defaulted" in result.flags or "implied" in result.flags \
                     or slot.name in s.bindings or slot.name in td.verify:  # fmt: skip
                 continue
             key = (td.tool.name, slot.path, value_key(result.value))

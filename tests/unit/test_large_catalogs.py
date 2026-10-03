@@ -90,6 +90,46 @@ def test_a_late_default_that_decides_the_value_is_flagged_and_not_verified() -> 
     assert not _verifies(Q(), bound)  # type: ignore[arg-type]
 
 
+def test_a_mention_equal_to_the_late_default_is_implied_and_not_verified() -> None:
+    from jevtools.decode import _verifies
+    from jevtools.kinds.base import LATE_DEFAULT, SlotResult
+
+    real = SlotResult(path=("dataset",), kind="ref", stakes="identity", dist={LATE_DEFAULT: 0.3, '"wages"': 0.65},
+                      values={'"wages"': "wages"}, value="wages", shape="ok", factor=0.65)  # fmt: skip
+    implied = real.bind_late_default("wages", out_of_pool=0.3)  # "Granger test of price on sales": the columns' dataset
+    assert implied.value == "wages" and "implied" in implied.flags and "defaulted" not in implied.flags
+    other = real.bind_late_default("survey", out_of_pool=0.3)  # the columns say survey, the mention wages
+    assert other.value == "wages" and "implied" not in other.flags
+
+    class Q:
+        meta = {"candidate": {"value": "wages"}}
+
+    assert not _verifies(Q(), implied)  # type: ignore[arg-type]
+    assert _verifies(Q(), other)  # type: ignore[arg-type]
+
+
+def test_a_late_default_reads_the_attribute_a_lists_elements_share() -> None:
+    from jevtools.kinds.base import SlotResult
+    from jevtools.kinds.late import make_lookup
+
+    def column(name: str, dataset: str) -> SlotResult:
+        return SlotResult(path=("columns",), kind="ref", stakes="identity", dist={f'"{name}"': 0.9},
+                          values={f'"{name}"': name}, value=name, shape="ok", factor=0.9,
+                          attrs={"dataset": dataset})  # fmt: skip
+
+    def columns(*parts: SlotResult) -> dict[str, SlotResult]:
+        value = [p.value for p in parts]
+        return {"columns": SlotResult(path=("columns",), kind="list", stakes="identity", dist={"k": 0.9},
+                                      values={"k": value}, value=value, shape="ok", factor=0.9,
+                                      parts={f"m{i}": p for i, p in enumerate(parts)})}  # fmt: skip
+
+    same = make_lookup(columns(column("capital", "firm_panel"), column("investment", "firm_panel")), Context())
+    assert same("columns.dataset") == "firm_panel"
+    mixed = make_lookup(columns(column("capital", "firm_panel"), column("income", "survey")), Context())
+    with pytest.raises(KeyError):
+        mixed("columns.dataset")
+
+
 def test_an_anchor_naming_a_siblings_value_leaves_the_list() -> None:
     from jevtools.kinds.base import SlotResult
     from jevtools.kinds.listing import _names_sibling

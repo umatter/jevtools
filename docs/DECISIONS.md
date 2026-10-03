@@ -2180,9 +2180,29 @@ columns) needed six generic changes:
   default's mass decided it), and the `verify` gate skips it: verify asks whether a record is the one the request
   refers to, and a dataset derived from the columns the user named is not referred to. On the prompt2analytics
   bench such datasets were verified at 0.09–0.47 and right calls became questions. The flag appears in decision
-  documents (golden R3-TOCTOU-changed: the currency defaulted from the account).
+  documents. (Corrected below: the flag first compared the default's mass with the mention of the default's value,
+  so a mention of another value that won was flagged and went unverified; golden R3-TOCTOU-changed carried it.)
 - §3.7.1: list slots decode after the scalar slots of the same tool, and a list leaves out an anchor that names a
   sibling's elected value, whether it elects that value or its most probable real option is it ("Firm fixed effects
   regression of investment on …": "Firm" is the entity variable and "investment" the dependent variable, not
   regressors). Each such anchor's EXCLUDE probability had multiplied into the list's factor.
+
+Reading the right calls the policy withheld in the live prompt2analytics run (60 of 159 decisions) gave three more:
+
+- §3.2 `noun` default for `ref` slots → `ref_noun` also drops "name" and "name or ID" ("the name of the column
+  containing the time series values" → "the column containing the time series values"; "the name or ID of a
+  previously loaded dataset" → "a previously loaded dataset"). Asked for "the name of the column", Jev gave
+  `NOT_STATED` 0.45–0.78 for columns the user had named ("Fit an ARIMA(1,1,1) to sales", "Histogram of wages"), the
+  same reading as the email-address case above.
+- §3.8.3: `defaulted` and the new `implied` describe the elected value. When it is the default's value, it is
+  `defaulted` if the default's mass exceeds the mention's, else `implied`: the user named the value that another
+  slot's record also gives ("Does price Granger-cause sales?" elects `store_sales` by mention, and `price` lies in
+  `store_sales`). `verify` skips both, since the value follows from a slot that is itself verified, and no follow-up
+  `verify` round is asked about them (it had cost a round whose answer decode ignored). A mention of
+  another value that wins carries neither flag and is verified as before. Golden R3 gains `implied` (the CHF the user
+  wrote is the source account's currency); R3-TOCTOU-changed loses the wrong `defaulted`.
+- §5.4: a `default_from` path `<list>.<attr>` reads the attribute that every elected element of the list shares
+  (`columns.dataset`: the dataset all the named columns belong to), in the decoder's late-default binding and in
+  late recipes alike; when the elements disagree or none has it, the default is unavailable, as for a missing row. The prompt2analytics catalog now defaults `dataset` from a column
+  list when a tool has no single column (PCA, k-means, a correlation over chosen columns).
 

@@ -208,11 +208,16 @@ def test_invitee_rule() -> None:
         ("the ticket id", "the ticket"),
         ("the file path", "the file"),
         ("the workspace-relative file path", "the workspace-relative file"),
+        ("the name of the column containing the time series values", "the column containing the time series values"),
+        ("the name or ID of a previously loaded dataset", "a previously loaded dataset"),
+        ("the dataset name", "the dataset"),
+        ("the customer's name", "the customer"),
         # already an entity, or nothing left once the format is dropped: unchanged
         ("the account the money goes to", "the account the money goes to"),
         ("the calendar event to cancel", "the calendar event to cancel"),
         ("the email address", "the email address"),
         ("the path", "the path"),
+        ("the name", "the name"),
     ],
 )
 def test_ref_noun_names_the_entity(noun: str, expected: str) -> None:
